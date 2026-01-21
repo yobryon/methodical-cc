@@ -36,18 +36,22 @@ We need to migrate ALL project management references from "stage" to "sprint" wh
    - The `.claude/CLAUDE.md` file
    - Any other files that might contain PM references
 
-2. **Identify PM Artifacts**: For each file, determine if it's a PM artifact or domain content. Be smart about this - read the content if you're unsure.
+2. **Check for Git**: Determine if this is a git repository (look for `.git/` directory).
 
-3. **Rename Files**: Rename PM artifact files from `*stageN*` to `*sprintN*`
+3. **Identify PM Artifacts**: For each file, determine if it's a PM artifact or domain content. Be smart about this - read the content if you're unsure.
 
-4. **Update Content**: In PM artifacts, update references:
+4. **Rename Files**: Rename PM artifact files from `*stageN*` to `*sprintN*`
+   - **If git repo**: Use `git mv oldname newname` to preserve history
+   - **If not git**: Use regular rename/move
+
+5. **Update Content**: In PM artifacts, update references:
    - "Stage N" → "Sprint N"
    - "stage N" → "sprint N"
    - "STAGE N" → "SPRINT N"
    - "stageN" → "sprintN" (in file references)
    - Be case-aware and context-aware
 
-5. **Report What You Did**: After making changes, summarize:
+6. **Report What You Did**: After making changes, summarize:
    - Files renamed
    - Files with content updated
    - Any files you intentionally skipped and why
