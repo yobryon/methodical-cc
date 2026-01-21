@@ -9,6 +9,9 @@ A Claude Code plugin for managing complex software projects using distinct Archi
 - **Structured handoffs**: Briefs and plans transfer context between agents
 - **Feedback loops**: Implementation logs and feedback cycles drive evolution
 - **Sprint-based development**: Coherent chunks of work with clear outcomes
+- **Auto-detection of project state**: SessionStart hook detects current sprint and artifacts
+- **Smart context loading**: Commands prompt reading of relevant documents before proceeding
+- **UX Designer subagent**: Persistent-context design collaborator for the Architect
 
 ## Installation
 
@@ -21,7 +24,7 @@ claude --plugin-dir /path/to/cc-methodology
 ### Option 2: Install from Marketplace
 
 ```
-/plugin install multi-agent-methodology
+/plugin install m
 ```
 
 ## Quick Start
@@ -30,58 +33,58 @@ claude --plugin-dir /path/to/cc-methodology
 
 1. **Initialize** (Architect session):
    ```
-   /multi-agent-methodology:arch-init
+   /m:arch-init
 
    [Provide your initial design documents, research, ideas]
    ```
 
 2. **Discuss Architecture**:
    ```
-   /multi-agent-methodology:arch-discuss
+   /m:arch-discuss
 
    [Share your architectural thinking]
    ```
 
 3. **Create Documentation**:
    ```
-   /multi-agent-methodology:arch-create-docs
+   /m:arch-create-docs
    ```
 
 4. **Create Roadmap**:
    ```
-   /multi-agent-methodology:arch-roadmap
+   /m:arch-roadmap
    ```
 
 5. **Plan First Sprint**:
    ```
-   /multi-agent-methodology:arch-sprint-plan
+   /m:arch-sprint-plan
    ```
 
 6. **Process Feedback** (when you have thoughts/reactions):
    ```
-   /multi-agent-methodology:arch-feedback
+   /m:arch-feedback
 
    [Share your feedback essay]
    ```
 
 7. **Finalize Sprint**:
    ```
-   /multi-agent-methodology:arch-sprint-finalize
+   /m:arch-sprint-finalize
    ```
 
 8. **Switch to Implementor Session**:
    ```
-   /multi-agent-methodology:impl-start @docs/implementor_brief_sprint1.md
+   /m:impl-start @docs/implementor_brief_sprint1.md
    ```
 
 9. **Complete Implementation Work**:
    ```
-   /multi-agent-methodology:impl-finalize
+   /m:impl-finalize
    ```
 
 10. **Back to Architect Session**:
     ```
-    /multi-agent-methodology:arch-sprint-complete @docs/implementation_log_sprint1.md
+    /m:arch-sprint-complete @docs/implementation_log_sprint1.md
     ```
 
 Then repeat the sprint cycle as needed.
@@ -93,14 +96,16 @@ Then repeat the sprint cycle as needed.
 | Command | Purpose |
 |---------|---------|
 | `arch-init` | Initialize project, set patterns, establish Architect role |
+| `arch-resume` | Resume in-flight project, establish/correct current state |
 | `arch-discuss` | Engage in architectural discussion, build understanding |
 | `arch-create-docs` | Create initial product documentation |
 | `arch-roadmap` | Create implementation roadmap |
-| `arch-sprint-plan` | Begin planning next sprint, propose initial scope |
+| `arch-sprint-plan` | Begin planning next sprint (auto-loads context) |
 | `arch-feedback` | Process user feedback, extract deltas, align on scope |
 | `arch-sprint-finalize` | Finalize scope, write implementation plan and brief |
-| `arch-sprint-complete` | Process completed sprint, update docs, propose next sprint |
+| `arch-sprint-complete` | Process completed sprint (auto-loads context) |
 | `arch-user-story` | Capture and discuss user stories |
+| `ux-consult` | Collaborate with UX Designer subagent |
 
 ### Implementor Commands
 
@@ -145,6 +150,37 @@ your-project/
 │   └── implementation_log_sprintX.md
 └── [source code]
 ```
+
+## Resuming In-Flight Projects
+
+When you start a Claude Code session on an existing project:
+
+1. **Auto-Detection**: The plugin automatically detects project state on session start
+2. **Correction**: If the detected state is wrong, tell the Architect: "We're actually in sprint 5"
+3. **Explicit Resume**: Use `/m:arch-resume` for full state review and correction
+
+The plugin scans for:
+- Current sprint info in `.claude/CLAUDE.md`
+- Sprint artifacts in `docs/` (plans, briefs, logs)
+- Active deltas
+
+## UX Designer Collaboration
+
+The Architect can invoke a UX Designer subagent for design collaboration:
+
+```
+/m:ux-consult
+
+Help me design the user interaction patterns for the dashboard feature.
+```
+
+The UX Designer:
+- Analyzes product documentation for UX implications
+- Proposes design patterns, flows, and visual systems
+- Creates design artifacts (style guides, component specs)
+- Uses **persistent context** for continuity across sessions
+
+To maintain continuity, note the agent ID from your first UX session and use resume in subsequent sessions.
 
 ## Philosophy
 

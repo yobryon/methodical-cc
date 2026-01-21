@@ -93,10 +93,16 @@ Provide a clear summary:
 - [ ] Noted any process improvements
 - [ ] Prepared next sprint proposal
 
+## Before You Begin
+
+Read these files to establish context:
+1. The implementation log for the completed sprint (user may provide via @ reference, or find most recent `docs/implementation_log_sprint*.md`)
+2. The corresponding implementation plan (`docs/implementation_plan_sprint*.md`)
+3. `.claude/CLAUDE.md` - Current state section
+4. Active deltas (use Glob for `docs/delta_*.md`)
+
 ## Begin
 
-Read the implementation log provided, then proceed with reconciliation and next sprint proposal.
-
----
+Read the implementation log (user-provided or most recent), then proceed with reconciliation and next sprint proposal.
 
 $ARGUMENTS

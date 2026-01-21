@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '=== MULTI-AGENT METHODOLOGY ===' && if [ -f .claude/CLAUDE.md ]; then sprint=$(grep -oP 'Current Sprint.*?\\K\\d+' .claude/CLAUDE.md 2>/dev/null | head -1); if [ -n \"$sprint\" ]; then echo \"IN-FLIGHT PROJECT - Sprint $sprint\"; else highest=$(ls docs/implementation_*sprint*.md 2>/dev/null | grep -oP 'sprint\\K\\d+' | sort -n | tail -1); if [ -n \"$highest\" ]; then echo \"IN-FLIGHT PROJECT - Detected Sprint $highest artifacts\"; else echo 'PROJECT INITIALIZED - No sprints started yet'; fi; fi; echo 'Sprint artifacts:' && ls -1 docs/implementation_*sprint*.md docs/implementor_brief_sprint*.md 2>/dev/null | head -6 || echo '  (none)'; else echo 'NEW PROJECT - No .claude/CLAUDE.md found'; echo 'Run /multi-agent-methodology:arch-init to get started'; fi && echo '---' && echo 'Tell me if this is wrong: \"We are in sprint X\"'"
+          }
+        ]
+      }
+    ]
+  }
+}

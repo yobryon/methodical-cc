@@ -69,10 +69,16 @@ Always check and follow the patterns in `.claude/CLAUDE.md`. Common patterns inc
 - Testing conventions
 - Code style preferences
 
+## Before You Begin
+
+Read these files to establish context:
+1. The implementor brief for this sprint (user may provide via @ reference, or find most recent `docs/implementor_brief_sprint*.md`)
+2. The corresponding implementation plan (`docs/implementation_plan_sprint*.md`)
+3. `.claude/CLAUDE.md` - Project patterns section
+4. The implementation log to maintain (`docs/implementation_log_sprint*.md`)
+
 ## Begin
 
-Read the brief provided, then proceed with implementation. Work until complete or until you hit a stopping point.
-
----
+Read the brief (user-provided or most recent), then proceed with implementation. Work until complete or until you hit a stopping point.
 
 $ARGUMENTS
