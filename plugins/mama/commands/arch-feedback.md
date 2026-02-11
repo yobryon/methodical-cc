@@ -75,7 +75,7 @@ This might be a single exchange or multiple turns. Stay in this mode until:
 - You've processed all the feedback
 - Deltas are created where needed
 - You've aligned on scope direction
-- You're ready for `/arch-sprint-finalize`
+- You're ready for `/arch-sprint-start`
 
 ## Begin
 

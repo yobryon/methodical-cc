@@ -43,13 +43,13 @@ cc-methodology/
 
 ### MAM (Multi-Agent Methodology)
 Session-based workflow where you run Architect and Implementor as separate Claude sessions.
-- Commands namespaced as `/mam:arch-init`, `/mam:impl-start`, etc.
+- Commands namespaced as `/mam:arch-init`, `/mam:impl-begin`, etc.
 - Handoff via document files (briefs, plans, logs)
 - Good for explicit context separation
 
 ### MAMA (Multi-Agent Methodology with Agents)
 Subagent-based workflow where Architect orchestrates Implementor and UX Designer as persistent subagents.
-- Commands namespaced as `/mama:arch-init`, `/mama:impl-start`, etc.
+- Commands namespaced as `/mama:arch-init`, `/mama:impl-begin`, etc.
 - Implementor and UX Designer maintain context across sessions via resume
 - Good for context continuity across sprints
 
@@ -61,16 +61,16 @@ Subagent-based workflow where Architect orchestrates Implementor and UX Designer
 - `/arch-discuss` - Engage in architectural discussion
 - `/arch-create-docs` - Create initial product documentation
 - `/arch-roadmap` - Create implementation roadmap
-- `/arch-sprint-plan` - Begin planning next sprint (auto-loads context)
+- `/arch-sprint-prep` - Prepare sprint proposal (auto-loads context)
 - `/arch-feedback` - Process user feedback essay
-- `/arch-sprint-finalize` - Finalize scope, write plan and brief
+- `/arch-sprint-start` - Lock scope, write plan and brief
 - `/arch-sprint-complete` - Process completed sprint, reconcile docs (auto-loads context)
 - `/arch-user-story` - Capture and discuss user stories
 - `/ux-consult` - Collaborate with UX Designer subagent
 
 ### Implementor Commands
-- `/impl-start` - Begin implementation (MAM: read brief; MAMA: delegate to subagent)
-- `/impl-finalize` - Wrap up implementation with retrospective
+- `/impl-begin` - Begin implementation (MAM: read brief; MAMA: delegate to subagent)
+- `/impl-end` - Wrap up implementation with retrospective
 
 ### Shared Commands
 - `/pattern-add` - Add or update a project pattern in CLAUDE.md
@@ -123,7 +123,7 @@ claude --plugin-dir ./plugins/mama
 - **Implementation Log**: Running journal of actual work
 
 ### Sprint Lifecycle
-1. Planning → 2. Feedback → 3. Finalization → 4. Implementation → 5. Review → 6. Reconciliation
+1. Prep → 2. Feedback → 3. Start → 4. Begin (implementation) → 5. End (implementation) → 6. Complete
 
 ## Advanced Features
 
@@ -135,9 +135,9 @@ On session start, the plugin auto-detects project state:
 
 ### Context Loading
 Key commands prompt Claude to read relevant files before proceeding:
-- `arch-sprint-plan` - Reads roadmap, recent artifacts, active deltas
+- `arch-sprint-prep` - Reads roadmap, recent artifacts, active deltas
 - `arch-sprint-complete` - Reads implementation log, plan, deltas
-- `impl-start` - Reads brief, plan, project patterns
+- `impl-begin` - Reads brief, plan, project patterns
 - `arch-resume` - Reads full project state for session resumption
 
 ### UX Designer Subagent

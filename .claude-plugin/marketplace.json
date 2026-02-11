@@ -9,13 +9,13 @@
       "name": "mam",
       "source": "./plugins/mam",
       "description": "Multi-Agent Methodology - session-based Architect/Implementor workflow for complex software projects",
-      "version": "1.0.1"
+      "version": "1.0.2"
     },
     {
       "name": "mama",
       "source": "./plugins/mama",
       "description": "Multi-Agent Methodology with Agents - subagent-based workflow with persistent Implementor and UX Designer contexts",
-      "version": "1.0.1"
+      "version": "1.0.2"
     }
   ]
 }

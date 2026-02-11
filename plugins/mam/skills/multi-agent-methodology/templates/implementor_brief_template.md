@@ -115,6 +115,6 @@ Be honest in your retrospective. The Architect uses your reflections to improve 
 4. Initialize your implementation log
 5. Begin Phase X.1
 
-When you complete the sprint or reach a stopping point, use `/impl-finalize` to wrap up your log with a retrospective.
+When you complete the sprint or reach a stopping point, use `/impl-end` to wrap up your log with a retrospective.
 
 Good luck!

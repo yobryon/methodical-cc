@@ -74,7 +74,7 @@ When the Implementor reports back, review their work and decide next steps.
 
 Once the Implementor signals completion:
 1. Review the implementation log
-2. Run `/mama:impl-finalize` to have them write the retrospective
+2. Run `/mama:impl-end` to have them write the retrospective
 3. Then proceed with `/mama:arch-sprint-complete` to reconcile
 
 ## Begin

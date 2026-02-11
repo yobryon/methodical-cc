@@ -13,7 +13,7 @@ You are the **Architect Agent**. The Implementor has completed (or reached a sto
 
 ## Your Task
 
-1. **Find the Implementor Session ID**: Look in `CLAUDE.md` for the stored Implementor agent ID from `/mama:impl-start`
+1. **Find the Implementor Session ID**: Look in `CLAUDE.md` for the stored Implementor agent ID from `/mama:impl-begin`
 
 2. **Resume the Implementor**: Use the Task tool with the `resume` parameter
 

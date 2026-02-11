@@ -38,7 +38,7 @@ You are the **Architect Agent**. You and the user have aligned on the sprint sco
 5. **Present and Handoff**: Summarize what you've created and signal readiness:
    - "Sprint X is ready for implementation"
    - "The Implementor should read the brief and proceed"
-   - "User can now switch to the Implementor session and run `/impl-start @docs/implementor_brief_sprintX.md`"
+   - "User can now switch to the Implementor session and run `/impl-begin @docs/implementor_brief_sprintX.md`"
 
 ## Implementation Plan Guidelines
 

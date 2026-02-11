@@ -28,16 +28,16 @@ claude --plugin-dir /path/to/plugins/mam
 - `/mam:arch-discuss` - Architectural discussion
 - `/mam:arch-create-docs` - Create product documentation
 - `/mam:arch-roadmap` - Create implementation roadmap
-- `/mam:arch-sprint-plan` - Plan next sprint
+- `/mam:arch-sprint-prep` - Prepare sprint proposal
 - `/mam:arch-feedback` - Process user feedback
-- `/mam:arch-sprint-finalize` - Finalize sprint scope
+- `/mam:arch-sprint-start` - Lock scope, start sprint
 - `/mam:arch-sprint-complete` - Process completed sprint
 - `/mam:arch-user-story` - Capture user stories
 - `/mam:ux-consult` - Collaborate with UX Designer
 
 ### Implementor Commands
-- `/mam:impl-start` - Begin implementation
-- `/mam:impl-finalize` - Complete implementation
+- `/mam:impl-begin` - Begin implementation
+- `/mam:impl-end` - Complete implementation
 
 ### Shared Commands
 - `/mam:pattern-add` - Add project patterns

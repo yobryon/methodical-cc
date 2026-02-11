@@ -39,16 +39,16 @@ claude --plugin-dir /path/to/plugins/mama
 - `/mama:arch-discuss` - Architectural discussion
 - `/mama:arch-create-docs` - Create documentation
 - `/mama:arch-roadmap` - Create roadmap
-- `/mama:arch-sprint-plan` - Plan next sprint
+- `/mama:arch-sprint-prep` - Prepare sprint proposal
 - `/mama:arch-feedback` - Process feedback
-- `/mama:arch-sprint-finalize` - Finalize sprint
+- `/mama:arch-sprint-start` - Lock scope, start sprint
 - `/mama:arch-sprint-complete` - Complete sprint
 - `/mama:arch-user-story` - Capture user stories
 - `/mama:ux-consult` - Collaborate with UX Designer subagent
 
 ### Implementor Delegation
-- `/mama:impl-start` - Delegate to Implementor subagent
-- `/mama:impl-finalize` - Have Implementor write retrospective
+- `/mama:impl-begin` - Delegate to Implementor subagent
+- `/mama:impl-end` - Have Implementor write retrospective
 
 ### Shared Commands
 - `/mama:pattern-add` - Add project patterns
@@ -58,7 +58,7 @@ claude --plugin-dir /path/to/plugins/mama
 ### First Time Using a Subagent
 
 ```
-/mama:impl-start Sprint 11
+/mama:impl-begin Sprint 11
 
 → Claude invokes Implementor subagent
 → Implementor does the work
@@ -69,7 +69,7 @@ claude --plugin-dir /path/to/plugins/mama
 ### Resuming a Subagent
 
 ```
-/mama:impl-start Continue from where we left off
+/mama:impl-begin Continue from where we left off
 
 → Claude reads stored agent ID from CLAUDE.md
 → Resumes the previous Implementor session

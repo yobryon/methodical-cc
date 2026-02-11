@@ -59,7 +59,7 @@ For each phase, log:
 
 When you complete all phases (or reach a stopping point):
 - Ensure your implementation log is complete
-- Use `/impl-finalize` to wrap up with a retrospective
+- Use `/impl-end` to wrap up with a retrospective
 
 ## Project Patterns Reminder
 

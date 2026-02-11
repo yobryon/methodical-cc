@@ -1,7 +1,7 @@
 {
   "name": "mama",
   "description": "Multi-Agent Methodology with Agents - subagent-based workflow with persistent Implementor and UX Designer contexts for seamless collaboration",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": {
     "name": "Bryon Williams"
   }

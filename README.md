@@ -50,25 +50,25 @@ claude --plugin-dir /path/to/cc-methodology/plugins/mama
    [Provide your initial design documents, research, ideas]
    ```
 
-2. **Plan Sprint**:
+2. **Prep Sprint**:
    ```
-   /mam:arch-sprint-plan
+   /mam:arch-sprint-prep
    ```
 
-3. **Process Feedback & Finalize**:
+3. **Process Feedback & Start Sprint**:
    ```
    /mam:arch-feedback [your thoughts]
-   /mam:arch-sprint-finalize
+   /mam:arch-sprint-start
    ```
 
 4. **Switch to Implementor Session**:
    ```
-   /mam:impl-start
+   /mam:impl-begin
    ```
 
 5. **Complete & Return to Architect**:
    ```
-   /mam:impl-finalize
+   /mam:impl-end
    /mam:arch-sprint-complete
    ```
 
@@ -79,20 +79,20 @@ claude --plugin-dir /path/to/cc-methodology/plugins/mama
    /mama:arch-init
    ```
 
-2. **Plan Sprint**:
+2. **Prep Sprint**:
    ```
-   /mama:arch-sprint-plan
+   /mama:arch-sprint-prep
    ```
 
 3. **Delegate to Implementor Subagent**:
    ```
-   /mama:impl-start Sprint 1
+   /mama:impl-begin Sprint 1
    ```
    → Implementor works as subagent, maintains context via resume
 
 4. **Complete Sprint**:
    ```
-   /mama:impl-finalize
+   /mama:impl-end
    /mama:arch-sprint-complete
    ```
 
@@ -108,9 +108,9 @@ Both plugins share the same command names, just with different namespaces (`/mam
 | `arch-discuss` | Architectural discussion |
 | `arch-create-docs` | Create product documentation |
 | `arch-roadmap` | Create implementation roadmap |
-| `arch-sprint-plan` | Plan next sprint |
+| `arch-sprint-prep` | Prepare sprint proposal |
 | `arch-feedback` | Process user feedback |
-| `arch-sprint-finalize` | Finalize sprint scope |
+| `arch-sprint-start` | Lock scope, write plan and brief |
 | `arch-sprint-complete` | Complete sprint, reconcile docs |
 | `arch-user-story` | Capture user stories |
 | `ux-consult` | Collaborate with UX Designer |
@@ -118,8 +118,8 @@ Both plugins share the same command names, just with different namespaces (`/mam
 ### Implementor Commands
 | Command | MAM Behavior | MAMA Behavior |
 |---------|--------------|---------------|
-| `impl-start` | Read brief, begin work | Delegate to Implementor subagent |
-| `impl-finalize` | Write retrospective | Have subagent write retrospective |
+| `impl-begin` | Read brief, begin work | Delegate to Implementor subagent |
+| `impl-end` | Write retrospective | Have subagent write retrospective |
 
 ### Shared Commands
 | Command | Purpose |

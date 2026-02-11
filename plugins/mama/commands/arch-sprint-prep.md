@@ -14,7 +14,7 @@ This command kicks off the sprint planning cycle:
 2. **User provides** feedback, new ideas, reflections via `/arch-feedback`
 3. **You process** feedback, create deltas, discuss
 4. **Together you converge** on final scope
-5. **You finalize** via `/arch-sprint-finalize`
+5. **You lock scope** via `/arch-sprint-start`
 
 ## Your Task
 
