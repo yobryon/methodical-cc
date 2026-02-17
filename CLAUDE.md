@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Claude Code plugin that encapsulates the Multi-Agent Architecture Methodology. The methodology enables complex software projects to be managed through distinct Architect and Implementor agent roles, with structured handoffs via briefs, plans, and logs.
+This repository contains Claude Code plugins for structured product design and implementation workflows. Three plugins: PDT for pre-implementation product design thinking, MAM and MAMA for sprint-based implementation with distinct Architect and Implementor roles.
 
 ## Plugin Structure
 
@@ -13,9 +13,15 @@ This plugin follows the Claude Code plugin specification:
 ```
 cc-methodology/
 ├── .claude-plugin/
-│   └── marketplace.json         # Marketplace advertising both plugins
+│   └── marketplace.json         # Marketplace advertising all three plugins
 ├── plugins/
-│   ├── mam/                     # Session-based variant
+│   ├── pdt/                     # Product Design Thinking
+│   │   ├── .claude-plugin/
+│   │   │   └── plugin.json
+│   │   ├── skills/
+│   │   ├── commands/
+│   │   └── hooks/
+│   ├── mam/                     # Session-based implementation
 │   │   ├── .claude-plugin/
 │   │   │   └── plugin.json
 │   │   ├── skills/
@@ -23,7 +29,7 @@ cc-methodology/
 │   │   ├── agents/
 │   │   │   └── ux-designer/
 │   │   └── hooks/
-│   └── mama/                    # Subagent-based variant
+│   └── mama/                    # Subagent-based implementation
 │       ├── .claude-plugin/
 │       │   └── plugin.json
 │       ├── skills/
@@ -39,7 +45,14 @@ cc-methodology/
 
 **Critical**: `commands/`, `skills/`, `hooks/`, and `agents/` must be at the **plugin root**, NOT inside `.claude-plugin/`.
 
-## Two Plugin Variants
+## Three Plugin Variants
+
+### PDT (Product Design Thinking)
+Pre-implementation product design workflow with a Socratic Design Partner.
+- Commands namespaced as `/pdt:init`, `/pdt:discuss`, `/pdt:crystallize`, etc.
+- Single role: Design Partner (no Architect/Implementor split)
+- Produces design documents, decisions log, concept backlog
+- Natural predecessor to MAM/MAMA -- design first, then implement
 
 ### MAM (Multi-Agent Methodology)
 Session-based workflow where you run Architect and Implementor as separate Claude sessions.
@@ -54,6 +67,21 @@ Subagent-based workflow where Architect orchestrates Implementor and UX Designer
 - Good for context continuity across sprints
 
 ## Commands
+
+### PDT Commands
+- `/init` - Survey existing materials, classify, produce reading guide
+- `/read` - Deep-read materials, produce synthesis
+- `/discuss` - Open-ended conceptual discussion
+- `/feedback` - Process raw feedback, drive toward alignment
+- `/crystallize` - Propose doc structure, write documentation bundle
+- `/capture` - Memorialize incremental alignment
+- `/delta` - Capture a new idea as a working paper
+- `/decide` - Record a resolved decision with rationale
+- `/research` - Research a topic, synthesize findings for discussion
+- `/research-brief` - Write a research prompt for an external agent
+- `/gaps` - Assess what is done, partial, open, deferred
+- `/backlog` - Update/review concept development backlog
+- `/resume` - Re-establish context on in-flight design effort
 
 ### Architect Commands
 - `/arch-init` - Initialize project, set patterns, establish Architect role
@@ -98,6 +126,9 @@ $ARGUMENTS
 ## Testing the Plugins
 
 ```bash
+# Test PDT locally
+claude --plugin-dir ./plugins/pdt
+
 # Test MAM locally
 claude --plugin-dir ./plugins/mam
 
@@ -105,6 +136,7 @@ claude --plugin-dir ./plugins/mam
 claude --plugin-dir ./plugins/mama
 
 # Invoke commands
+/pdt:init         # for PDT
 /mam:arch-init    # for MAM
 /mama:arch-init   # for MAMA
 ```
@@ -154,5 +186,5 @@ To maintain UX Designer continuity:
 ## Development Notes
 
 - The `docs/` directory contains the original design documents from the design session (kept for reference)
-- The plugin name is `mam` for brevity, so commands are invoked as `/mam:arch-init` etc.
+- Plugin names are `pdt`, `mam`, and `mama` for brevity, so commands are invoked as `/pdt:init`, `/mam:arch-init`, `/mama:arch-init` etc.
 - To test changes, restart Claude Code with `claude --plugin-dir ./`

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '=== PRODUCT DESIGN THINKING ===' && if [ -f CLAUDE.md ]; then if [ -f docs/reading_guide.md ]; then if ls docs/*.md 2>/dev/null | grep -qvE '(reading_guide|concept_backlog|decisions_log|delta_)'; then echo 'DESIGN EFFORT - Documentation bundle exists'; else echo 'DESIGN EFFORT - In progress (no doc bundle yet)'; fi; else echo 'DESIGN EFFORT - Initialized (no reading guide yet)'; fi; deltas=$(ls docs/delta_*.md 2>/dev/null | wc -l); decisions=0; if [ -f docs/decisions_log.md ]; then decisions=$(grep -c '^### DEC-' docs/decisions_log.md 2>/dev/null || echo 0); fi; echo \"Deltas: $deltas | Decisions: $decisions\"; echo 'Design artifacts:' && ls -1 docs/reading_guide.md docs/decisions_log.md docs/concept_backlog.md docs/delta_*.md 2>/dev/null | head -10 || echo '  (none yet)'; else echo 'NEW DESIGN EFFORT - No CLAUDE.md found'; echo 'Run /pdt:init to get started'; fi && echo '---' && echo 'Tell me if this is wrong or if you want to pick up somewhere specific.'"
+          }
+        ]
+      }
+    ]
+  }
+}

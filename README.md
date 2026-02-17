@@ -1,46 +1,86 @@
 # Multi-Agent Architecture Methodology
 
-Claude Code plugins for managing complex software projects using distinct Architect and Implementor agent roles.
+Claude Code plugins for structured product design and implementation workflows.
 
-## Two Plugin Variants
+## Three Plugins
 
 | Plugin | Description | Best For |
 |--------|-------------|----------|
+| **PDT** | Product Design Thinking - Socratic design partner for pre-implementation thinking | Product vision, concept development, documentation crystallization |
 | **MAM** | Session-based - Architect and Implementor as separate Claude sessions | Explicit context separation, document-based handoffs |
 | **MAMA** | Subagent-based - Architect orchestrates persistent Implementor subagent | Context continuity, iterative work |
 
+PDT is the natural predecessor to MAM/MAMA. Design your product with PDT, then build it with MAM or MAMA.
+
 ## Features
 
+- **Socratic design partnership**: PDT probes, challenges, and develops ideas alongside you
+- **Progressive crystallization**: Ideas evolve from conversations to deltas to formal documents
 - **Clear role separation**: Architect owns design and orchestration; Implementor owns execution
 - **Incremental design via deltas**: Explore changes before committing to documentation
 - **Structured handoffs**: Briefs and plans transfer context between agents
 - **Feedback loops**: Implementation logs and feedback cycles drive evolution
 - **Sprint-based development**: Coherent chunks of work with clear outcomes
-- **Auto-detection of project state**: SessionStart hook detects current sprint and artifacts
+- **Auto-detection of project state**: SessionStart hook detects current state and artifacts
 - **Smart context loading**: Commands prompt reading of relevant documents
-- **UX Designer subagent**: Persistent-context design collaborator
+- **Decisions as first-class artifacts**: Every resolved decision logged with rationale
 
 ## Installation
 
 ### From Marketplace
 
 ```bash
-# Session-based workflow
+# Product design thinking
+claude plugin install pdt
+
+# Session-based implementation workflow
 claude plugin install mam
 
-# Subagent-based workflow
+# Subagent-based implementation workflow
 claude plugin install mama
 ```
 
 ### Test Locally
 
 ```bash
+# PDT (product design thinking)
+claude --plugin-dir /path/to/cc-methodology/plugins/pdt
+
 # MAM (session-based)
 claude --plugin-dir /path/to/cc-methodology/plugins/mam
 
 # MAMA (subagent-based)
 claude --plugin-dir /path/to/cc-methodology/plugins/mama
 ```
+
+## Quick Start (PDT - Product Design Thinking)
+
+1. **Initialize** (survey existing materials):
+   ```
+   /pdt:init
+   [Provide file paths, URLs, or describe what you have]
+   ```
+
+2. **Deep Read** priority materials:
+   ```
+   /pdt:read [file or topic]
+   ```
+
+3. **Discuss** and develop concepts:
+   ```
+   /pdt:discuss [topic or idea]
+   ```
+
+4. **Crystallize** into formal documentation:
+   ```
+   /pdt:crystallize
+   ```
+
+5. **Assess readiness** and hand off:
+   ```
+   /pdt:gaps
+   → When ready, switch to MAM or MAMA for implementation
+   ```
 
 ## Quick Start (MAM - Session-based)
 
@@ -98,9 +138,24 @@ claude --plugin-dir /path/to/cc-methodology/plugins/mama
 
 ## Commands
 
-Both plugins share the same command names, just with different namespaces (`/mam:` vs `/mama:`):
+### PDT Commands (`/pdt:`)
+| Command | Purpose |
+|---------|---------|
+| `init` | Survey existing materials, produce reading guide |
+| `read` | Deep-read materials, produce synthesis |
+| `discuss` | Open-ended conceptual discussion |
+| `feedback` | Process raw feedback, drive toward alignment |
+| `crystallize` | Propose doc structure, write documentation bundle |
+| `capture` | Memorialize incremental alignment |
+| `delta` | Capture a new idea as a working paper |
+| `decide` | Record a resolved decision with rationale |
+| `research` | Research a topic, synthesize findings for discussion |
+| `research-brief` | Write a research prompt for an external agent |
+| `gaps` | Assess what is done, partial, open, deferred |
+| `backlog` | Update/review concept development backlog |
+| `resume` | Re-establish context on in-flight design effort |
 
-### Architect Commands
+### MAM/MAMA Architect Commands (`/mam:` or `/mama:`)
 | Command | Purpose |
 |---------|---------|
 | `arch-init` | Initialize project, set patterns |
@@ -160,13 +215,15 @@ Work with Claude as a thinking partner, not just a tool.
 ```
 cc-methodology/
 ├── plugins/
-│   ├── mam/              # Session-based plugin
-│   └── mama/             # Subagent-based plugin
+│   ├── pdt/              # Product design thinking plugin
+│   ├── mam/              # Session-based implementation plugin
+│   └── mama/             # Subagent-based implementation plugin
 ├── tools/                # Migration utilities
 └── docs/                 # Design documentation
 ```
 
 See individual plugin READMEs for detailed documentation:
+- [PDT README](plugins/pdt/README.md)
 - [MAM README](plugins/mam/README.md)
 - [MAMA README](plugins/mama/README.md)
 

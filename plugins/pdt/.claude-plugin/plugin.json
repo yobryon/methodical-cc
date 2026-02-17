@@ -1,0 +1,8 @@
+{
+  "name": "pdt",
+  "description": "Product Design Thinking - a Socratic design partner for pre-implementation product thinking. Helps excavate existing ideas, develop concepts through conversation, crystallize aligned thinking into documents, and track progress toward ready-to-build.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Bryon Williams"
+  }
+}

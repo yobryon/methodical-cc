@@ -16,6 +16,12 @@
       "source": "./plugins/mama",
       "description": "Multi-Agent Methodology with Agents - subagent-based workflow with persistent Implementor and UX Designer contexts",
       "version": "1.0.3"
+    },
+    {
+      "name": "pdt",
+      "source": "./plugins/pdt",
+      "description": "Product Design Thinking - Socratic design partner for pre-implementation product thinking, concept development, and documentation crystallization",
+      "version": "1.0.0"
     }
   ]
 }
