@@ -44,13 +44,13 @@ claude plugin install mama
 
 ```bash
 # PDT (product design thinking)
-claude --plugin-dir /path/to/cc-methodology/plugins/pdt
+claude --plugin-dir /path/to/methodical-cc/plugins/pdt
 
 # MAM (session-based)
-claude --plugin-dir /path/to/cc-methodology/plugins/mam
+claude --plugin-dir /path/to/methodical-cc/plugins/mam
 
 # MAMA (subagent-based)
-claude --plugin-dir /path/to/cc-methodology/plugins/mama
+claude --plugin-dir /path/to/methodical-cc/plugins/mama
 ```
 
 ## Quick Start (PDT - Product Design Thinking)
@@ -213,7 +213,7 @@ Work with Claude as a thinking partner, not just a tool.
 ## Repository Structure
 
 ```
-cc-methodology/
+methodical-cc/
 ├── plugins/
 │   ├── pdt/              # Product design thinking plugin
 │   ├── mam/              # Session-based implementation plugin

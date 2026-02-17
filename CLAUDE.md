@@ -11,7 +11,7 @@ This repository contains Claude Code plugins for structured product design and i
 This plugin follows the Claude Code plugin specification:
 
 ```
-cc-methodology/
+methodical-cc/
 ├── .claude-plugin/
 │   └── marketplace.json         # Marketplace advertising all three plugins
 ├── plugins/

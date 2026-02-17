@@ -12,7 +12,7 @@ Uses Claude Code to intelligently find and update PM terminology while leaving d
 
 ```bash
 # From your project directory
-/path/to/cc-methodology/tools/migrate-stage-to-sprint.sh .
+/path/to/methodical-cc/tools/migrate-stage-to-sprint.sh .
 
 # Or specify the project path
 ./migrate-stage-to-sprint.sh /path/to/your-project
@@ -39,7 +39,7 @@ Uses Claude Code to intelligently find and update PM terminology while leaving d
 A simpler Python script that uses pattern matching. Faster but less intelligent - may catch false positives.
 
 ```bash
-python /path/to/cc-methodology/tools/migrate-stage-to-sprint-regex.py /path/to/your-project
+python /path/to/methodical-cc/tools/migrate-stage-to-sprint-regex.py /path/to/your-project
 ```
 
 **What it does:**
