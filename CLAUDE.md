@@ -81,6 +81,7 @@ Subagent-based workflow where Architect orchestrates Implementor and UX Designer
 - `/research-brief` - Write a research prompt for an external agent
 - `/gaps` - Assess what is done, partial, open, deferred
 - `/backlog` - Update/review concept development backlog
+- `/next` - Figure out what's workable and highest-value for this session
 - `/resume` - Re-establish context on in-flight design effort
 
 ### Architect Commands

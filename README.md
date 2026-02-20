@@ -160,6 +160,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 | `research-brief` | Write a research prompt for an external agent |
 | `gaps` | Assess what is done, partial, open, deferred |
 | `backlog` | Update/review concept development backlog |
+| `next` | Figure out what's workable and highest-value for this session |
 | `resume` | Re-establish context on in-flight design effort |
 
 ### MAM/MAMA Architect Commands (`/mam:` or `/mama:`)

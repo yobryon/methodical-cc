@@ -40,6 +40,7 @@ claude --plugin-dir /path/to/plugins/pdt
 | `/pdt:research-brief` | Write a self-contained research prompt for an external agent |
 | `/pdt:gaps` | Assess what is done, partial, open, deferred |
 | `/pdt:backlog` | Update/review the concept development backlog |
+| `/pdt:next` | Figure out the best use of this session -- what's workable and highest-value |
 | `/pdt:resume` | Re-establish context on an in-flight design effort |
 
 ## Typical Workflow
