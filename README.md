@@ -161,6 +161,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 | `gaps` | Assess what is done, partial, open, deferred |
 | `backlog` | Update/review concept development backlog |
 | `next` | Figure out what's workable and highest-value for this session |
+| `coherence` | Cross-document consistency audit with optional fix application |
 | `resume` | Re-establish context on in-flight design effort |
 
 ### MAM/MAMA Architect Commands (`/mam:` or `/mama:`)

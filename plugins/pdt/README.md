@@ -41,6 +41,7 @@ claude --plugin-dir /path/to/plugins/pdt
 | `/pdt:gaps` | Assess what is done, partial, open, deferred |
 | `/pdt:backlog` | Update/review the concept development backlog |
 | `/pdt:next` | Figure out the best use of this session -- what's workable and highest-value |
+| `/pdt:coherence` | Cross-document consistency audit -- surface contradictions, stale descriptions, drift |
 | `/pdt:resume` | Re-establish context on an in-flight design effort |
 
 ## Typical Workflow
@@ -53,7 +54,8 @@ claude --plugin-dir /path/to/plugins/pdt
 5. /pdt:feedback         Process reactions and new ideas
 6. /pdt:crystallize      Write the documentation bundle
 7. /pdt:capture          Capture incremental updates
-8. /pdt:gaps             Assess readiness
+8. /pdt:coherence        Audit consistency across documents, fix drift
+9. /pdt:gaps             Assess readiness
    → Hand off to MAM or MAMA for implementation
 ```
 
@@ -89,11 +91,12 @@ PDT embodies a few core beliefs:
 
 PDT does not have an explicit "ready to build" command. Instead:
 
-1. Run `/pdt:gaps` to see the current state
-2. When the assessment shows readiness, install MAM or MAMA
-3. Run `/mam:arch-init` (or `/mama:arch-init`) -- the Architect will consume the PDT documentation bundle as its input
-4. The concept backlog's deferred items become the seed for the implementation roadmap
-5. The decisions log provides the institutional memory the Architect needs
+1. Run `/pdt:coherence` to ensure the corpus is internally consistent
+2. Run `/pdt:gaps` to see the current state
+3. When the assessment shows readiness, install MAM or MAMA
+4. Run `/mam:arch-init` (or `/mama:arch-init`) -- the Architect will consume the PDT documentation bundle as its input
+5. The concept backlog's deferred items become the seed for the implementation roadmap
+6. The decisions log provides the institutional memory the Architect needs
 
 ## When to Use PDT
 

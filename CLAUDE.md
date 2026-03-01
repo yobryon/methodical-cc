@@ -82,6 +82,7 @@ Subagent-based workflow where Architect orchestrates Implementor and UX Designer
 - `/gaps` - Assess what is done, partial, open, deferred
 - `/backlog` - Update/review concept development backlog
 - `/next` - Figure out what's workable and highest-value for this session
+- `/coherence` - Cross-document consistency audit with optional fix application
 - `/resume` - Re-establish context on in-flight design effort
 
 ### Architect Commands

@@ -154,9 +154,12 @@ There is no rigid sequence. The commands support different patterns of thinking,
 
 Steps 3, 4, and 6 happen repeatedly. Crystallization may happen once or may be revisited if understanding shifts significantly.
 
+After intensive iteration, run a coherence audit (`/pdt:coherence`) to catch drift -- contradictions, stale descriptions, and missing cross-references that accumulate across the corpus.
+
 ## Handoff to Implementation
 
 When the design effort reaches sufficient completeness:
+- The `/pdt:coherence` command will confirm the corpus is internally consistent -- the implementation team should not encounter contradictions
 - The `/pdt:gaps` command will naturally show that critical areas are resolved
 - The concept backlog will show mostly deferred/future items rather than blocking unknowns
 - The Design Partner will observe this and note readiness for implementation
@@ -184,5 +187,6 @@ There is no rigid gate. Readiness is a gradient that the gap analysis makes visi
 ### For Progress Tracking
 1. Use the concept backlog honestly -- do not pretend things are resolved
 2. Run gap analysis periodically to see the real state
-3. Deferred is a legitimate status -- not everything needs resolution now
-4. Ready-to-build does not mean perfect -- it means sufficient
+3. Run coherence audits after design bursts or before handoff -- the corpus drifts faster than you expect
+4. Deferred is a legitimate status -- not everything needs resolution now
+5. Ready-to-build does not mean perfect -- it means sufficient
