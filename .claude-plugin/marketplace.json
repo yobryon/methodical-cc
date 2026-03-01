@@ -21,7 +21,7 @@
       "name": "pdt",
       "source": "./plugins/pdt",
       "description": "Product Design Thinking - Socratic design partner for pre-implementation product thinking, concept development, and documentation crystallization",
-      "version": "1.0.1"
+      "version": "1.0.2"
     }
   ]
 }
