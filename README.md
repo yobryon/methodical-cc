@@ -83,10 +83,15 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
    /pdt:crystallize
    ```
 
-5. **Assess readiness** and hand off:
+5. **Assess readiness**:
    ```
    /pdt:gaps
-   → When ready, switch to MAM or MAMA for implementation
+   ```
+
+6. **Orient the Architect** and launch MAM:
+   ```
+   /pdt:orient
+   → Install MAM or MAMA, run /mam:arch-init or /mama:arch-init
    ```
 
 ## Quick Start (MAM - Session-based)
@@ -162,6 +167,9 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 | `backlog` | Update/review concept development backlog |
 | `next` | Figure out what's workable and highest-value for this session |
 | `coherence` | Cross-document consistency audit with optional fix application |
+| `commission` | Commission work from MAM (validation, prototyping, investigation) |
+| `orient` | Write/update architect orientation for launch or phase transitions |
+| `consult` | Process a design question from the Architect, write a response |
 | `resume` | Re-establish context on in-flight design effort |
 
 ### MAM/MAMA Architect Commands (`/mam:` or `/mama:`)
@@ -177,6 +185,8 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 | `arch-sprint-start` | Lock scope, write plan and brief |
 | `arch-sprint-complete` | Complete sprint, reconcile docs |
 | `arch-user-story` | Capture user stories |
+| `ask-pdt` | Formalize a design question for PDT |
+| `commission-complete` | Report results of a PDT commission |
 | `ux-consult` | Collaborate with UX Designer |
 
 ### Implementor Commands

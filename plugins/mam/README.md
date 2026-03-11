@@ -33,6 +33,8 @@ claude --plugin-dir /path/to/plugins/mam
 - `/mam:arch-sprint-start` - Lock scope, start sprint
 - `/mam:arch-sprint-complete` - Process completed sprint
 - `/mam:arch-user-story` - Capture user stories
+- `/mam:ask-pdt` - Formalize a design question for PDT
+- `/mam:commission-complete` - Report results of a PDT commission
 - `/mam:ux-consult` - Collaborate with UX Designer
 
 ### Implementor Commands

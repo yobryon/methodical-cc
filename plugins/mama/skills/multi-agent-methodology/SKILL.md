@@ -232,6 +232,24 @@ The roadmap is a directional guide, not a contract:
 - Evolves sprint by sprint as understanding deepens
 - Serves as an anchor point to remember original thinking
 
+## Working with PDT
+
+When a project was designed using PDT (Product Design Thinking), the Architect works as a peer with the Design Partner rather than starting from scratch.
+
+### Initialization from PDT
+
+If `docs/architect_orientation.md` exists, the project was designed with PDT. The orientation is your guided entry point — it provides reading order, priorities, confidence assessments, and active commissions. Read it first during `arch-init`.
+
+### Crossover Channel
+
+PDT and MAM communicate through discrete files in `docs/crossover/`:
+- **Commissions** (PDT→MAM): `commission_NNN_request.md` / `commission_NNN_response.md` — PDT requests execution work (validation, prototyping, investigation). Check for open commissions during sprint prep.
+- **Consultations** (MAM→PDT): `consult_NNN_request.md` / `consult_NNN_response.md` — When you encounter a design flaw, ambiguity, or trade-off that needs the Design Partner's input, formalize the question via `ask-pdt`.
+
+### Phase Transitions
+
+PDT may update `docs/architect_orientation.md` with new priorities and reading guidance when a new design phase is ready. Check for orientation updates during `arch-resume`.
+
 ## Best Practices
 
 ### For Architects
@@ -240,6 +258,7 @@ The roadmap is a directional guide, not a contract:
 3. Write briefs that save time - good context reduces back-and-forth
 4. Read implementation logs carefully - reality often differs from plan
 5. Reconcile promptly - don't let sprints pile up
+6. Check the crossover folder during resume and sprint prep - PDT may have new commissions or orientation updates
 
 ### For Implementors
 1. Log decisions, not just actions - "why" matters more than "what"

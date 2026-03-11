@@ -44,6 +44,8 @@ claude --plugin-dir /path/to/plugins/mama
 - `/mama:arch-sprint-start` - Lock scope, start sprint
 - `/mama:arch-sprint-complete` - Complete sprint
 - `/mama:arch-user-story` - Capture user stories
+- `/mama:ask-pdt` - Formalize a design question for PDT
+- `/mama:commission-complete` - Report results of a PDT commission
 - `/mama:ux-consult` - Collaborate with UX Designer subagent
 
 ### Implementor Delegation

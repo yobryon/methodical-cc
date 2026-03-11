@@ -9,19 +9,19 @@
       "name": "mam",
       "source": "./plugins/mam",
       "description": "Multi-Agent Methodology - session-based Architect/Implementor workflow for complex software projects",
-      "version": "1.0.3"
+      "version": "1.0.4"
     },
     {
       "name": "mama",
       "source": "./plugins/mama",
       "description": "Multi-Agent Methodology with Agents - subagent-based workflow with persistent Implementor and UX Designer contexts",
-      "version": "1.0.3"
+      "version": "1.0.4"
     },
     {
       "name": "pdt",
       "source": "./plugins/pdt",
       "description": "Product Design Thinking - Socratic design partner for pre-implementation product thinking, concept development, and documentation crystallization",
-      "version": "1.0.2"
+      "version": "1.0.3"
     }
   ]
 }

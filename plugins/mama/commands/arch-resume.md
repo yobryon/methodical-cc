@@ -22,6 +22,10 @@ Read the following files to establish context (use your Read tool):
 2. **Sprint Artifacts**: List files in `docs/` matching `implementation_*sprint*.md` and `implementor_brief_sprint*.md`
 3. **Active Deltas**: List files in `docs/` matching `delta_*.md`
 4. **Roadmap**: `docs/roadmap.md` if it exists
+5. **PDT Crossover**: Check `docs/crossover/` for new items since last session:
+   - Open commissions (`commission_*_request.md` with status `open`) — work PDT needs done
+   - Consultation responses (`consult_*_response.md`) — answers to questions you asked PDT
+   - Updates to `docs/architect_orientation.md` — phase transitions or priority changes from PDT
 
 Then:
 
@@ -45,10 +49,17 @@ Then:
    - **Last Updated**: [Date]
    ```
 
-5. **Summarize and Confirm**: Present your understanding:
+5. **Check PDT Activity**: If `docs/crossover/` has new items:
+   - Surface any new commissions from PDT and their urgency
+   - Surface any consultation responses that came back
+   - Note any orientation updates that signal a phase transition
+   - These may affect what you propose as the next action
+
+6. **Summarize and Confirm**: Present your understanding:
    - "We're in Sprint X, currently in the [phase] phase"
    - "The last completed sprint was Y, which accomplished [summary]"
    - "Active deltas include: [list]"
+   - PDT crossover status (if applicable): new commissions, pending consultations, orientation updates
    - "Ready to proceed with [next logical action]"
 
 ## Common Scenarios

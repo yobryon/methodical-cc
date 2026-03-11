@@ -28,6 +28,7 @@ This command kicks off the sprint planning cycle:
    - What does the roadmap suggest for this sprint?
    - What's the logical next step based on current state?
    - Are there any urgent items or blockers to address?
+   - Check `docs/crossover/` for open PDT commissions — if PDT has commissioned validation, prototyping, or investigation work, consider whether to fold it into this sprint or schedule it separately
 
 3. **Propose Initial Scope**:
    - Define a coherent sprint goal
@@ -70,6 +71,7 @@ Read these files to establish context:
 2. `docs/roadmap.md` - Roadmap status
 3. Recent sprint artifacts (use Glob for `docs/implementation_*sprint*.md`)
 4. Active deltas (use Glob for `docs/delta_*.md`)
+5. PDT crossover (use Glob for `docs/crossover/commission_*_request.md`) - check for open commissions
 
 ## Begin
 

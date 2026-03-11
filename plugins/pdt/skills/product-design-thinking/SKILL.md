@@ -156,17 +156,37 @@ Steps 3, 4, and 6 happen repeatedly. Crystallization may happen once or may be r
 
 After intensive iteration, run a coherence audit (`/pdt:coherence`) to catch drift -- contradictions, stale descriptions, and missing cross-references that accumulate across the corpus.
 
-## Handoff to Implementation
+## Launch and Ongoing Collaboration with MAM
+
+PDT and MAM are peers with different domains. PDT owns the design indefinitely. MAM owns execution. After launch, they run concurrently and communicate through a formal crossover channel (`docs/crossover/`).
+
+### Launch
 
 When the design effort reaches sufficient completeness:
-- The `/pdt:coherence` command will confirm the corpus is internally consistent -- the implementation team should not encounter contradictions
+- The `/pdt:coherence` command will confirm the corpus is internally consistent
 - The `/pdt:gaps` command will naturally show that critical areas are resolved
-- The concept backlog will show mostly deferred/future items rather than blocking unknowns
-- The Design Partner will observe this and note readiness for implementation
-- The user installs MAM or MAMA and begins the implementation workflow
-- The documentation bundle, decisions log, and concept backlog become the foundation for MAM/MAMA's `/mam:arch-init` or `/mama:arch-init`
+- The `/pdt:orient` command writes the architect orientation -- the Architect's entry point into the design corpus, with reading guidance, priorities, and confidence assessments
+- Optionally, `/pdt:commission` writes validation or prototyping tasks for the Architect to pick up
+- The user installs MAM or MAMA and runs `/mam:arch-init` or `/mama:arch-init`
+- The Architect reads `docs/architect_orientation.md` as their starting point
 
 There is no rigid gate. Readiness is a gradient that the gap analysis makes visible.
+
+### Crossover Channel
+
+PDT and MAM communicate through discrete files in `docs/crossover/`:
+- **Commissions** (PDT→MAM): `commission_NNN_request.md` / `commission_NNN_response.md` — PDT requests execution work, MAM reports results
+- **Consultations** (MAM→PDT): `consult_NNN_request.md` / `consult_NNN_response.md` — MAM asks design questions, PDT responds
+
+Each file has an ordinal, a status, and a one-line summary. This structure allows both sides to reference specific interactions in their logs and documents.
+
+### Phase Transitions
+
+When PDT completes the design for a new phase:
+- Run `/pdt:orient` to add a new dated section to the architect orientation
+- The Architect reads the update to understand new priorities, new documents, and shifted risk
+
+PDT may be designing phase 2 while MAM executes phase 1. Commissions and consultations flow between them continuously.
 
 ## Best Practices
 

@@ -83,19 +83,24 @@ Subagent-based workflow where Architect orchestrates Implementor and UX Designer
 - `/backlog` - Update/review concept development backlog
 - `/next` - Figure out what's workable and highest-value for this session
 - `/coherence` - Cross-document consistency audit with optional fix application
+- `/commission` - Commission work from MAM (validation, prototyping, investigation)
+- `/orient` - Write/update architect orientation for initial launch or phase transitions
+- `/consult` - Process a design question from the Architect, write a formal response
 - `/resume` - Re-establish context on in-flight design effort
 
 ### Architect Commands
-- `/arch-init` - Initialize project, set patterns, establish Architect role
-- `/arch-resume` - Resume in-flight project, establish/correct current state
+- `/arch-init` - Initialize project, set patterns, establish Architect role (reads PDT orientation if present)
+- `/arch-resume` - Resume in-flight project, establish/correct current state (checks crossover for new items)
 - `/arch-discuss` - Engage in architectural discussion
 - `/arch-create-docs` - Create initial product documentation
 - `/arch-roadmap` - Create implementation roadmap
-- `/arch-sprint-prep` - Prepare sprint proposal (auto-loads context)
+- `/arch-sprint-prep` - Prepare sprint proposal (auto-loads context, checks for PDT commissions)
 - `/arch-feedback` - Process user feedback essay
 - `/arch-sprint-start` - Lock scope, write plan and brief
 - `/arch-sprint-complete` - Process completed sprint, reconcile docs (auto-loads context)
 - `/arch-user-story` - Capture and discuss user stories
+- `/ask-pdt` - Formalize a design question for PDT, write a consultation request
+- `/commission-complete` - Report results of a PDT commission
 - `/ux-consult` - Collaborate with UX Designer subagent
 
 ### Implementor Commands
