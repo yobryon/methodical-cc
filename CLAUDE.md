@@ -49,7 +49,7 @@ methodical-cc/
 
 ### PDT (Product Design Thinking)
 Pre-implementation product design workflow with a Socratic Design Partner.
-- Commands namespaced as `/pdt:init`, `/pdt:discuss`, `/pdt:crystallize`, etc.
+- Commands namespaced as `/pdt:init`, `/pdt:discuss`, `/pdt:capture`, etc.
 - Single role: Design Partner (no Architect/Implementor split)
 - Produces design documents, decisions log, concept backlog
 - Natural predecessor to MAM/MAMA -- design first, then implement
@@ -71,14 +71,10 @@ Subagent-based workflow where Architect orchestrates Implementor and UX Designer
 ### PDT Commands
 - `/init` - Survey existing materials, classify, produce reading guide
 - `/read` - Deep-read materials, produce synthesis
-- `/discuss` - Open-ended conceptual discussion
-- `/feedback` - Process raw feedback, drive toward alignment
-- `/crystallize` - Propose doc structure, write documentation bundle
-- `/capture` - Memorialize incremental alignment
-- `/delta` - Capture a new idea as a working paper
+- `/discuss` - Discuss ideas, process feedback, explore concepts with the Design Partner
+- `/capture` - Write things down -- deltas, document updates, decisions, or the full documentation bundle
 - `/decide` - Record a resolved decision with rationale
-- `/research` - Research a topic, synthesize findings for discussion
-- `/research-brief` - Write a research prompt for an external agent
+- `/research` - Research a topic in-session or write a brief for external research
 - `/gaps` - Assess what is done, partial, open, deferred
 - `/backlog` - Update/review concept development backlog
 - `/next` - Figure out what's workable and highest-value for this session
@@ -86,21 +82,21 @@ Subagent-based workflow where Architect orchestrates Implementor and UX Designer
 - `/commission` - Commission work from MAM (validation, prototyping, investigation)
 - `/orient` - Write/update architect orientation for initial launch or phase transitions
 - `/consult` - Process a design question from the Architect, write a formal response
+- `/debrief` - Process an implementation debrief from the Architect, evaluate and evolve the design
 - `/resume` - Re-establish context on in-flight design effort
 
 ### Architect Commands
 - `/arch-init` - Initialize project, set patterns, establish Architect role (reads PDT orientation if present)
 - `/arch-resume` - Resume in-flight project, establish/correct current state (checks crossover for new items)
-- `/arch-discuss` - Engage in architectural discussion
+- `/arch-discuss` - Discuss ideas, process feedback, explore architecture with the user
 - `/arch-create-docs` - Create initial product documentation
 - `/arch-roadmap` - Create implementation roadmap
 - `/arch-sprint-prep` - Prepare sprint proposal (auto-loads context, checks for PDT commissions)
-- `/arch-feedback` - Process user feedback essay
 - `/arch-sprint-start` - Lock scope, write plan and brief
 - `/arch-sprint-complete` - Process completed sprint, reconcile docs (auto-loads context)
-- `/arch-user-story` - Capture and discuss user stories
-- `/ask-pdt` - Formalize a design question for PDT, write a consultation request
+- `/consult-pdt` - Formalize a design question for PDT, write a consultation request
 - `/commission-complete` - Report results of a PDT commission
+- `/debrief-pdt` - Report back to PDT after a milestone with implementation assessment
 - `/ux-consult` - Collaborate with UX Designer subagent
 
 ### Implementor Commands
@@ -162,7 +158,7 @@ claude --plugin-dir ./plugins/mama
 - **Implementation Log**: Running journal of actual work
 
 ### Sprint Lifecycle
-1. Prep → 2. Feedback → 3. Start → 4. Begin (implementation) → 5. End (implementation) → 6. Complete
+1. Prep → 2. Discuss → 3. Start → 4. Begin (implementation) → 5. End (implementation) → 6. Complete
 
 ## Advanced Features
 

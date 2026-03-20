@@ -56,7 +56,7 @@ Add the decision to `docs/decisions_log.md` with:
 
 - If this decision resolves a concept backlog item, update the backlog
 - If this decision resolves open questions in a delta, update the delta
-- If this decision affects an existing product document, note it (but save the doc update for `/pdt:capture` or `/pdt:crystallize`)
+- If this decision affects an existing product document, note it (but save the doc update for `/pdt:capture`)
 - If this decision supersedes a previous decision, mark the old one as SUPERSEDED
 
 ### 5. Confirm

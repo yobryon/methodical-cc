@@ -78,9 +78,9 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
    /pdt:discuss [topic or idea]
    ```
 
-4. **Crystallize** into formal documentation:
+4. **Capture** aligned thinking into documentation:
    ```
-   /pdt:crystallize
+   /pdt:capture
    ```
 
 5. **Assess readiness**:
@@ -107,9 +107,9 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
    /mam:arch-sprint-prep
    ```
 
-3. **Process Feedback & Start Sprint**:
+3. **Discuss Feedback & Start Sprint**:
    ```
-   /mam:arch-feedback [your thoughts]
+   /mam:arch-discuss [your thoughts and reactions]
    /mam:arch-sprint-start
    ```
 
@@ -155,14 +155,10 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 |---------|---------|
 | `init` | Survey existing materials, produce reading guide |
 | `read` | Deep-read materials, produce synthesis |
-| `discuss` | Open-ended conceptual discussion |
-| `feedback` | Process raw feedback, drive toward alignment |
-| `crystallize` | Propose doc structure, write documentation bundle |
-| `capture` | Memorialize incremental alignment |
-| `delta` | Capture a new idea as a working paper |
+| `discuss` | Discuss ideas, process feedback, explore concepts |
+| `capture` | Write things down -- deltas, doc updates, decisions, or full documentation bundle |
 | `decide` | Record a resolved decision with rationale |
-| `research` | Research a topic, synthesize findings for discussion |
-| `research-brief` | Write a research prompt for an external agent |
+| `research` | Research a topic in-session or write a brief for external research |
 | `gaps` | Assess what is done, partial, open, deferred |
 | `backlog` | Update/review concept development backlog |
 | `next` | Figure out what's workable and highest-value for this session |
@@ -170,6 +166,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 | `commission` | Commission work from MAM (validation, prototyping, investigation) |
 | `orient` | Write/update architect orientation for launch or phase transitions |
 | `consult` | Process a design question from the Architect, write a response |
+| `debrief` | Process an implementation debrief, evaluate and evolve the design |
 | `resume` | Re-establish context on in-flight design effort |
 
 ### MAM/MAMA Architect Commands (`/mam:` or `/mama:`)
@@ -177,16 +174,15 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 |---------|---------|
 | `arch-init` | Initialize project, set patterns |
 | `arch-resume` | Resume in-flight project |
-| `arch-discuss` | Architectural discussion |
+| `arch-discuss` | Discuss ideas, process feedback, explore architecture |
 | `arch-create-docs` | Create product documentation |
 | `arch-roadmap` | Create implementation roadmap |
 | `arch-sprint-prep` | Prepare sprint proposal |
-| `arch-feedback` | Process user feedback |
 | `arch-sprint-start` | Lock scope, write plan and brief |
 | `arch-sprint-complete` | Complete sprint, reconcile docs |
-| `arch-user-story` | Capture user stories |
-| `ask-pdt` | Formalize a design question for PDT |
+| `consult-pdt` | Formalize a design question for PDT |
 | `commission-complete` | Report results of a PDT commission |
+| `debrief-pdt` | Report back to PDT after a milestone |
 | `ux-consult` | Collaborate with UX Designer |
 
 ### Implementor Commands

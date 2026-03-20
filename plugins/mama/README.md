@@ -36,16 +36,15 @@ claude --plugin-dir /path/to/plugins/mama
 ### Architect Commands
 - `/mama:arch-init` - Initialize project
 - `/mama:arch-resume` - Resume in-flight project
-- `/mama:arch-discuss` - Architectural discussion
+- `/mama:arch-discuss` - Discuss ideas, process feedback, explore architecture
 - `/mama:arch-create-docs` - Create documentation
 - `/mama:arch-roadmap` - Create roadmap
 - `/mama:arch-sprint-prep` - Prepare sprint proposal
-- `/mama:arch-feedback` - Process feedback
 - `/mama:arch-sprint-start` - Lock scope, start sprint
 - `/mama:arch-sprint-complete` - Complete sprint
-- `/mama:arch-user-story` - Capture user stories
-- `/mama:ask-pdt` - Formalize a design question for PDT
+- `/mama:consult-pdt` - Formalize a design question for PDT
 - `/mama:commission-complete` - Report results of a PDT commission
+- `/mama:debrief-pdt` - Report back to PDT after a milestone
 - `/mama:ux-consult` - Collaborate with UX Designer subagent
 
 ### Implementor Delegation

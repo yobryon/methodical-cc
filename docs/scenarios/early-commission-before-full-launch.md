@@ -48,7 +48,7 @@ This writes `docs/crossover/commission_001_response.md` with findings, design im
 Take the commission results back to the PDT session:
 
 ```
-/pdt:feedback See docs/crossover/commission_001_response.md for the validation results
+/pdt:discuss See docs/crossover/commission_001_response.md for the validation results
 ```
 
 PDT processes the findings, updates the design, possibly writes more commissions, and eventually reaches the point where the design is ready for full implementation. At that point:
@@ -103,7 +103,7 @@ Design work produces corpus
                                          → reads commission, does validation work
                                          /mam:commission-complete → writes response
 
-/pdt:feedback [commission results]
+/pdt:discuss [commission results]
 → further design work
 → possibly more commissions
 
@@ -117,6 +117,14 @@ Design work produces corpus
                                          /mam:arch-roadmap
                                          /mam:arch-sprint-prep
                                          → full project flow begins
+                                         ...
+                                         → reaches MVP
+                                         /mam:debrief-pdt → writes debrief
+
+/pdt:debrief [debrief results]
+→ evaluates fidelity, absorbs insights
+→ evolves design, updates docs
+→ possibly /pdt:orient for next phase
 ```
 
 ## Variations

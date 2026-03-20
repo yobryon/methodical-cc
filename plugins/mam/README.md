@@ -25,16 +25,15 @@ claude --plugin-dir /path/to/plugins/mam
 ### Architect Commands
 - `/mam:arch-init` - Initialize project, set patterns
 - `/mam:arch-resume` - Resume in-flight project
-- `/mam:arch-discuss` - Architectural discussion
+- `/mam:arch-discuss` - Discuss ideas, process feedback, explore architecture
 - `/mam:arch-create-docs` - Create product documentation
 - `/mam:arch-roadmap` - Create implementation roadmap
 - `/mam:arch-sprint-prep` - Prepare sprint proposal
-- `/mam:arch-feedback` - Process user feedback
 - `/mam:arch-sprint-start` - Lock scope, start sprint
 - `/mam:arch-sprint-complete` - Process completed sprint
-- `/mam:arch-user-story` - Capture user stories
-- `/mam:ask-pdt` - Formalize a design question for PDT
+- `/mam:consult-pdt` - Formalize a design question for PDT
 - `/mam:commission-complete` - Report results of a PDT commission
+- `/mam:debrief-pdt` - Report back to PDT after a milestone
 - `/mam:ux-consult` - Collaborate with UX Designer
 
 ### Implementor Commands

@@ -11,7 +11,7 @@ You are the **Architect Agent**. It's time to plan the next sprint.
 
 This command kicks off the sprint planning cycle:
 1. **You propose** initial scope (this step)
-2. **User provides** feedback, new ideas, reflections via `/mam:arch-feedback`
+2. **User provides** feedback, new ideas, reflections via `/mam:arch-discuss`
 3. **You process** feedback, create deltas, discuss
 4. **Together you converge** on final scope
 5. **You lock scope** via `/mam:arch-sprint-start`
@@ -75,6 +75,6 @@ Read these files to establish context:
 
 ## Begin
 
-Review the project state and present your sprint proposal. End by inviting the user to share their feedback via `/mam:arch-feedback` (or they may just respond conversationally with their thoughts).
+Review the project state and present your sprint proposal. End by inviting the user to share their feedback via `/mam:arch-discuss` (or they may just respond conversationally with their thoughts).
 
 $ARGUMENTS

@@ -30,14 +30,10 @@ claude --plugin-dir /path/to/plugins/pdt
 |---------|---------|
 | `/pdt:init` | Survey existing materials, classify, produce a reading guide |
 | `/pdt:read` | Deep-read materials, produce synthesis |
-| `/pdt:discuss` | Open-ended conceptual discussion |
-| `/pdt:feedback` | Process raw feedback -- untangle, organize, drive toward alignment |
-| `/pdt:crystallize` | The big moment: propose doc structure, write the documentation bundle |
-| `/pdt:capture` | Memorialize incremental alignment (doc updates, deltas, decisions) |
-| `/pdt:delta` | Capture a single new idea as a lightweight working paper |
+| `/pdt:discuss` | Discuss ideas, process feedback, explore concepts with the Design Partner |
+| `/pdt:capture` | Write things down -- deltas, doc updates, decisions, or the full documentation bundle |
 | `/pdt:decide` | Record a resolved decision with full rationale |
-| `/pdt:research` | Research a topic -- search, read, synthesize findings for discussion |
-| `/pdt:research-brief` | Write a self-contained research prompt for an external agent |
+| `/pdt:research` | Research a topic in-session or write a brief for external research |
 | `/pdt:gaps` | Assess what is done, partial, open, deferred |
 | `/pdt:backlog` | Update/review the concept development backlog |
 | `/pdt:next` | Figure out the best use of this session -- what's workable and highest-value |
@@ -45,6 +41,7 @@ claude --plugin-dir /path/to/plugins/pdt
 | `/pdt:commission` | Commission work from MAM -- validation, prototyping, investigation |
 | `/pdt:orient` | Write/update architect orientation for initial launch or phase transitions |
 | `/pdt:consult` | Process a design question from the Architect, write a formal response |
+| `/pdt:debrief` | Process an implementation debrief — evaluate fidelity, absorb insights, evolve the design |
 | `/pdt:resume` | Re-establish context on an in-flight design effort |
 
 ## Typical Workflow
@@ -52,19 +49,17 @@ claude --plugin-dir /path/to/plugins/pdt
 ```
 1. /pdt:init             Survey existing materials
 2. /pdt:read             Deep-read priority items
-3. /pdt:discuss          Explore concepts (repeat as needed)
-4. /pdt:research         Go deep on a topic (or /pdt:research-brief to commission it)
-5. /pdt:feedback         Process reactions and new ideas
-6. /pdt:crystallize      Write the documentation bundle
-7. /pdt:capture          Capture incremental updates
-8. /pdt:coherence        Audit consistency across documents, fix drift
-9. /pdt:gaps             Assess readiness
-10. /pdt:orient          Brief the Architect on the design corpus
-11. /pdt:commission      Commission validation/prototyping work
+3. /pdt:discuss          Explore concepts, process feedback (repeat as needed)
+4. /pdt:research         Go deep on a topic (in-session or as a brief)
+5. /pdt:capture          Write docs, capture updates, create deltas
+6. /pdt:coherence        Audit consistency across documents, fix drift
+7. /pdt:gaps             Assess readiness
+8. /pdt:orient           Brief the Architect on the design corpus
+9. /pdt:commission       Commission validation/prototyping work
     → Launch MAM for implementation
 ```
 
-The workflow is not strictly linear. Discussion, feedback, delta creation, and decision recording happen throughout. Crystallization happens when understanding is deep enough.
+The workflow is not strictly linear. Discussion and decision recording happen throughout. Capture is used at any scale -- from a quick delta to the full documentation bundle -- whenever thinking has converged enough to write down.
 
 After MAM launches, PDT continues to own the design. Use `/pdt:commission` to request execution work, `/pdt:consult` to respond to design questions from the Architect, and `/pdt:orient` again for phase transitions.
 
@@ -87,7 +82,8 @@ your-project/
 │       ├── commission_NNN_request.md   # PDT commissions work from MAM
 │       ├── commission_NNN_response.md  # MAM reports results
 │       ├── consult_NNN_request.md      # MAM asks PDT a design question
-│       └── consult_NNN_response.md     # PDT responds
+│       ├── consult_NNN_response.md     # PDT responds
+│       └── debrief_NNN.md             # MAM reports on a milestone
 ```
 
 ## Philosophy
@@ -118,7 +114,8 @@ PDT and MAM are peers with different domains. PDT owns the design indefinitely; 
 - **PDT commissions MAM**: Use `/pdt:commission` to request validation, prototyping, or investigation work. Results come back via `commission_NNN_response.md`.
 - **MAM consults PDT**: When the Architect hits a design question, they write a `consult_NNN_request.md`. Use `/pdt:consult` to discuss and respond.
 - **Phase transitions**: When PDT is ready to hand off the next phase, use `/pdt:orient` to update the architect orientation with new priorities and reading guidance.
-- **Processing results**: Use `/pdt:feedback` to incorporate commission results or implementation learnings back into the design.
+- **Milestone debriefs**: When MAM reaches a milestone (MVP, phase completion, version release), the Architect writes a `debrief_NNN.md`. Use `/pdt:debrief` to evaluate fidelity, absorb insights, and evolve the design.
+- **Processing results**: Use `/pdt:discuss` to incorporate commission results or implementation learnings back into the design.
 
 ## When to Use PDT
 

@@ -1,6 +1,6 @@
 ---
 name: product-design-thinking
-description: Product Design Thinking methodology for pre-implementation product design. Provides a Socratic design partner who helps excavate existing thinking, develop concepts through conversation, crystallize aligned understanding into documentation, and track progress toward ready-to-build. Use when doing product thinking before implementation, when exploring and formalizing design concepts, or when preparing a project for handoff to MAM/MAMA.
+description: Product Design Thinking methodology for pre-implementation product design. Provides a Socratic design partner who helps excavate existing thinking, develop concepts through conversation, capture aligned understanding into documentation, and track progress toward ready-to-build. Use when doing product thinking before implementation, when exploring and formalizing design concepts, or when preparing a project for handoff to MAM/MAMA.
 ---
 
 # Product Design Thinking Methodology
@@ -73,7 +73,7 @@ The Design Partner is your thinking companion through the entire pre-implementat
 **Lifecycle:**
 1. Created when new ideas emerge during discussion, feedback, or reading
 2. Refined through conversation
-3. Either folded into the documentation bundle during crystallize/capture, or deferred/abandoned
+3. Either folded into the documentation bundle during `/pdt:capture`, or deferred/abandoned
 4. Deltas are working papers. They can be incomplete, speculative, or wrong. That is their purpose.
 
 ### Decisions Log
@@ -122,37 +122,36 @@ The Design Partner is your thinking companion through the entire pre-implementat
 - Whatever serves the project
 
 **Lifecycle:**
-1. Structure proposed during `/pdt:crystallize`
-2. Initial content written during crystallize
-3. Updated incrementally via `/pdt:capture`
-4. Becomes the input for MAM/MAMA when implementation begins
+1. Structure proposed and initial content written during `/pdt:capture` (crystallization mode)
+2. Updated incrementally via `/pdt:capture` (incremental mode)
+3. Becomes the input for MAM/MAMA when implementation begins
 
 ## The Workflow
 
 There is no rigid sequence. The commands support different patterns of thinking, and you use them as needed. That said, a typical design effort flows roughly like this:
 
 ```
-1. EXCAVATION          2. DEEP READING       3. IDEATION
+1. EXCAVATION          2. DEEP READING       3. DISCUSSION
 ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
-│ Survey what  │ ────▶ │ Read key    │ ────▶ │ Discuss,    │
-│ exists       │       │ materials   │       │ explore,    │
-└─────────────┘       └─────────────┘       │ develop     │
+│ Survey what  │ ────▶ │ Read key    │ ────▶ │ Explore,    │
+│ exists       │       │ materials   │       │ process,    │
+└─────────────┘       └─────────────┘       │ align       │
                                              └──────┬──────┘
                                                     │
-         ┌──────────────────────────────────────────┘
-         ▼
-4. FEEDBACK LOOPS      5. CRYSTALLIZATION    6. INCREMENTAL
-┌─────────────┐       ┌─────────────┐       ┌─────────────┐
-│ Process raw  │ ────▶ │ Propose     │ ────▶ │ Capture new │
-│ reactions,   │       │ structure,  │       │ alignment,  │
-│ drive align  │       │ write docs  │       │ update docs │
-└─────────────┘       └─────────────┘       └─────────────┘
-         ▲                                          │
-         └──────────────────────────────────────────┘
-                     (iterate as needed)
+                              ┌─────────────────────┘
+                              ▼
+                       4. CAPTURE
+                       ┌─────────────┐
+                       │ Write docs, │
+                       │ deltas,     │
+                       │ updates     │
+                       └─────────────┘
+                              │
+                              └──────▶ back to 3
+                           (iterate as needed)
 ```
 
-Steps 3, 4, and 6 happen repeatedly. Crystallization may happen once or may be revisited if understanding shifts significantly.
+Steps 3 and 4 happen repeatedly. Discussion scales from Socratic exploration to structured feedback processing. Capture scales from a quick delta to the full documentation bundle.
 
 After intensive iteration, run a coherence audit (`/pdt:coherence`) to catch drift -- contradictions, stale descriptions, and missing cross-references that accumulate across the corpus.
 
@@ -177,8 +176,13 @@ There is no rigid gate. Readiness is a gradient that the gap analysis makes visi
 PDT and MAM communicate through discrete files in `docs/crossover/`:
 - **Commissions** (PDT→MAM): `commission_NNN_request.md` / `commission_NNN_response.md` — PDT requests execution work, MAM reports results
 - **Consultations** (MAM→PDT): `consult_NNN_request.md` / `consult_NNN_response.md` — MAM asks design questions, PDT responds
+- **Debriefs** (MAM→PDT): `debrief_NNN.md` — MAM reports back after a milestone (MVP, phase completion, version release) with an assessment of how the design played out in practice
 
 Each file has an ordinal, a status, and a one-line summary. This structure allows both sides to reference specific interactions in their logs and documents.
+
+### Milestone Debriefs
+
+When MAM reaches a milestone, the Architect writes a debrief reporting what was built, how faithfully the design was realized, where deviations occurred, and what was learned. PDT processes the debrief via `/pdt:debrief` — evaluating design fidelity, assessing deviations, absorbing emergent insights, and evolving the design through document updates, new deltas, new decisions, and backlog changes. This is how the design learns from implementation.
 
 ### Phase Transitions
 

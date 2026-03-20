@@ -25,7 +25,7 @@ Review these to build your picture:
 For each open backlog item, delta, or known gap, determine what's needed to make progress:
 
 - **Workable now**: You and the user can make meaningful progress on this in conversation right now. No external dependencies, no blocked inputs, no prototyping required.
-- **Needs research**: Progress requires investigation we haven't done yet. Could be kicked off with `/pdt:research` or `/pdt:research-brief`.
+- **Needs research**: Progress requires investigation we haven't done yet. Could be kicked off with `/pdt:research`.
 - **Needs external input**: Waiting on a stakeholder, another team member, a decision from someone not in this session, or deliverables from a parallel effort.
 - **Needs prototyping or implementation**: Can't be resolved through design thinking alone -- needs hands-on experimentation to inform the design.
 - **User homework**: Something the user specifically needs to do outside this session (write something, make a call, gather information).

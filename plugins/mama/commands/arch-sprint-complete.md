@@ -81,7 +81,7 @@ Provide a clear summary:
 - Key learnings
 - Questions addressed
 - Initial proposal for Sprint X+1
-- Invitation for user feedback (which will flow into `/mama:arch-feedback`)
+- Invitation for user feedback (which will flow into `/mama:arch-discuss`)
 
 ## Reconciliation Checklist
 

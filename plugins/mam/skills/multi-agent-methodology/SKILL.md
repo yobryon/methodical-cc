@@ -152,12 +152,12 @@ A sprint is a coherent chunk of work with a clear outcome:
 ### Sprint Phases
 
 ```
-1. PLANNING           2. FEEDBACK           3. FINALIZATION
+1. PLANNING           2. DISCUSSION         3. FINALIZATION
 ┌─────────────┐      ┌─────────────┐       ┌─────────────┐
-│ Arch proposes│ ───▶ │User feedback│ ────▶ │ Converge &  │
-│ initial scope│      │ + new ideas │       │ write plan  │
-└─────────────┘      └─────────────┘       └─────────────┘
-                                                  │
+│ Arch proposes│ ───▶ │User + Arch  │ ────▶ │ Converge &  │
+│ initial scope│      │ discuss,    │       │ write plan  │
+└─────────────┘      │ align       │       └─────────────┘
+                      └─────────────┘             │
                                                   ▼
 6. RECONCILIATION    5. REVIEW            4. IMPLEMENTATION
 ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
@@ -173,11 +173,11 @@ A sprint is a coherent chunk of work with a clear outcome:
 - Based on roadmap, previous sprint outcomes, and project state
 - Output: Initial scope proposal
 
-**2. Feedback (User → Architect)**
-- User provides feedback essay: reactions, new ideas, reflections
+**2. Discussion (User + Architect)**
+- User shares thinking: reactions, new ideas, reflections, feedback on the proposal
 - Can include retrospective on previous sprint AND forward-looking thoughts
-- Architect untangles, organizes, extracts deltas
-- Discussion to clarify and align
+- Architect engages, probes, organizes, extracts deltas
+- Drives toward alignment on scope
 - Output: Delta documents, refined scope understanding
 
 **3. Finalization (Architect)**
@@ -207,22 +207,22 @@ A sprint is a coherent chunk of work with a clear outcome:
 - Propose scope for next sprint
 - Output: Updated product docs, next sprint proposal
 
-## The Feedback Cycle
+## The Discussion Cycle
 
-The feedback cycle is where evolution happens. After implementation:
+The discussion cycle is where evolution happens. After implementation:
 
 1. User collects thoughts during implementation (notes, reactions, ideas)
-2. User presents these to the Architect as a feedback essay
-3. Architect processes the feedback:
+2. User presents these to the Architect via `arch-discuss`
+3. Architect engages with the input:
    - Untangles and organizes the content
    - Identifies new ideas → creates deltas
-   - Identifies feedback on existing decisions → notes for discussion
+   - Probes reactions to existing decisions → drives toward clarity
    - Identifies architectural implications → flags for discussion
    - Identifies scope candidates → adds to sprint planning
-4. Discussion to clarify and converge
+4. Together they clarify and converge
 5. Decisions on what to tackle now vs. backlog vs. roadmap
 
-**Key Insight:** The feedback essay often mixes retrospective reflection with forward-looking ideas. This is natural and efficient. The Architect should embrace this and sort it out.
+**Key Insight:** User input often mixes retrospective reflection with forward-looking ideas. This is natural and efficient. The Architect should embrace this and sort it out.
 
 ## Roadmap Management
 
@@ -244,7 +244,8 @@ If `docs/architect_orientation.md` exists, the project was designed with PDT. Th
 
 PDT and MAM communicate through discrete files in `docs/crossover/`:
 - **Commissions** (PDT→MAM): `commission_NNN_request.md` / `commission_NNN_response.md` — PDT requests execution work (validation, prototyping, investigation). Check for open commissions during sprint prep.
-- **Consultations** (MAM→PDT): `consult_NNN_request.md` / `consult_NNN_response.md` — When you encounter a design flaw, ambiguity, or trade-off that needs the Design Partner's input, formalize the question via `ask-pdt`.
+- **Consultations** (MAM→PDT): `consult_NNN_request.md` / `consult_NNN_response.md` — When you encounter a design flaw, ambiguity, or trade-off that needs the Design Partner's input, formalize the question via `consult-pdt`.
+- **Debriefs** (MAM→PDT): `debrief_NNN.md` — When you reach a milestone (MVP, phase completion, version release), report back to PDT via `debrief-pdt` with an assessment of how the design played out in practice.
 
 ### Phase Transitions
 
