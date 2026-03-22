@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 — 2026-03-22
+
+### Architectural Review
+
+- **`/mam:arch-review`** (and `/mama:arch-review`) — System-level architectural review of the implemented codebase against the design intent. Maps design concepts to code, surfaces DRY violations, concept fragmentation, pattern drift, missing abstractions, and design-code mismatches. Supports scoping by area, concern, or sprint range. Produces classified findings with concrete consolidation recommendations. Run periodically (every 5-10 sprints), before phase transitions, or when symptoms of architectural drift appear.
+
 ## 1.1.0 — 2026-03-20
 
 ### PDT ↔ MAM Crossover Channel

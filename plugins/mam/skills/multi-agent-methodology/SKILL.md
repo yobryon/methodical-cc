@@ -260,6 +260,7 @@ PDT may update `docs/architect_orientation.md` with new priorities and reading g
 4. Read implementation logs carefully - reality often differs from plan
 5. Reconcile promptly - don't let sprints pile up
 6. Check the crossover folder during resume and sprint prep - PDT may have new commissions or orientation updates
+7. Run architectural reviews periodically (every 5-10 sprints) - codebases fragment faster than you expect, and sprint-level reconciliation doesn't catch systemic drift
 
 ### For Implementors
 1. Log decisions, not just actions - "why" matters more than "what"

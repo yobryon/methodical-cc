@@ -31,6 +31,7 @@ claude --plugin-dir /path/to/plugins/mam
 - `/mam:arch-sprint-prep` - Prepare sprint proposal
 - `/mam:arch-sprint-start` - Lock scope, start sprint
 - `/mam:arch-sprint-complete` - Process completed sprint
+- `/mam:arch-review` - Architectural review of codebase against design
 - `/mam:consult-pdt` - Formalize a design question for PDT
 - `/mam:commission-complete` - Report results of a PDT commission
 - `/mam:debrief-pdt` - Report back to PDT after a milestone

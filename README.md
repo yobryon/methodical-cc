@@ -180,6 +180,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 | `arch-sprint-prep` | Prepare sprint proposal |
 | `arch-sprint-start` | Lock scope, write plan and brief |
 | `arch-sprint-complete` | Complete sprint, reconcile docs |
+| `arch-review` | Architectural review — DRY, fragmentation, pattern drift |
 | `consult-pdt` | Formalize a design question for PDT |
 | `commission-complete` | Report results of a PDT commission |
 | `debrief-pdt` | Report back to PDT after a milestone |

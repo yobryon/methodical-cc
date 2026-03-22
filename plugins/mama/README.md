@@ -42,6 +42,7 @@ claude --plugin-dir /path/to/plugins/mama
 - `/mama:arch-sprint-prep` - Prepare sprint proposal
 - `/mama:arch-sprint-start` - Lock scope, start sprint
 - `/mama:arch-sprint-complete` - Complete sprint
+- `/mama:arch-review` - Architectural review of codebase against design
 - `/mama:consult-pdt` - Formalize a design question for PDT
 - `/mama:commission-complete` - Report results of a PDT commission
 - `/mama:debrief-pdt` - Report back to PDT after a milestone

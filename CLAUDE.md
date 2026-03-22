@@ -94,6 +94,7 @@ Subagent-based workflow where Architect orchestrates Implementor and UX Designer
 - `/arch-sprint-prep` - Prepare sprint proposal (auto-loads context, checks for PDT commissions)
 - `/arch-sprint-start` - Lock scope, write plan and brief
 - `/arch-sprint-complete` - Process completed sprint, reconcile docs (auto-loads context)
+- `/arch-review` - Architectural review of codebase against design intent
 - `/consult-pdt` - Formalize a design question for PDT, write a consultation request
 - `/commission-complete` - Report results of a PDT commission
 - `/debrief-pdt` - Report back to PDT after a milestone with implementation assessment
