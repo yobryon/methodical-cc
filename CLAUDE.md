@@ -29,14 +29,14 @@ methodical-cc/
 │   │   ├── agents/
 │   │   │   └── ux-designer/
 │   │   └── hooks/
-│   └── mama/                    # Subagent-based implementation
+│   └── mama/                    # Team-based implementation
 │       ├── .claude-plugin/
 │       │   └── plugin.json
 │       ├── skills/
 │       ├── commands/
 │       ├── agents/
-│       │   ├── ux-designer/
-│       │   └── implementor/     # Implementor as subagent
+│       │   ├── ux-designer/     # UX Designer teammate definition
+│       │   └── implementor/     # Implementor teammate definition
 │       └── hooks/
 ├── tools/                       # Migration and utility scripts
 ├── docs/                        # Design-time documentation (not part of plugins)
@@ -61,10 +61,13 @@ Session-based workflow where you run Architect and Implementor as separate Claud
 - Good for explicit context separation
 
 ### MAMA (Multi-Agent Methodology with Agents)
-Subagent-based workflow where Architect orchestrates Implementor and UX Designer as persistent subagents.
+Team-based workflow where Architect orchestrates Implementor and UX Designer as agent teammates.
 - Commands namespaced as `/mama:arch-init`, `/mama:impl-begin`, etc.
-- Implementor and UX Designer maintain context across sessions via resume
-- Good for context continuity across sprints
+- User can interact directly with Implementor and UX Designer teammates
+- Implementor maintains persistent working knowledge via compacted state document
+- MAMA internal state kept in `.mama/` (or `.mama-{scope}/` for multi-product)
+- Sprint artifacts organized hierarchically: `docs/sprint/X/`
+- Requires agent teams feature enabled
 
 ## Commands
 
@@ -98,11 +101,11 @@ Subagent-based workflow where Architect orchestrates Implementor and UX Designer
 - `/consult-pdt` - Formalize a design question for PDT, write a consultation request
 - `/commission-complete` - Report results of a PDT commission
 - `/debrief-pdt` - Report back to PDT after a milestone with implementation assessment
-- `/ux-consult` - Collaborate with UX Designer subagent
+- `/ux-consult` - Collaborate with UX Designer teammate
 
 ### Implementor Commands
-- `/impl-begin` - Begin implementation (MAM: read brief; MAMA: delegate to subagent)
-- `/impl-end` - Wrap up implementation with retrospective
+- `/impl-begin` - Begin implementation (MAM: read brief; MAMA: spawn Implementor teammate)
+- `/impl-end` - Wrap up implementation, write state, shut down Implementor
 
 ### Shared Commands
 - `/pattern-add` - Add or update a project pattern in CLAUDE.md
@@ -165,27 +168,38 @@ claude --plugin-dir ./plugins/mama
 
 ### SessionStart Hook
 On session start, the plugin auto-detects project state:
-- Checks for `CLAUDE.md` and current sprint info
-- Scans `docs/` for sprint artifacts
+- Checks for `.mama/` or `.mama-{scope}/` state directories
+- Reads architect state for sprint history
+- Falls back to scanning `CLAUDE.md` and `docs/` if no state directory exists
 - Displays detected state and invites correction ("We're actually in sprint X")
+
+### MAMA State Directory
+MAMA keeps its internal state in `.mama/` (or `.mama-{scope}/` for multi-product projects):
+- `architect_state.md` - Architect's running project knowledge and sprint history
+- `implementor_state.md` - Implementor's compacted working memory across sprints
+- `sprint_log.md` - Chronological sprint record
+
+### Agent Teams
+MAMA uses agent teams for orchestration:
+- Architect is the team lead
+- Implementor and UX Designer are spawned as teammates
+- User can interact directly with any teammate (Shift+Down to cycle, or split panes)
+- Teammates communicate directly via SendMessage
+- Shared task list provides live sprint progress visibility
+- Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+
+### Implementor Persistent Working Knowledge
+The Implementor accumulates expertise across sprints via `implementor_state.md`:
+- Written at sprint end (impl-end), compacting everything learned
+- Loaded automatically at sprint start via SessionStart hook in the agent definition
+- Rewritten (not appended) each sprint -- stays bounded through compaction
 
 ### Context Loading
 Key commands prompt Claude to read relevant files before proceeding:
-- `arch-sprint-prep` - Reads roadmap, recent artifacts, active deltas
-- `arch-sprint-complete` - Reads implementation log, plan, deltas
-- `impl-begin` - Reads brief, plan, project patterns
-- `arch-resume` - Reads full project state for session resumption
-
-### UX Designer Subagent
-The `/ux-consult` command invokes a UX Designer subagent that:
-- Works collaboratively with the Architect on design decisions
-- Creates design artifacts (style guides, interaction patterns, etc.)
-- Uses persistent context (resume capability) for continuity across sessions
-
-To maintain UX Designer continuity:
-1. First session: Note the agent ID returned
-2. Later sessions: Use resume with that agent ID
-3. Store agent ID in project notes or CLAUDE.md
+- `arch-sprint-prep` - Reads architect state, roadmap, active deltas
+- `arch-sprint-complete` - Reads implementation log, updates architect state and sprint log
+- `impl-begin` - Spawns Implementor teammate with brief, plan, and state references
+- `arch-resume` - Reads `.mama*/` state for session resumption
 
 ## Development Notes
 

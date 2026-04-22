@@ -80,7 +80,7 @@ These decisions have been made by the Architect and User. Do not revisit them; i
 
 ## Implementation Plan
 
-See: `docs/implementation_plan_sprintX.md`
+See the implementation plan in your sprint directory (e.g., `docs/sprint/X/implementation_plan.md`).
 
 Execute the phases in order. After completing each phase, update your implementation log before proceeding.
 
@@ -88,7 +88,7 @@ Execute the phases in order. After completing each phase, update your implementa
 
 ## Implementation Log
 
-Maintain your log at: `docs/implementation_log_sprintX.md`
+Maintain your log in the sprint directory (e.g., `docs/sprint/X/implementation_log.md`).
 
 Update it as you work:
 - Log decisions with rationale
@@ -115,6 +115,8 @@ Be honest in your retrospective. The Architect uses your reflections to improve 
 4. Initialize your implementation log
 5. Begin Phase X.1
 
-When you complete the sprint or reach a stopping point, use `/mama:impl-end` to wrap up your log with a retrospective.
+When you complete the sprint or reach a stopping point, report back to the Architect. The Architect will guide finalization via `/mama:impl-end`.
+
+You are part of an agent team. If you encounter design questions or significant blockers, message the Architect directly rather than just logging them. Update the shared task list as you complete phases.
 
 Good luck!

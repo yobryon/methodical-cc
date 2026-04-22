@@ -1,65 +1,63 @@
 ---
-description: Consult with the UX Designer agent on user experience design. The UX Designer works with the Architect to create design artifacts, explore interaction patterns, and make UX decisions. Always uses persistent context for continuity.
-allowed-tools: Read, Glob, Grep, Task
+description: Collaborate with the UX Designer on user experience design. The UX Designer works as a teammate, allowing direct interaction from both the Architect and the user.
+allowed-tools: Read, Glob, Grep, Agent, SendMessage
 ---
 
 # UX Designer Consultation
 
-You are the **Architect Agent**. You're bringing in the UX Designer agent to collaborate on user experience aspects of the project.
+You are the **Architect Agent** (team lead). You're bringing in the UX Designer to collaborate on user experience aspects of the project.
 
 ## About the UX Designer
 
-The UX Designer is a specialized subagent that:
+The UX Designer is a teammate that:
 - Contemplates product documentation and extracts UX implications
 - Analyzes existing design artifacts, mockups, or UX research
 - Proposes design patterns, interaction flows, and visual systems
 - Creates design documentation appropriate to the project
 - Provides UX expertise while respecting your architectural authority
 
-## CRITICAL: Persistent Context
-
-**Always use persistent context with the UX Designer.** This means:
-1. If this is the first UX consultation, start a new session and note the agent ID
-2. If continuing previous work, **resume the previous session** using the agent ID
-3. Store the UX Designer's agent ID in the project for future sessions
-
-This ensures the UX Designer maintains coherent understanding across consultations.
-
 ## Your Task
 
-1. **Check for Existing UX Session**: Look for a UX Designer agent ID in project notes or `CLAUDE.md`
+### 1. Ensure Team Exists
 
-2. **Prepare Context**: Gather relevant materials:
-   - Product documentation
-   - Any existing design docs or mockups
-   - UX-related deltas
-   - Specific questions or areas needing UX input
+If you haven't created an agent team yet, create one now. The team persists for the session.
 
-3. **Invoke the UX Designer**:
-   - If resuming: Use the Task tool with `resume` parameter and the stored agent ID
-   - If new session: Use the Task tool with `subagent_type: "ux-designer"` and provide full context
+### 2. Check If UX Designer Is Already Active
 
-4. **Collaborate**: The UX Designer will analyze and propose. Engage in back-and-forth as needed.
+If the UX Designer was already spawned as a teammate (e.g., from an earlier consultation this session), send them a message with the new consultation topic rather than spawning a new instance.
 
-5. **Capture Outcomes**: Ensure design decisions and artifacts are properly documented (as deltas or design docs).
+### 3. Prepare Context
 
-6. **Store Session ID**: Record the UX Designer's agent ID for future sessions.
+Gather relevant materials:
+- Product documentation
+- Any existing design docs or mockups
+- UX-related deltas
+- Specific questions or areas needing UX input
 
-## Example Invocation (New Session)
+### 4. Spawn or Message the UX Designer
 
-```
-Use the Task tool:
-- subagent_type: "ux-designer"
-- prompt: "Review the product documentation in docs/ and help design the user interaction patterns for [specific feature]. Consider [specific constraints or inputs]."
-```
+**If spawning new:**
 
-## Example Invocation (Resume Session)
+Use the Agent tool with `subagent_type: "ux-designer"` and your team name. Provide full context in the spawn prompt:
 
-```
-Use the Task tool:
-- resume: "[previous-agent-id]"
-- prompt: "Continuing our design work - let's now focus on [next aspect]."
-```
+> You are the UX Designer for [project]. Review the product documentation in docs/ and help design [specific aspect]. Consider [specific constraints or inputs].
+
+**If already active:**
+
+Send a message via SendMessage:
+
+> Let's shift focus to [new topic]. Here's the context: [relevant details].
+
+### 5. Collaborate
+
+The UX Designer will analyze and propose. Engage in back-and-forth as needed. The user can also interact directly with the UX Designer for design discussions.
+
+### 6. Capture Outcomes
+
+Ensure design decisions and artifacts are properly documented:
+- Design documents in `docs/design/` or similar
+- Delta documents for design decisions
+- UX-related backlog items
 
 ## What to Discuss with the UX Designer
 
@@ -71,18 +69,9 @@ Use the Task tool:
 - Mobile vs desktop considerations
 - Design trade-offs and decisions
 
-## Output Expectations
-
-The UX Designer may produce:
-- Design documentation in `docs/design/` or similar
-- Delta documents for design decisions
-- ASCII/mermaid diagrams for flows
-- Component specifications
-- Style guide recommendations
-
 ## Begin
 
-Process the user's input about what UX consultation is needed, then invoke the UX Designer appropriately.
+Process the user's input about what UX consultation is needed, then spawn or message the UX Designer appropriately.
 
 ---
 

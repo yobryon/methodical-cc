@@ -1,16 +1,20 @@
 # MAMA - Multi-Agent Methodology with Agents
 
-Subagent-based workflow where the Architect orchestrates persistent Implementor and UX Designer agents.
+Team-based workflow where the Architect orchestrates Implementor and UX Designer as **teammates** you can interact with directly.
 
 ## Overview
 
-MAMA extends the Multi-Agent Methodology by running the Implementor and UX Designer as **subagents with persistent context**. This means:
+MAMA uses **agent teams** for orchestration. The Architect is the team lead; the Implementor and UX Designer are teammates that the user can interact with directly -- no more proxying everything through the Architect.
 
-- **Architect**: You (the main agent) - orchestrates the project
-- **Implementor**: A subagent that maintains context across implementation sessions
-- **UX Designer**: A subagent that maintains context across design consultations
+- **Architect**: You (the team lead) - orchestrates the project, owns design and documentation
+- **Implementor**: A teammate that executes sprint work -- you can give it test feedback, nudges, and redirections directly
+- **UX Designer**: A teammate for design consultations -- available on demand
 
-The key advantage: subagents remember their previous work, building up codebase understanding over time.
+## Key Advantage: Direct Interaction
+
+The defining difference from MAM: you can talk to the Implementor directly. Test something and want to give feedback? Shift+Down to the Implementor and tell it. Hit a bug during testing? Tell the Implementor right there. No more routing everything through the Architect as a proxy.
+
+The Implementor can also message the Architect mid-sprint when design questions arise, getting real-time clarification instead of logging questions for later.
 
 ## Installation
 
@@ -22,93 +26,171 @@ claude plugin install mama
 claude --plugin-dir /path/to/plugins/mama
 ```
 
+**Requirement:** Agent teams must be enabled:
+```json
+// In ~/.claude/settings.json or .claude/settings.json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
 ## Key Difference from MAM
 
-| Aspect | MAM (Session-based) | MAMA (Subagent-based) |
-|--------|---------------------|----------------------|
-| Implementor | Separate Claude session | Subagent with persistent context |
-| Context | Fresh each session | Maintained via resume |
-| Handoff | Through document files | Direct subagent invocation |
-| Workflow | Switch between sessions | Architect orchestrates subagents |
+| Aspect | MAM (Session-based) | MAMA (Team-based) |
+|--------|---------------------|-------------------|
+| Implementor | Separate Claude session you run yourself | Teammate you can interact with directly |
+| User interaction | You talk to each agent in separate sessions | You talk to any agent from the same session |
+| Mid-sprint questions | Implementor logs them for later | Implementor messages Architect directly |
+| Context persistence | Your session compacts naturally | Implementor state document, compacted each sprint |
+| MAMA internal state | N/A | `.mama/` directory for operational state |
+| Sprint artifacts | `docs/` (flat) | `docs/sprint/X/` (hierarchical) |
 
 ## Commands
 
 ### Architect Commands
-- `/mama:arch-init` - Initialize project
-- `/mama:arch-resume` - Resume in-flight project
-- `/mama:arch-discuss` - Discuss ideas, process feedback, explore architecture
-- `/mama:arch-create-docs` - Create documentation
-- `/mama:arch-roadmap` - Create roadmap
-- `/mama:arch-sprint-prep` - Prepare sprint proposal
-- `/mama:arch-sprint-start` - Lock scope, start sprint
-- `/mama:arch-sprint-complete` - Complete sprint
-- `/mama:arch-review` - Architectural review of codebase against design
-- `/mama:consult-pdt` - Formalize a design question for PDT
-- `/mama:commission-complete` - Report results of a PDT commission
-- `/mama:debrief-pdt` - Report back to PDT after a milestone
-- `/mama:ux-consult` - Collaborate with UX Designer subagent
+| Command | Purpose |
+|---------|---------|
+| `/mama:arch-init` | Initialize project, establish scope, create `.mama/` state |
+| `/mama:arch-resume` | Resume in-flight project from `.mama/` state |
+| `/mama:arch-discuss` | Discuss ideas, process feedback, explore architecture |
+| `/mama:arch-create-docs` | Create initial product documentation |
+| `/mama:arch-roadmap` | Create implementation roadmap |
+| `/mama:arch-sprint-prep` | Prepare sprint proposal |
+| `/mama:arch-sprint-start` | Lock scope, write plan and brief |
+| `/mama:arch-sprint-complete` | Process completed sprint, reconcile docs, update state |
+| `/mama:arch-review` | Architectural review of codebase against design |
+| `/mama:consult-pdt` | Formalize a design question for PDT |
+| `/mama:commission-complete` | Report results of a PDT commission |
+| `/mama:debrief-pdt` | Report back to PDT after a milestone |
+| `/mama:ux-consult` | Collaborate with UX Designer teammate |
 
-### Implementor Delegation
-- `/mama:impl-begin` - Delegate to Implementor subagent
-- `/mama:impl-end` - Have Implementor write retrospective
+### Implementor Commands
+| Command | Purpose |
+|---------|---------|
+| `/mama:impl-begin` | Spawn Implementor teammate, begin sprint work |
+| `/mama:impl-end` | Finalize work, write state document, shut down Implementor |
 
 ### Shared Commands
-- `/mama:pattern-add` - Add project patterns
+| Command | Purpose |
+|---------|---------|
+| `/mama:pattern-add` | Add project patterns |
 
-## Persistent Context Workflow
+## How It Works
 
-### First Time Using a Subagent
-
-```
-/mama:impl-begin Sprint 11
-
-→ Claude invokes Implementor subagent
-→ Implementor does the work
-→ Claude receives agent ID (e.g., "agent-abc123")
-→ Store this ID in CLAUDE.md for next time
-```
-
-### Resuming a Subagent
+### Team Lifecycle
 
 ```
-/mama:impl-begin Continue from where we left off
-
-→ Claude reads stored agent ID from CLAUDE.md
-→ Resumes the previous Implementor session
-→ Implementor has full context of previous work
+Team created (first need) ──────────────────────────── Team cleaned up
+     │                                                       │
+     │  Sprint 1              Sprint 2              Sprint N │
+     │  ┌───────────────┐     ┌───────────────┐             │
+     │  │ Impl spawns   │     │ Impl spawns   │    ...      │
+     │  │ works phases  │     │ (reads state) │             │
+     │  │ writes state  │     │ works phases  │             │
+     │  │ shuts down    │     │ writes state  │             │
+     │  └───────────────┘     │ shuts down    │             │
+     │                         └───────────────┘             │
+     │  UX Designer available at any point ──────────────── │
 ```
 
-### Storing Agent IDs
+- **Team**: Created when first needed, persists across sprints
+- **Implementor**: Sprint-scoped -- spawned at start, shut down at end
+- **UX Designer**: On-demand -- spawned when needed
 
-Add to your project's `CLAUDE.md`:
+### Persistent Working Knowledge
 
-```markdown
-## Subagent Sessions
+The Implementor accumulates expertise across sprints through `implementor_state.md`:
 
-### Implementor
-- **Agent ID**: agent-abc123
-- **Last Active**: Sprint 11
+1. **Sprint 1 end**: Implementor writes everything it learned -- patterns, gotchas, component relationships
+2. **Sprint 2 start**: Fresh Implementor spawns, automatically loads the state document
+3. **Sprint 2 end**: Implementor rewrites the state -- compacting previous + new knowledge
+4. **Sprint N**: State doc stays bounded (compaction, not accumulation) with the distilled essence of all prior work
 
-### UX Designer
-- **Agent ID**: agent-xyz789
-- **Last Active**: Design system work
+### MAMA State Directory
+
+MAMA keeps its internal state in `.mama/` (or `.mama-{scope}/` for multi-product projects):
+
+```
+.mama/
+├── architect_state.md      # Architect's running project knowledge
+├── implementor_state.md    # Implementor's compacted working memory
+└── sprint_log.md           # Chronological sprint record
+```
+
+### Scoped Instances
+
+For multi-product projects sharing a directory, each MAMA instance scopes itself:
+
+```
+.mama-backend/    # Backend architect's state
+.mama-app/        # App architect's state
+.mama-admin/      # Admin architect's state
+```
+
+Sprint artifacts follow the same pattern:
+```
+docs/backend/sprint/1/{implementation_plan,implementor_brief,implementation_log}.md
+docs/app/sprint/1/{implementation_plan,implementor_brief,implementation_log}.md
+```
+
+## Sprint Artifact Organization
+
+Sprint artifacts use a hierarchical layout:
+
+```
+docs/sprint/1/
+├── implementation_plan.md
+├── implementor_brief.md
+└── implementation_log.md
+
+docs/sprint/2/
+├── implementation_plan.md
+├── implementor_brief.md
+└── implementation_log.md
+```
+
+## Typical Workflow
+
+```
+1. /mama:arch-init              Initialize project, create .mama/ state
+2. /mama:arch-create-docs       Create product documentation
+3. /mama:arch-roadmap           Plan the roadmap
+4. /mama:arch-sprint-prep       Propose sprint scope
+5. /mama:arch-discuss           Discuss with user, refine scope
+6. /mama:arch-sprint-start      Lock scope, write plan and brief
+7. /mama:impl-begin             Spawn Implementor, begin work
+   ↕ User interacts directly with Implementor during implementation
+   ↕ Implementor messages Architect when questions arise
+8. /mama:impl-end               Finalize, write state, shut down Implementor
+9. /mama:arch-sprint-complete   Reconcile docs, update state, propose next sprint
+   → Repeat from step 4
 ```
 
 ## When to Use MAMA
 
-Choose MAMA (subagent-based) when you:
-- Want the Implementor to build up codebase understanding over time
-- Prefer a single orchestrating session rather than switching
-- Want seamless context continuity across sprints
-- Are doing iterative work where context carryover helps
+Choose MAMA (team-based) when you:
+- Want to interact directly with the Implementor during sprints
+- Want the Implementor and Architect to communicate in real-time
+- Want persistent working knowledge across sprints without manual session management
+- Want live visibility into sprint progress via shared task list
+- Are doing iterative work where direct feedback loops help
 
-See also: **MAM** (session variant) for explicit session separation.
+Choose MAM (session-based) when you:
+- Prefer running the Implementor session yourself with full control
+- Want the simplicity of separate sessions without team overhead
+- Don't need real-time inter-agent communication
 
-## Subagent Definitions
+## Agent Definitions
 
-MAMA includes these subagent definitions:
+MAMA includes these agent definitions:
 
-- **`implementor`**: Skilled software engineer focused on execution excellence
-- **`ux-designer`**: Design collaborator for UX decisions and artifacts
+- **`implementor`**: Skilled software engineer focused on execution excellence. Loads persistent working knowledge via SessionStart hook.
+- **`ux-designer`**: Design collaborator for UX decisions and artifacts.
 
-Both are configured for persistent context via the resume capability.
+Both are configured for team-based communication via SendMessage.
+
+See also:
+- [MAM](../mam/README.md) (session-based implementation workflow)
+- [PDT](../pdt/README.md) (pre-implementation product design)

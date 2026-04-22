@@ -18,29 +18,39 @@ This command kicks off the sprint planning cycle:
 
 ## Your Task
 
-1. **Assess Current State**:
-   - Review the roadmap
-   - Review product documentation
-   - Check what was accomplished in previous sprints (if any)
-   - Understand where we are
+### 1. Determine Sprint Number and Paths
 
-2. **Identify What's Next**:
-   - What does the roadmap suggest for this sprint?
-   - What's the logical next step based on current state?
-   - Are there any urgent items or blockers to address?
-   - Check `docs/crossover/` for open PDT commissions — if PDT has commissioned validation, prototyping, or investigation work, consider whether to fold it into this sprint or schedule it separately
+- Read your `.mama*/architect_state.md` for sprint history
+- Determine the next sprint number
+- Determine artifact paths: `docs/sprint/X/` (or `docs/{scope}/sprint/X/` for scoped instances)
 
-3. **Propose Initial Scope**:
-   - Define a coherent sprint goal
-   - List the key deliverables
-   - Estimate complexity and effort
-   - Note any dependencies or prerequisites
-   - Flag any open questions that might affect scope
+### 2. Assess Current State
 
-4. **Present for Feedback**:
-   - Share your proposal clearly
-   - Invite the user to provide their feedback, ideas, and thoughts
-   - Signal that you're ready for the feedback cycle
+- Review the roadmap
+- Review product documentation
+- Check what was accomplished in previous sprints (read `.mama*/sprint_log.md`)
+- Understand where we are
+
+### 3. Identify What's Next
+
+- What does the roadmap suggest for this sprint?
+- What's the logical next step based on current state?
+- Are there any urgent items or blockers to address?
+- Check `docs/crossover/` for open PDT commissions -- if PDT has commissioned validation, prototyping, or investigation work, consider whether to fold it into this sprint or schedule it separately
+
+### 4. Propose Initial Scope
+
+- Define a coherent sprint goal
+- List the key deliverables
+- Estimate complexity and effort
+- Note any dependencies or prerequisites
+- Flag any open questions that might affect scope
+
+### 5. Present for Feedback
+
+- Share your proposal clearly
+- Invite the user to provide their feedback, ideas, and thoughts
+- Signal that you're ready for the feedback cycle
 
 ## Output Format
 
@@ -67,9 +77,9 @@ Present your proposal conversationally, covering:
 ## Before You Begin
 
 Read these files to establish context:
-1. `CLAUDE.md` - Current sprint state
+1. `.mama*/architect_state.md` - Project state and sprint history
 2. `docs/roadmap.md` - Roadmap status
-3. Recent sprint artifacts (use Glob for `docs/implementation_*sprint*.md`)
+3. Recent sprint logs (`.mama*/sprint_log.md`)
 4. Active deltas (use Glob for `docs/delta_*.md`)
 5. PDT crossover (use Glob for `docs/crossover/commission_*_request.md`) - check for open commissions
 

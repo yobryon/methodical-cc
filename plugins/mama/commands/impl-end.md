@@ -1,74 +1,72 @@
 ---
-description: Have the Implementor subagent finalize their work with a retrospective. Uses persistent context.
-allowed-tools: Read, Glob, Grep, Task
+description: Have the Implementor finalize their work with a retrospective, write their persistent state document, and shut down.
+allowed-tools: Read, Write, Edit, Glob, Grep, SendMessage, TaskList, TaskUpdate
 ---
 
 # Finalize Implementation
 
-You are the **Architect Agent**. The Implementor has completed (or reached a stopping point on) the sprint work. Now have them finalize with a retrospective.
-
-## CRITICAL: Use Persistent Context
-
-**You MUST resume the existing Implementor session** so they have full context of the work they did. Check `CLAUDE.md` or project notes for the Implementor's agent ID.
+You are the **Architect Agent** (team lead). The Implementor has completed (or reached a stopping point on) the sprint work. Now have them finalize, write their persistent state, and shut down.
 
 ## Your Task
 
-1. **Find the Implementor Session ID**: Look in `CLAUDE.md` for the stored Implementor agent ID from `/mama:impl-begin`
+### 1. Send Finalization Message
 
-2. **Resume the Implementor**: Use the Task tool with the `resume` parameter
+Send a message to the Implementor teammate requesting finalization. Include:
 
-3. **Request Finalization**: Ask the Implementor to:
-   - Review and complete their implementation log
-   - Write a thorough retrospective
-   - Provide a handoff summary
+**Implementation log completion:**
+- Updated status for all phases
+- Any missing decision logs or deviations
+- A retrospective section covering:
+  - What went well
+  - What could be improved
+  - Technical debt introduced
+  - Recommendations for future sprints
+- A clear handoff summary
 
-## Finalization Prompt for Implementor
+**State document update:**
+- Tell the Implementor to write/update their state document at `{mama_dir}/implementor_state.md`
+- If a prior state document exists, re-read it first, then rewrite it incorporating new knowledge
+- If this is the first sprint, write it from scratch
+- The state document should capture everything they'd want their next instance to know: codebase patterns, gotchas, component relationships, testing approaches, build quirks, things that would surprise a new engineer
+- Emphasize: this is compaction, not accumulation -- rewrite, don't append; keep it readable in under 5 minutes
 
-```
-Use the Task tool:
-- resume: "[implementor-agent-id]"
-- prompt: "Finalize your implementation work. Complete the implementation log with:
-  1. Updated status for all phases
-  2. Any missing decision logs or deviations
-  3. A retrospective section covering:
-     - What went well
-     - What could be improved
-     - Technical debt introduced
-     - Recommendations for future sprints
-  4. A clear handoff summary for the Architect"
-```
+**Example message to Implementor:**
 
-## What the Implementor Should Produce
+> Finalize your implementation work:
+>
+> 1. Complete your implementation log with phase statuses, deviations, and a retrospective (what went well, what was hard, tech debt, recommendations)
+>
+> 2. Write your state document at `.mama/implementor_state.md`. If a prior version exists, re-read it first. Then rewrite it as a fresh compaction of everything you know that matters -- previous knowledge plus what you learned this sprint. This is your persistent working memory for future sprints. Keep it focused and readable in under 5 minutes. Drop anything that's no longer relevant.
+>
+> 3. Send me your handoff summary when done.
 
-The Implementor will update the implementation log with:
+### 2. Review Handoff
 
-**Phase Progress:**
-- Status for each phase (COMPLETE, PARTIAL, BLOCKED)
-- Notes on each
+When the Implementor responds with their handoff summary:
+- Note overall status
+- Note key accomplishments
+- Note questions or concerns flagged
+- Note tech debt introduced
 
-**Retrospective:**
-- What worked well
-- What was harder than expected
-- Technical debt introduced
-- Recommendations
+### 3. Verify Outputs
 
-**Handoff Summary:**
-- Overall status
-- Key accomplishments
-- Issues encountered
-- Questions for you (the Architect)
+Check that the Implementor produced:
+- [ ] Finalized implementation log with retrospective
+- [ ] Updated `{mama_dir}/implementor_state.md`
+- [ ] All phase tasks marked complete (or appropriately noted)
 
-## After Finalization
+### 4. Request Shutdown
 
-Once the Implementor provides their summary:
-1. Review the implementation log they produced
-2. Note any questions they flagged
-3. Proceed to `/mama:arch-sprint-complete` to reconcile documentation
+Once satisfied with the finalization outputs, ask the Implementor to shut down. The team stays alive -- only the Implementor shuts down for this sprint.
+
+### 5. Next Steps
+
+After the Implementor shuts down:
+- Review the implementation log in detail
+- Proceed to `/mama:arch-sprint-complete` to reconcile documentation
 
 ## Begin
 
-Find the Implementor's session ID and resume their session to request finalization.
-
----
+Send the finalization message to the Implementor teammate, then guide the process through to shutdown.
 
 $ARGUMENTS

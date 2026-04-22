@@ -14,8 +14,8 @@
     {
       "name": "mama",
       "source": "./plugins/mama",
-      "description": "Multi-Agent Methodology with Agents - subagent-based workflow with persistent Implementor and UX Designer contexts",
-      "version": "1.2.0"
+      "description": "Multi-Agent Methodology with Agents - team-based workflow with direct user interaction and persistent working knowledge",
+      "version": "2.0.0"
     },
     {
       "name": "pdt",

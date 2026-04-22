@@ -16,51 +16,62 @@ This command helps establish context when:
 
 ## Your Task
 
-Read the following files to establish context (use your Read tool):
+### 1. Find Your MAMA State
 
-1. **Project CLAUDE.md**: `CLAUDE.md` - Check current sprint state
-2. **Sprint Artifacts**: List files in `docs/` matching `implementation_*sprint*.md` and `implementor_brief_sprint*.md`
-3. **Active Deltas**: List files in `docs/` matching `delta_*.md`
-4. **Roadmap**: `docs/roadmap.md` if it exists
-5. **PDT Crossover**: Check `docs/crossover/` for new items since last session:
-   - Open commissions (`commission_*_request.md` with status `open`) — work PDT needs done
-   - Consultation responses (`consult_*_response.md`) — answers to questions you asked PDT
-   - Updates to `docs/architect_orientation.md` — phase transitions or priority changes from PDT
+Look for the MAMA state directory:
+- `.mama/` (unscoped) or `.mama-{scope}/` (scoped)
+- Read `architect_state.md` -- this is your primary context document, containing project identity, sprint history, current status, and accumulated knowledge
+- Read `sprint_log.md` for the chronological sprint record
 
-Then:
+If no `.mama*/` directory exists, this project may need initialization via `/mama:arch-init`.
 
-1. **Listen to User Corrections**: The user may tell you:
-   - "We're in sprint X"
-   - "We just completed sprint Y"
-   - "We're about to start sprint Z"
-   - "Ignore sprint N, we're re-doing it"
+### 2. Read Supporting Context
 
-3. **Establish Context**: Based on auto-detection and user input:
-   - Confirm which sprint we're in
-   - Confirm the state (planning, implementing, reviewing, etc.)
-   - Note any deltas that are active
-   - Understand what was accomplished recently
+- **Project CLAUDE.md**: `CLAUDE.md` -- project patterns and conventions
+- **Sprint Artifacts**: Check `docs/sprint/*/` (or `docs/{scope}/sprint/*/`) for existing sprint artifacts
+- **Active Deltas**: List files matching `docs/delta_*.md`
+- **Roadmap**: `docs/roadmap.md` if it exists
+- **PDT Crossover**: Check `docs/crossover/` for new items since last session:
+  - Open commissions (`commission_*_request.md` with status `open`) -- work PDT needs done
+  - Consultation responses (`consult_*_response.md`) -- answers to questions you asked PDT
+  - Updates to `docs/architect_orientation.md` -- phase transitions or priority changes from PDT
 
-4. **Update CLAUDE.md If Needed**: If the Current State section is outdated, update it:
-   ```markdown
-   ### Current State
-   - **Current Sprint**: X
-   - **Sprint Status**: [planning/implementing/reviewing/completed]
-   - **Last Updated**: [Date]
-   ```
+### 3. Listen to User Corrections
 
-5. **Check PDT Activity**: If `docs/crossover/` has new items:
-   - Surface any new commissions from PDT and their urgency
-   - Surface any consultation responses that came back
-   - Note any orientation updates that signal a phase transition
-   - These may affect what you propose as the next action
+The user may tell you:
+- "We're in sprint X"
+- "We just completed sprint Y"
+- "We're about to start sprint Z"
+- "Ignore sprint N, we're re-doing it"
 
-6. **Summarize and Confirm**: Present your understanding:
-   - "We're in Sprint X, currently in the [phase] phase"
-   - "The last completed sprint was Y, which accomplished [summary]"
-   - "Active deltas include: [list]"
-   - PDT crossover status (if applicable): new commissions, pending consultations, orientation updates
-   - "Ready to proceed with [next logical action]"
+### 4. Establish Context
+
+Based on your state documents and user input:
+- Confirm which sprint we're in
+- Confirm the state (planning, implementing, reviewing, etc.)
+- Note any deltas that are active
+- Understand what was accomplished recently
+
+### 5. Update State If Needed
+
+If `architect_state.md` is outdated or the user provides corrections, update it to reflect the current reality.
+
+### 6. Check PDT Activity
+
+If `docs/crossover/` has new items:
+- Surface any new commissions from PDT and their urgency
+- Surface any consultation responses that came back
+- Note any orientation updates that signal a phase transition
+- These may affect what you propose as the next action
+
+### 7. Summarize and Confirm
+
+Present your understanding:
+- "We're in Sprint X, currently in the [phase] phase"
+- "The last completed sprint was Y, which accomplished [summary]"
+- "Active deltas include: [list]"
+- PDT crossover status (if applicable)
+- "Ready to proceed with [next logical action]"
 
 ## Common Scenarios
 
@@ -70,18 +81,18 @@ Then:
 - Understand where in sprint 5 we are (planning? implementing?)
 
 **User says "We just finished sprint 3":**
-- Review implementation_log_sprint3.md
+- Review the implementation log for sprint 3
 - Check if reconciliation happened
 - Propose next steps (reconciliation if needed, or sprint 4 planning)
 
 **User provides no correction:**
-- Trust the auto-detected state
+- Trust the state from `architect_state.md` and auto-detection
 - Confirm your understanding
 - Propose next logical action
 
 ## Begin
 
-Review the auto-loaded state, listen to any user corrections, and establish the project context.
+Read your MAMA state, review the project context, listen to any user corrections, and establish where we are.
 
 ---
 

@@ -8,7 +8,7 @@ Claude Code plugins for structured product design and implementation workflows.
 |--------|-------------|----------|
 | **PDT** | Product Design Thinking - Socratic design partner for pre-implementation thinking | Product vision, concept development, documentation crystallization |
 | **MAM** | Session-based - Architect and Implementor as separate Claude sessions | Explicit context separation, document-based handoffs |
-| **MAMA** | Subagent-based - Architect orchestrates persistent Implementor subagent | Context continuity, iterative work |
+| **MAMA** | Team-based - Architect orchestrates Implementor and UX Designer as teammates | Direct interaction with agents, real-time communication, persistent knowledge |
 
 PDT is the natural predecessor to MAM/MAMA. Design your product with PDT, then build it with MAM or MAMA.
 
@@ -56,7 +56,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/pdt
 # MAM (session-based)
 claude --plugin-dir /path/to/methodical-cc/plugins/mam
 
-# MAMA (subagent-based)
+# MAMA (team-based)
 claude --plugin-dir /path/to/methodical-cc/plugins/mama
 ```
 
@@ -124,9 +124,9 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
    /mam:arch-sprint-complete
    ```
 
-## Quick Start (MAMA - Subagent-based)
+## Quick Start (MAMA - Team-based)
 
-1. **Initialize** (you are the Architect):
+1. **Initialize** (you are the Architect / team lead):
    ```
    /mama:arch-init
    ```
@@ -136,15 +136,16 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
    /mama:arch-sprint-prep
    ```
 
-3. **Delegate to Implementor Subagent**:
+3. **Spawn Implementor Teammate**:
    ```
    /mama:impl-begin Sprint 1
    ```
-   → Implementor works as subagent, maintains context via resume
+   → Implementor spawns as teammate, you can interact directly
+   → Implementor loads persistent working knowledge from prior sprints
 
 4. **Complete Sprint**:
    ```
-   /mama:impl-end
+   /mama:impl-end          # Implementor writes state, shuts down
    /mama:arch-sprint-complete
    ```
 
@@ -189,8 +190,8 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 ### Implementor Commands
 | Command | MAM Behavior | MAMA Behavior |
 |---------|--------------|---------------|
-| `impl-begin` | Read brief, begin work | Delegate to Implementor subagent |
-| `impl-end` | Write retrospective | Have subagent write retrospective |
+| `impl-begin` | Read brief, begin work | Spawn Implementor teammate |
+| `impl-end` | Write retrospective | Finalize, write state, shut down teammate |
 
 ### Shared Commands
 | Command | Purpose |
@@ -204,15 +205,29 @@ After initialization, projects typically have:
 ```
 your-project/
 ├── .claude/
-│   └── CLAUDE.md          # Project patterns and context
+│   └── CLAUDE.md              # Project patterns and context
+├── .mama/                     # MAMA internal state (or .mama-{scope}/)
+│   ├── architect_state.md     # Architect's running project knowledge
+│   ├── implementor_state.md   # Implementor's compacted working memory
+│   └── sprint_log.md          # Chronological sprint record
 ├── docs/
-│   ├── [product_docs]     # Product documentation
-│   ├── roadmap.md         # Implementation roadmap
-│   ├── delta_XX_*.md      # Design deltas
-│   ├── implementation_plan_sprintX.md
-│   ├── implementor_brief_sprintX.md
-│   └── implementation_log_sprintX.md
+│   ├── [product_docs]         # Product documentation
+│   ├── roadmap.md             # Implementation roadmap
+│   ├── delta_XX_*.md          # Design deltas
+│   └── sprint/
+│       ├── 1/
+│       │   ├── implementation_plan.md
+│       │   ├── implementor_brief.md
+│       │   └── implementation_log.md
+│       └── 2/
+│           └── ...
 └── [source code]
+```
+
+For multi-product projects, sprint artifacts scope by component:
+```
+docs/backend/sprint/1/{implementation_plan,implementor_brief,implementation_log}.md
+docs/app/sprint/1/{implementation_plan,implementor_brief,implementation_log}.md
 ```
 
 ## Philosophy
@@ -233,7 +248,7 @@ methodical-cc/
 ├── plugins/
 │   ├── pdt/              # Product design thinking plugin
 │   ├── mam/              # Session-based implementation plugin
-│   └── mama/             # Subagent-based implementation plugin
+│   └── mama/             # Team-based implementation plugin
 ├── tools/                # Migration utilities
 └── docs/                 # Design documentation
 ```

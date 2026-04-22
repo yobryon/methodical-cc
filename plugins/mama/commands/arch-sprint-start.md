@@ -9,36 +9,53 @@ You are the **Architect Agent**. You and the user have aligned on the sprint sco
 
 ## Your Task
 
-1. **Confirm Final Scope**: Briefly restate the agreed scope to ensure alignment.
+### 1. Confirm Final Scope
 
-2. **Create Implementation Plan**: Write `docs/implementation_plan_sprintX.md`
-   - Break the work into logical phases
-   - Define clear tasks for each phase
-   - Specify files to create/modify
-   - Define verification criteria
-   - Reference relevant deltas
-   - See the template in the multi-agent-methodology skill for structure
+Briefly restate the agreed scope to ensure alignment.
 
-3. **Create Implementor Brief**: Write `docs/implementor_brief_sprintX.md`
-   - Establish the Implementor's role and expertise expectations
-   - Provide essential project context
-   - Summarize key decisions already made
-   - Define scope boundaries (in/out)
-   - List key files and systems
-   - Include project patterns from `CLAUDE.md`
-   - Reference the implementation plan
-   - See the template in the multi-agent-methodology skill for structure
+### 2. Determine Artifact Paths
 
-4. **Prepare Implementation Log**: Create `docs/implementation_log_sprintX.md`
-   - Initialize with sprint metadata
-   - Set up the phase progress table
-   - Ready for the Implementor to fill in
-   - See the template in the multi-agent-methodology skill for structure
+Based on your MAMA scope:
+- Unscoped: `docs/sprint/X/`
+- Scoped: `docs/{scope}/sprint/X/`
 
-5. **Present and Handoff**: Summarize what you've created and signal readiness:
-   - "Sprint X is ready for implementation"
-   - "The Implementor should read the brief and proceed"
-   - "User can now delegate to the Implementor subagent via `/mama:impl-begin @docs/implementor_brief_sprintX.md`"
+Create the sprint directory if it doesn't exist.
+
+### 3. Create Implementation Plan
+
+Write `docs/sprint/X/implementation_plan.md` (or scoped equivalent):
+- Break the work into logical phases
+- Define clear tasks for each phase
+- Specify files to create/modify
+- Define verification criteria
+- Reference relevant deltas
+- See the template in the multi-agent-methodology skill for structure
+
+### 4. Create Implementor Brief
+
+Write `docs/sprint/X/implementor_brief.md` (or scoped equivalent):
+- Establish the Implementor's role and expertise expectations
+- Provide essential project context
+- Summarize key decisions already made
+- Define scope boundaries (in/out)
+- List key files and systems
+- Include project patterns from `CLAUDE.md`
+- Reference the implementation plan
+- See the template in the multi-agent-methodology skill for structure
+
+### 5. Initialize Implementation Log
+
+Create `docs/sprint/X/implementation_log.md` (or scoped equivalent):
+- Initialize with sprint metadata
+- Set up the phase progress table
+- Ready for the Implementor to fill in
+
+### 6. Present and Handoff
+
+Summarize what you've created and signal readiness:
+- "Sprint X is ready for implementation"
+- "The Implementor should read the brief and proceed"
+- "Run `/mama:impl-begin` to spawn the Implementor and begin work"
 
 ## Implementation Plan Guidelines
 
@@ -69,6 +86,7 @@ Before declaring ready, verify:
 - [ ] Project patterns are included in the brief
 - [ ] Implementation log is initialized
 - [ ] All relevant deltas are referenced
+- [ ] Sprint directory created at the correct path
 
 ## Begin
 

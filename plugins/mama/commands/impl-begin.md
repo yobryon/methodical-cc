@@ -1,86 +1,80 @@
 ---
-description: Delegate implementation work to the Implementor subagent. The Implementor uses persistent context for continuity across sessions.
-allowed-tools: Read, Glob, Grep, Task
+description: Spawn the Implementor as a teammate and begin sprint implementation. The Implementor loads its persistent working knowledge automatically on startup.
+allowed-tools: Read, Write, Edit, Glob, Grep, Agent, TaskCreate, TaskUpdate, TaskList, SendMessage
 ---
 
-# Delegate to Implementor
+# Begin Implementation
 
-You are the **Architect Agent**. You're delegating implementation work to the Implementor subagent.
-
-## About the Implementor Subagent
-
-The Implementor is a specialized subagent that:
-- Executes implementation plans with precision
-- Writes clean, well-structured, tested code
-- Maintains detailed implementation logs
-- Flags questions rather than making design decisions
-- Uses **persistent context** for continuity across sessions
-
-## CRITICAL: Persistent Context
-
-**Always use persistent context with the Implementor.** This means:
-1. If this is the first implementation session, start fresh and note the agent ID
-2. If continuing previous work, **resume the previous session** using the stored agent ID
-3. Store the Implementor's agent ID in the project for future sessions (e.g., in `CLAUDE.md`)
-
-This ensures the Implementor maintains understanding of the codebase and work across sessions.
+You are the **Architect Agent** (team lead). It's time to hand off implementation work to the Implementor.
 
 ## Your Task
 
-1. **Check for Existing Implementor Session**: Look for an Implementor agent ID in `CLAUDE.md` or project notes
+### 1. Determine MAMA Scope and State Directory
 
-2. **Gather Context**: Find the relevant files:
-   - Implementor brief (`docs/implementor_brief_sprint*.md`)
-   - Implementation plan (`docs/implementation_plan_sprint*.md`)
-   - Implementation log if continuing (`docs/implementation_log_sprint*.md`)
+Check which `.mama` directory this project uses:
+- Look for `.mama/` (unscoped, single-product project)
+- Look for `.mama-{scope}/` (scoped, multi-product project)
+- Use whichever matches your established scope from `arch-init`
 
-3. **Invoke the Implementor**:
-   - If resuming: Use the Task tool with `resume` parameter and the stored agent ID
-   - If new session: Use the Task tool with `subagent_type: "implementor"`
+### 2. Ensure Team Exists
 
-4. **Provide Clear Instructions**: Tell the Implementor:
-   - Which sprint/brief to work on
-   - Whether to start fresh or continue from where they left off
-   - Any specific focus areas or constraints
+If you haven't already created an agent team for this session, create one now. The team persists across sprints -- you only need to create it once per session.
 
-5. **Store Session ID**: After invocation, record the Implementor's agent ID for future sessions
+### 3. Gather Sprint Context
 
-## Example Invocation (New Session)
+Find the current sprint's artifacts:
+- Implementation plan: `docs/sprint/X/implementation_plan.md` (or `docs/{scope}/sprint/X/implementation_plan.md` for scoped)
+- Implementor brief: `docs/sprint/X/implementor_brief.md`
+- Initialize the implementation log: `docs/sprint/X/implementation_log.md`
 
-```
-Use the Task tool:
-- subagent_type: "implementor"
-- prompt: "Begin implementation for Sprint 11. Read the brief at docs/implementor_brief_sprint11.md and the plan at docs/implementation_plan_sprint11.md. Follow project patterns in CLAUDE.md. Create and maintain the implementation log."
-```
+### 4. Create Phase Tasks
 
-## Example Invocation (Resume Session)
+Read the implementation plan and create tasks in the shared task list for each implementation phase. This gives the Implementor a clear checklist and provides live visibility into progress.
 
-```
-Use the Task tool:
-- resume: "[previous-agent-id]"
-- prompt: "Continue implementation work. Pick up where you left off - check your implementation log for current status."
-```
+For each phase in the plan, create a task with:
+- **subject**: The phase name/goal
+- **description**: Key deliverables and success criteria from the plan
 
-## Monitoring Progress
+### 5. Spawn the Implementor Teammate
 
-The Implementor will:
-- Work through the implementation plan phase by phase
-- Maintain the implementation log with detailed entries
-- Report back when complete or when hitting blockers
+Spawn the Implementor as a teammate using the `implementor` agent type. Your spawn prompt must include:
 
-When the Implementor reports back, review their work and decide next steps.
+- The MAMA state directory path (e.g., `.mama/` or `.mama-backend/`) so the Implementor knows where its state lives
+- The paths to the sprint artifacts (brief, plan, log)
+- The sprint number
+- Any specific focus areas or constraints
 
-## When Implementation is Complete
+**Example spawn prompt:**
 
-Once the Implementor signals completion:
+> You are the Implementor for Sprint X. Your MAMA state directory is `.mama-backend/`.
+>
+> **First**, read your accumulated working knowledge from `.mama-backend/implementor_state.md` if it exists -- this contains everything you learned from prior sprints.
+>
+> Then read your sprint context:
+> - Brief: `docs/backend/sprint/X/implementor_brief.md`
+> - Plan: `docs/backend/sprint/X/implementation_plan.md`
+> - Log: `docs/backend/sprint/X/implementation_log.md` (maintain this as you work)
+>
+> Review project patterns in `CLAUDE.md`, then execute the implementation plan phase by phase. Update the shared task list as you complete phases. Message me if you encounter design questions or significant blockers.
+
+The state loading instruction in the spawn prompt is critical -- it tells the Implementor exactly which scoped state directory to read from, ensuring the right working knowledge is loaded in multi-product setups.
+
+### 6. Monitor and Respond
+
+After spawning:
+- The Implementor will begin working through the plan
+- It may message you with questions -- respond efficiently so it can continue
+- The user may interact with the Implementor directly for testing and feedback
+- Monitor the shared task list for progress
+
+## When the Implementor Finishes
+
+When the Implementor reports completion or reaches a stopping point:
 1. Review the implementation log
-2. Run `/mama:impl-end` to have them write the retrospective
-3. Then proceed with `/mama:arch-sprint-complete` to reconcile
+2. Run `/mama:impl-end` to have the Implementor finalize and write its state
 
 ## Begin
 
-Check for an existing Implementor session ID, gather the sprint context, and invoke the Implementor subagent.
-
----
+Determine the scope, ensure the team exists, gather sprint context, create phase tasks, and spawn the Implementor.
 
 $ARGUMENTS
