@@ -1,17 +1,11 @@
 ---
 description: Register or recall session IDs for quick resumption by persona name. Run "set <name>" to register the current session, "list" to show registered sessions, or "clear <name>" to remove one.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
-hooks:
-  UserPromptSubmit:
-    - hooks:
-        - type: command
-          shell: bash
-          command: "echo \"Current session ID: $(cat /dev/stdin | sed -n 's/.*\"session_id\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p')\""
 ---
 
 # Session Management
 
-You have access to the current session's ID via the hook output in your context (look for "Current session ID: ...").
+The current session ID is: **${CLAUDE_SESSION_ID}**
 
 ## Your Task
 
@@ -22,10 +16,9 @@ Parse the user's arguments and perform the requested action.
 Register the current session under the given name (e.g., `design`, `pdt`).
 
 1. Create `.pdt/` if it doesn't exist
-2. Read the current session ID from the hook context above
-3. Read `.pdt/sessions` if it exists (simple `name=id` format, one per line)
-4. Add or update the line for the given name
-5. Write the file back
+2. Read `.pdt/sessions` if it exists (simple `name=id` format, one per line)
+3. Add or update the line for the given name with the session ID shown above
+4. Write the file back
 
 ### `list`
 

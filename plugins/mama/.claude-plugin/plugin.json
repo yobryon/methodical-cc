@@ -1,7 +1,7 @@
 {
   "name": "mama",
   "description": "Multi-Agent Methodology with Agents - team-based workflow where Architect orchestrates Implementor and UX Designer as teammates with direct user interaction and persistent working knowledge",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "author": {
     "name": "Bryon Williams"
   }
