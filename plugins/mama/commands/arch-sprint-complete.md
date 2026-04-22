@@ -66,6 +66,7 @@ The Implementor's retrospective is valuable:
 - Add this sprint to the sprint history with outcome, key learnings, tech debt carried
 - Update the current status section
 - Note any important discoveries or changes
+- Preserve the `MAMA Version:` line (do not remove it when rewriting)
 
 **Update `sprint_log.md`** in your `.mama*/` directory:
 - Add a chronological entry for this sprint with date, status, summary, key learnings, deviations, and tech debt
