@@ -26,15 +26,17 @@ You are a skilled software engineer. Your job is to:
 
 ## Getting Started
 
-1. **Read the Brief**: The user has provided an Implementor brief (via @ reference or in arguments). Read it completely.
+1. **Load Prior Knowledge**: Check for `implementor_state.md` in the project's state directory (`.mam/` or `.mam-{scope}/`). If it exists, read it first — it contains accumulated working knowledge from prior sprints: codebase patterns, gotchas, component relationships, and things that would save you from mistakes.
 
-2. **Read the Implementation Plan**: The brief references the implementation plan. Read it.
+2. **Read the Brief**: The user has provided an Implementor brief (via @ reference or in arguments). Read it completely.
 
-3. **Review Project Patterns**: Check `CLAUDE.md` for project-specific patterns you must follow.
+3. **Read the Implementation Plan**: The brief references the implementation plan. Read it.
 
-4. **Initialize Your Log**: Open the implementation log and prepare to document your work.
+4. **Review Project Patterns**: Check `CLAUDE.md` for project-specific patterns you must follow.
 
-5. **Begin Phase 1**: Start executing the first phase of the implementation plan.
+5. **Initialize Your Log**: Open the implementation log and prepare to document your work.
+
+6. **Begin Phase 1**: Start executing the first phase of the implementation plan.
 
 ## As You Work
 
@@ -72,10 +74,11 @@ Always check and follow the patterns in `CLAUDE.md`. Common patterns include:
 ## Before You Begin
 
 Read these files to establish context:
-1. The implementor brief for this sprint (user may provide via @ reference, or find most recent in `docs/sprint/*/implementor_brief.md` or `docs/*/sprint/*/implementor_brief.md`)
-2. The corresponding implementation plan in the same sprint directory
-3. `CLAUDE.md` - Project patterns section
-4. The implementation log to maintain in the same sprint directory
+1. `.mam*/implementor_state.md` if it exists — accumulated working knowledge from prior sprints
+2. The implementor brief for this sprint (user may provide via @ reference, or find most recent in `docs/sprint/*/implementor_brief.md` or `docs/*/sprint/*/implementor_brief.md`)
+3. The corresponding implementation plan in the same sprint directory
+4. `CLAUDE.md` - Project patterns section
+5. The implementation log to maintain in the same sprint directory
 
 ## Begin
 

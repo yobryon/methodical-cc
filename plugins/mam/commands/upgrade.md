@@ -13,9 +13,10 @@ Upgrades are **cumulative** — if a project is several versions behind, all int
 
 ### 1. Detect Current Version
 
-Look for the MAM state directory:
+Look for the project's state directory:
 - Check for `.mam/` or `.mam-{scope}/` directories
 - If found, read `architect_state.md` and look for a `MAM Version:` line
+- Also check for `.mama/` or `.mama-{scope}/` directories (MAMA → MAM migration)
 - If no state directory exists, the project is **pre-2.0.0**
 
 Record the detected version. If no version is found, treat it as `0.0.0` (pre-versioning).
@@ -25,6 +26,19 @@ Also check: does the user want to establish a scope? If they're in a multi-produ
 ### 2. Apply Transitions
 
 Apply each transition in order, skipping any that are already complete:
+
+---
+
+#### Transition: MAMA → MAM
+
+**Conditions**: `.mama/` or `.mama-{scope}/` exists but `.mam/` or `.mam-{scope}/` does not. The user is migrating from team-based to session-based workflow.
+
+**Steps:**
+- Rename `.mama/` → `.mam/` (or `.mama-{scope}/` → `.mam-{scope}/`)
+- Use `git mv` if the project is a git repository
+- Update the version reference in `architect_state.md` from `MAMA Version` to `MAM Version`
+- **Keep `implementor_state.md`** — in MAM, the user runs the Implementor session directly, but this document is still valuable as a knowledge reference. The updated `/mam:impl-begin` checks for it and reads it at sprint start.
+- Proceed to the 2.0.0 transition for any remaining steps
 
 ---
 

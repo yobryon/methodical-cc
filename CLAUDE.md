@@ -106,6 +106,7 @@ Team-based workflow where Architect orchestrates Implementor and UX Designer as 
 ### Implementor Commands
 - `/impl-begin` - Begin implementation (MAM: read brief; MAMA: spawn Implementor teammate)
 - `/impl-end` - Wrap up implementation, write state, shut down Implementor
+- `/impl-export` - Export accumulated implementation knowledge to state document (MAM only)
 
 ### Shared Commands
 - `/pattern-add` - Add or update a project pattern in CLAUDE.md

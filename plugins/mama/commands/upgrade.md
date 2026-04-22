@@ -33,10 +33,12 @@ Apply each transition in order, skipping any that are already complete:
 
 **Conditions**: `.mam/` or `.mam-{scope}/` exists but `.mama/` or `.mama-{scope}/` does not. The user is migrating from session-based to team-based workflow.
 
+**Before migrating**, check whether `implementor_state.md` already exists in the `.mam*/` directory. If it does not, suggest the user run `/mam:impl-export` first to capture their accumulated implementation knowledge — this becomes the Implementor teammate's starting context in MAMA. If they want to skip this, proceed without it.
+
 **Steps:**
 - Rename `.mam/` → `.mama/` (or `.mam-{scope}/` → `.mama-{scope}/`)
 - Use `git mv` if the project is a git repository
-- Create empty `implementor_state.md` in the state directory
+- If `implementor_state.md` doesn't exist, create an empty one in the state directory
 - Update the version reference in `architect_state.md` from `MAM Version` to `MAMA Version`
 - Proceed to the 2.0.0 transition for any remaining steps
 
@@ -101,7 +103,7 @@ After applying transitions:
 - **Always confirm destructive operations** with the user before proceeding.
 - **The bootstrapped architect_state.md is a starting point** — it will be incomplete. The Architect should flesh it out during the next `arch-resume`.
 - **This command is safe to run multiple times.** It checks what's already done and skips completed transitions.
-- **MAM → MAMA migration** is a one-way operation. The command handles renaming `.mam/` to `.mama/` and adding `implementor_state.md`.
+- **MAM → MAMA migration**: Consider running `/mam:impl-export` before migrating to capture accumulated implementation knowledge. The Implementor teammate will load this knowledge automatically on sprint start.
 
 ## Begin
 

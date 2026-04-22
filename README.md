@@ -43,7 +43,7 @@ claude plugin install pdt@methodical-cc
 # Session-based implementation workflow
 claude plugin install mam@methodical-cc
 
-# Subagent-based implementation workflow
+# Team-based implementation workflow
 claude plugin install mama@methodical-cc
 ```
 
@@ -192,6 +192,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 |---------|--------------|---------------|
 | `impl-begin` | Read brief, begin work | Spawn Implementor teammate |
 | `impl-end` | Write retrospective | Finalize, write state, shut down teammate |
+| `impl-export` | Export implementation knowledge to state doc | *(not needed — impl-end writes state)* |
 
 ### Shared Commands
 | Command | Purpose |

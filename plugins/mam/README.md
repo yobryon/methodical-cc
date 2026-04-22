@@ -44,6 +44,7 @@ claude --plugin-dir /path/to/plugins/mam
 |---------|---------|
 | `/mam:impl-begin` | Begin implementation (read brief, execute plan) |
 | `/mam:impl-end` | Complete implementation with retrospective |
+| `/mam:impl-export` | Export accumulated implementation knowledge to state document |
 
 ### Shared Commands
 | Command | Purpose |
