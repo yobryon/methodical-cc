@@ -27,8 +27,8 @@ Send a message to the Implementor teammate requesting finalization. Include:
 - Tell the Implementor to write/update their state document at `{mama_dir}/implementor_state.md`
 - If a prior state document exists, re-read it first, then rewrite it incorporating new knowledge
 - If this is the first sprint, write it from scratch
-- The state document should capture **tacit knowledge** — what they learned that can't be recovered from CLAUDE.md, the doc tree, the Architect briefing, or re-reading the code. Focus areas: why the codebase is built this way, project history and load-bearing lessons, empirical findings from real runs, known gotchas, how the user works, and current trajectory.
-- Emphasize: this is compaction, not accumulation — rewrite, don't append; keep it readable in under 5 minutes. Don't duplicate what's already in CLAUDE.md or docs/.
+- The state document should capture **tacit knowledge** — what they learned that can't be recovered from CLAUDE.md, the doc tree, the Architect briefing, or re-reading the code. Focus areas: why the codebase is built this way, project history and load-bearing lessons (including approaches tried and abandoned), empirical findings from real runs, known gotchas, how the user works, and current trajectory.
+- Emphasize: this is compaction, not accumulation — rewrite, don't append; keep it readable in under 5 minutes. Don't duplicate what's already in CLAUDE.md or docs/. Prune superseded empirical data (calibration numbers have half-lives); carry forward history and rationale.
 
 **Example message to Implementor:**
 
@@ -36,7 +36,7 @@ Send a message to the Implementor teammate requesting finalization. Include:
 >
 > 1. Complete your implementation log with phase statuses, deviations, and a retrospective (what went well, what was hard, tech debt, recommendations)
 >
-> 2. Write your state document at `.mama/implementor_state.md`. If a prior version exists, re-read it first. Then rewrite it as a fresh compaction of your **tacit knowledge** — what you learned that can't be recovered from CLAUDE.md, the doc tree, or re-reading the code. Focus on: why the codebase is built this way, project history and load-bearing lessons, empirical findings, known gotchas, how the user works. Keep it readable in under 5 minutes. Drop anything that's no longer relevant or that has a home elsewhere.
+> 2. Write your state document at `.mama/implementor_state.md`. If a prior version exists, re-read it first. Then rewrite it as a fresh compaction of your **tacit knowledge** — what you learned that can't be recovered from CLAUDE.md, the doc tree, or re-reading the code. Focus on: why the codebase is built this way, project history and load-bearing lessons (including approaches tried and abandoned), empirical findings, known gotchas, how the user works. Prune stale empirical data; carry forward history and rationale. Keep it readable in under 5 minutes.
 >
 > 3. Send me your handoff summary when done.
 

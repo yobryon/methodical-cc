@@ -29,15 +29,15 @@ Look for the project's state directory:
 
 Before writing, mentally inventory **what you know that has no other home**. The categories below are prompts, not a checklist — skip any that aren't relevant, and add what is.
 
+**Historical and contextual knowledge:**
+- **Project history and load-bearing lessons**: What past mistakes or pivots shaped the current design? What approaches were tried and abandoned, and why did they fail?
+- **Why it's built this way**: Where the code does something non-obvious, what's the rationale? What alternative was considered and rejected, and why?
+- **Working context**: How does the user work? What's their expertise, preferences, communication style? What do they care about most? How do they like to collaborate?
+
 **Technical tacit knowledge:**
 - **Gotchas and empirical findings**: What has experimentation revealed — things that broke surprisingly, behaviors that only show up at scale, calibration notes from real runs, what's actually expensive vs. cheap? What looks simple but isn't?
 - **Component relationships**: How do the pieces connect? What are the hidden dependencies that aren't obvious from the code structure?
 - **Build and tooling quirks**: What non-obvious things about the build, environment, or tooling would trip someone up?
-
-**Historical and contextual knowledge:**
-- **Project history and load-bearing lessons**: What past mistakes or pivots shaped the current design? What was tried before and why it was abandoned?
-- **Why it's built this way**: Where the code does something non-obvious, what's the rationale? What alternative was considered and rejected, and why?
-- **Working context**: How does the user work? What's their expertise, preferences, communication style? What do they care about most? How do they like to collaborate?
 
 **State and trajectory:**
 - **Current state**: What was just completed, what's in flight, what's the trajectory?
@@ -45,7 +45,7 @@ Before writing, mentally inventory **what you know that has no other home**. The
 
 ### 3. Write the State Document
 
-Write `{state_dir}/implementor_state.md`. If a prior version exists, read it first and incorporate anything still relevant.
+Write `{state_dir}/implementor_state.md`. If a prior version exists, read it first and incorporate anything still relevant. Prune superseded empirical data — calibration numbers, performance characteristics, and "what's expensive" findings have half-lives and should be updated or dropped when they no longer reflect reality. History and rationale age better; carry those forward.
 
 Structure it as **compacted tacit knowledge** — not a summary of the codebase or a log of what you did, but a distillation of what would be lost if this session ended. Write it as if briefing a skilled engineer who has access to CLAUDE.md, the full doc tree, and the Architect's briefing — but none of your experience.
 
@@ -62,7 +62,7 @@ Suggested structure (adapt to what's relevant):
 [Rationale behind non-obvious architectural choices — what was considered and rejected, and why]
 
 ## Project History and Lessons Learned
-[Load-bearing past mistakes or pivots that shaped current work — what you'd need to know to avoid repeating history]
+[Load-bearing past mistakes or pivots that shaped current work — what you'd need to know to avoid repeating history. Include approaches tried and abandoned, with the reason they failed.]
 
 ## Empirical Findings
 [What experiments and real runs have revealed — calibration data, performance characteristics, surprising behaviors, what's actually expensive vs. cheap]

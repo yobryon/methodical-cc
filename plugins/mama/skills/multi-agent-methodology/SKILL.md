@@ -166,7 +166,7 @@ The `implementor_state.md` file captures the Implementor's **tacit knowledge** -
 
 **What goes in:**
 - Why the codebase is built this way -- rationale behind non-obvious choices, what was considered and rejected
-- Project history and load-bearing lessons -- past mistakes or pivots that shaped current work
+- Project history and load-bearing lessons -- past mistakes or pivots that shaped current work, approaches tried and abandoned with the reason they failed
 - Empirical findings -- what experiments and real runs revealed, calibration data, what's actually expensive vs. cheap
 - Known gotchas -- non-obvious things that will bite you, hidden dependencies, subtle ordering requirements
 - Working context -- how the user works, their expertise, preferences, what they care about
@@ -181,7 +181,7 @@ The `implementor_state.md` file captures the Implementor's **tacit knowledge** -
 **Lifecycle:**
 1. **Sprint 1 (impl-end)**: Implementor reviews its full context and writes `implementor_state.md` from scratch -- the tacit knowledge it accumulated that has no other home
 2. **Sprint 2 (impl-begin)**: A fresh Implementor spawns, SessionStart hook loads the state document, priming it with accumulated knowledge before reading the brief
-3. **Sprint 2 (impl-end)**: Implementor re-reads its state doc if needed, then **rewrites** it -- a fresh compaction of previous knowledge + new knowledge. Stuff no longer relevant drops off naturally.
+3. **Sprint 2 (impl-end)**: Implementor re-reads its state doc if needed, then **rewrites** it -- a fresh compaction of previous knowledge + new knowledge. Prune superseded empirical data (calibration numbers, performance characteristics have half-lives); carry forward history and rationale (these age well).
 4. **Sprint N**: The state doc stays bounded in size because it's been compacted N-1 times. It contains the distilled essence of all prior implementation experience.
 
 **Size discipline:** Aim for a document readable in under 5 minutes. Each rewrite should be the same size or smaller, not growing. This is compaction, not accumulation.
