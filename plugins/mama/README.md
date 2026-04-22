@@ -76,6 +76,7 @@ claude --plugin-dir /path/to/plugins/mama
 | Command | Purpose |
 |---------|---------|
 | `/mama:pattern-add` | Add project patterns |
+| `/mama:upgrade` | Upgrade project artifacts to current plugin version (including MAM → MAMA migration) |
 
 ## How It Works
 

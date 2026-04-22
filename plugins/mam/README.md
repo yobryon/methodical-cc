@@ -49,6 +49,7 @@ claude --plugin-dir /path/to/plugins/mam
 | Command | Purpose |
 |---------|---------|
 | `/mam:pattern-add` | Add project patterns to CLAUDE.md |
+| `/mam:upgrade` | Upgrade project artifacts to current plugin version |
 
 ## MAM State Directory
 

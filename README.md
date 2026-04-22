@@ -197,6 +197,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 | Command | Purpose |
 |---------|---------|
 | `pattern-add` | Add project patterns to CLAUDE.md |
+| `upgrade` | Upgrade project artifacts to current plugin version |
 
 ## Project Structure
 
