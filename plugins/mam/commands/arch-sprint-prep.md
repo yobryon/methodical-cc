@@ -19,6 +19,7 @@ This command kicks off the sprint planning cycle:
 ## Your Task
 
 1. **Assess Current State**:
+   - Read `.mam*/architect_state.md` for your running project knowledge
    - Review the roadmap
    - Review product documentation
    - Check what was accomplished in previous sprints (if any)
@@ -67,11 +68,11 @@ Present your proposal conversationally, covering:
 ## Before You Begin
 
 Read these files to establish context:
-1. `CLAUDE.md` - Current sprint state
-2. `docs/roadmap.md` - Roadmap status
-3. Recent sprint artifacts (use Glob for `docs/implementation_*sprint*.md`)
+1. `.mam*/architect_state.md` — your running project knowledge
+2. `docs/roadmap.md` — roadmap status
+3. Recent sprint artifacts (use Glob for `docs/sprint/*/` or `docs/*/sprint/*/`)
 4. Active deltas (use Glob for `docs/delta_*.md`)
-5. PDT crossover (use Glob for `docs/crossover/commission_*_request.md`) - check for open commissions
+5. PDT crossover (use Glob for `docs/crossover/commission_*_request.md`) — check for open commissions
 
 ## Begin
 

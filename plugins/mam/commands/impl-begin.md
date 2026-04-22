@@ -72,10 +72,10 @@ Always check and follow the patterns in `CLAUDE.md`. Common patterns include:
 ## Before You Begin
 
 Read these files to establish context:
-1. The implementor brief for this sprint (user may provide via @ reference, or find most recent `docs/implementor_brief_sprint*.md`)
-2. The corresponding implementation plan (`docs/implementation_plan_sprint*.md`)
+1. The implementor brief for this sprint (user may provide via @ reference, or find most recent in `docs/sprint/*/implementor_brief.md` or `docs/*/sprint/*/implementor_brief.md`)
+2. The corresponding implementation plan in the same sprint directory
 3. `CLAUDE.md` - Project patterns section
-4. The implementation log to maintain (`docs/implementation_log_sprint*.md`)
+4. The implementation log to maintain in the same sprint directory
 
 ## Begin
 

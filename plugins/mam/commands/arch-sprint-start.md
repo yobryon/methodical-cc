@@ -11,7 +11,11 @@ You are the **Architect Agent**. You and the user have aligned on the sprint sco
 
 1. **Confirm Final Scope**: Briefly restate the agreed scope to ensure alignment.
 
-2. **Create Implementation Plan**: Write `docs/implementation_plan_sprintX.md`
+2. **Create Sprint Directory**: Create the sprint artifact directory:
+   - Unscoped: `docs/sprint/X/`
+   - Scoped: `docs/{scope}/sprint/X/`
+
+3. **Create Implementation Plan**: Write `docs/sprint/X/implementation_plan.md` (or scoped equivalent)
    - Break the work into logical phases
    - Define clear tasks for each phase
    - Specify files to create/modify
@@ -19,7 +23,7 @@ You are the **Architect Agent**. You and the user have aligned on the sprint sco
    - Reference relevant deltas
    - See the template in the multi-agent-methodology skill for structure
 
-3. **Create Implementor Brief**: Write `docs/implementor_brief_sprintX.md`
+4. **Create Implementor Brief**: Write `docs/sprint/X/implementor_brief.md` (or scoped equivalent)
    - Establish the Implementor's role and expertise expectations
    - Provide essential project context
    - Summarize key decisions already made
@@ -29,16 +33,16 @@ You are the **Architect Agent**. You and the user have aligned on the sprint sco
    - Reference the implementation plan
    - See the template in the multi-agent-methodology skill for structure
 
-4. **Prepare Implementation Log**: Create `docs/implementation_log_sprintX.md`
+5. **Prepare Implementation Log**: Create `docs/sprint/X/implementation_log.md` (or scoped equivalent)
    - Initialize with sprint metadata
    - Set up the phase progress table
    - Ready for the Implementor to fill in
    - See the template in the multi-agent-methodology skill for structure
 
-5. **Present and Handoff**: Summarize what you've created and signal readiness:
+6. **Present and Handoff**: Summarize what you've created and signal readiness:
    - "Sprint X is ready for implementation"
    - "The Implementor should read the brief and proceed"
-   - "User can now switch to the Implementor session and run `/mam:impl-begin @docs/implementor_brief_sprintX.md`"
+   - "Switch to the Implementor session and run `/mam:impl-begin`"
 
 ## Implementation Plan Guidelines
 
@@ -63,6 +67,7 @@ Good briefs:
 ## Quality Check
 
 Before declaring ready, verify:
+- [ ] Sprint directory created
 - [ ] Implementation plan covers all agreed scope
 - [ ] Phases are logical and appropriately sized
 - [ ] Implementor brief has sufficient context
@@ -72,6 +77,6 @@ Before declaring ready, verify:
 
 ## Begin
 
-Create the implementation artifacts for Sprint X, then present the handoff summary.
+Create the sprint directory and implementation artifacts for Sprint X, then present the handoff summary.
 
 $ARGUMENTS

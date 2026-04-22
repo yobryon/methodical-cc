@@ -80,7 +80,7 @@ These decisions have been made by the Architect and User. Do not revisit them; i
 
 ## Implementation Plan
 
-See: `docs/implementation_plan_sprintX.md`
+See the implementation plan in your sprint directory (e.g., `docs/sprint/X/implementation_plan.md`).
 
 Execute the phases in order. After completing each phase, update your implementation log before proceeding.
 
@@ -88,7 +88,7 @@ Execute the phases in order. After completing each phase, update your implementa
 
 ## Implementation Log
 
-Maintain your log at: `docs/implementation_log_sprintX.md`
+Maintain your log in the sprint directory (e.g., `docs/sprint/X/implementation_log.md`).
 
 Update it as you work:
 - Log decisions with rationale

@@ -18,7 +18,7 @@ Look back at what you've done:
 
 ### 2. Complete the Implementation Log
 
-Ensure your implementation log (`docs/implementation_log_sprintX.md`) is thorough and complete:
+Ensure your implementation log is thorough and complete:
 
 **Phase Progress Table:**
 - Update status for all phases (COMPLETE, PARTIAL, BLOCKED, etc.)

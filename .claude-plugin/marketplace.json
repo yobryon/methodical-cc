@@ -8,8 +8,8 @@
     {
       "name": "mam",
       "source": "./plugins/mam",
-      "description": "Multi-Agent Methodology - session-based Architect/Implementor workflow for complex software projects",
-      "version": "1.2.0"
+      "description": "Multi-Agent Methodology - session-based Architect/Implementor workflow with persistent state and structured sprint artifacts",
+      "version": "2.0.0"
     },
     {
       "name": "mama",
