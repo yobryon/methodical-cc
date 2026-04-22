@@ -77,6 +77,7 @@ claude --plugin-dir /path/to/plugins/mama
 |---------|---------|
 | `/mama:pattern-add` | Add project patterns |
 | `/mama:upgrade` | Upgrade project artifacts to current plugin version (including MAM → MAMA migration) |
+| `/mama:session` | Register or recall session IDs for quick resumption (`set arch`, `list`, `clear`) |
 
 ## How It Works
 

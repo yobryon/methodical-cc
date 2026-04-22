@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# cc - Resume a Claude Code session by persona name
+#
+# Usage:
+#   cc arch          # Resume the session registered as "arch"
+#   cc impl          # Resume the session registered as "impl"
+#   cc list          # Show all registered sessions
+#   cc               # Show usage
+#
+# Looks for a sessions file in .mam*/, .mama*/, or .pdt*/ state directories
+# in the current working directory. Sessions are registered via:
+#   /mam:session set <name>
+#   /mama:session set <name>
+
+set -euo pipefail
+
+usage() {
+  echo "Usage: cc <name>    Resume session registered as <name>"
+  echo "       cc list      Show all registered sessions"
+  echo ""
+  echo "Register sessions from inside Claude Code:"
+  echo "  /mam:session set arch"
+  echo "  /mama:session set arch"
+}
+
+find_sessions_files() {
+  local files=()
+  for dir in .mam .mam-* .mama .mama-* .pdt .pdt-*; do
+    if [ -f "$dir/sessions" ]; then
+      files+=("$dir/sessions")
+    fi
+  done
+  echo "${files[@]}"
+}
+
+lookup() {
+  local name="$1"
+  for dir in .mam .mam-* .mama .mama-* .pdt .pdt-*; do
+    if [ -f "$dir/sessions" ]; then
+      local id
+      id=$(grep "^${name}=" "$dir/sessions" 2>/dev/null | head -1 | cut -d= -f2-)
+      if [ -n "$id" ]; then
+        echo "$id"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+list_all() {
+  local found=0
+  for dir in .mam .mam-* .mama .mama-* .pdt .pdt-*; do
+    if [ -f "$dir/sessions" ]; then
+      echo "$dir/sessions:"
+      while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local name="${line%%=*}"
+        local id="${line#*=}"
+        echo "  $name  →  claude -r $id"
+      done < "$dir/sessions"
+      found=1
+    fi
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "No sessions registered. Use /mam:session set <name> or /mama:session set <name> to register."
+  fi
+}
+
+if [ $# -eq 0 ]; then
+  usage
+  exit 0
+fi
+
+case "$1" in
+  list)
+    list_all
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    id=$(lookup "$1") || {
+      echo "No session registered as '$1'."
+      echo ""
+      list_all
+      exit 1
+    }
+    exec claude -r "$id"
+    ;;
+esac

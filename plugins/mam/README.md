@@ -51,6 +51,7 @@ claude --plugin-dir /path/to/plugins/mam
 |---------|---------|
 | `/mam:pattern-add` | Add project patterns to CLAUDE.md |
 | `/mam:upgrade` | Upgrade project artifacts to current plugin version |
+| `/mam:session` | Register or recall session IDs for quick resumption (`set arch`, `set impl`, `list`, `clear`) |
 
 ## MAM State Directory
 
@@ -95,6 +96,25 @@ docs/sprint/2/
 ├── implementor_brief.md
 └── implementation_log.md
 ```
+
+## Session Resumption
+
+MAM runs Architect and Implementor as separate sessions. Use `/mam:session` to register each one for quick resumption:
+
+```
+# In your Architect session:
+/mam:session set arch
+
+# In your Implementor session:
+/mam:session set impl
+
+# Later, from any terminal:
+cc arch              # resumes the Architect session
+cc impl              # resumes the Implementor session
+cc list              # shows all registered sessions
+```
+
+The `cc` script is in `tools/cc`. Add it to your PATH or copy it to a location that's already on your PATH.
 
 ## Typical Workflow
 

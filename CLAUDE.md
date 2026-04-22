@@ -111,6 +111,7 @@ Team-based workflow where Architect orchestrates Implementor and UX Designer as 
 ### Shared Commands
 - `/pattern-add` - Add or update a project pattern in CLAUDE.md
 - `/upgrade` - Upgrade project artifacts to current plugin version (MAMA also handles MAM → MAMA migration)
+- `/session` - Register or recall session IDs for quick resumption by persona name (uses UserPromptSubmit hook to capture session ID)
 
 ## Command File Format
 

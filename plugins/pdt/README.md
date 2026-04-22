@@ -43,6 +43,7 @@ claude --plugin-dir /path/to/plugins/pdt
 | `/pdt:consult` | Process a design question from the Architect, write a formal response |
 | `/pdt:debrief` | Process an implementation debrief — evaluate fidelity, absorb insights, evolve the design |
 | `/pdt:resume` | Re-establish context on an in-flight design effort |
+| `/pdt:session` | Register or recall session IDs for quick resumption (`set design`, `list`, `clear`) |
 
 ## Typical Workflow
 

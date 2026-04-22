@@ -199,6 +199,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 |---------|---------|
 | `pattern-add` | Add project patterns to CLAUDE.md |
 | `upgrade` | Upgrade project artifacts to current plugin version |
+| `session` | Register or recall session IDs for quick resumption by persona name |
 
 ## Project Structure
 
@@ -251,7 +252,7 @@ methodical-cc/
 │   ├── pdt/              # Product design thinking plugin
 │   ├── mam/              # Session-based implementation plugin
 │   └── mama/             # Team-based implementation plugin
-├── tools/                # Migration utilities
+├── tools/                # Utilities (including `cc` session resume script)
 └── docs/                 # Design documentation
 ```
 
