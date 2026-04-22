@@ -27,8 +27,8 @@ Send a message to the Implementor teammate requesting finalization. Include:
 - Tell the Implementor to write/update their state document at `{mama_dir}/implementor_state.md`
 - If a prior state document exists, re-read it first, then rewrite it incorporating new knowledge
 - If this is the first sprint, write it from scratch
-- The state document should capture everything they'd want their next instance to know: codebase patterns, gotchas, component relationships, testing approaches, build quirks, things that would surprise a new engineer
-- Emphasize: this is compaction, not accumulation -- rewrite, don't append; keep it readable in under 5 minutes
+- The state document should capture **tacit knowledge** — what they learned that can't be recovered from CLAUDE.md, the doc tree, the Architect briefing, or re-reading the code. Focus areas: why the codebase is built this way, project history and load-bearing lessons, empirical findings from real runs, known gotchas, how the user works, and current trajectory.
+- Emphasize: this is compaction, not accumulation — rewrite, don't append; keep it readable in under 5 minutes. Don't duplicate what's already in CLAUDE.md or docs/.
 
 **Example message to Implementor:**
 
@@ -36,7 +36,7 @@ Send a message to the Implementor teammate requesting finalization. Include:
 >
 > 1. Complete your implementation log with phase statuses, deviations, and a retrospective (what went well, what was hard, tech debt, recommendations)
 >
-> 2. Write your state document at `.mama/implementor_state.md`. If a prior version exists, re-read it first. Then rewrite it as a fresh compaction of everything you know that matters -- previous knowledge plus what you learned this sprint. This is your persistent working memory for future sprints. Keep it focused and readable in under 5 minutes. Drop anything that's no longer relevant.
+> 2. Write your state document at `.mama/implementor_state.md`. If a prior version exists, re-read it first. Then rewrite it as a fresh compaction of your **tacit knowledge** — what you learned that can't be recovered from CLAUDE.md, the doc tree, or re-reading the code. Focus on: why the codebase is built this way, project history and load-bearing lessons, empirical findings, known gotchas, how the user works. Keep it readable in under 5 minutes. Drop anything that's no longer relevant or that has a home elsewhere.
 >
 > 3. Send me your handoff summary when done.
 

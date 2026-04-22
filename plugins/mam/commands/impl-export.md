@@ -1,15 +1,17 @@
 ---
-description: Export your accumulated implementation knowledge to a state document. Captures codebase patterns, gotchas, component relationships, and institutional knowledge from your session context. Useful before transitioning to MAMA or as periodic knowledge preservation.
+description: Export tacit implementation knowledge — the context that can't be recovered from code, docs, or briefings — to a persistent state document. Useful before transitioning to MAMA or as periodic knowledge preservation.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 # Export Implementation Knowledge
 
-You are the **Implementor**. You've been working on this project and have accumulated deep context about the codebase — patterns, gotchas, component relationships, testing approaches, build quirks, things that would surprise someone new. This command captures that knowledge into a persistent document.
+You are the **Implementor**. You've been working on this project and have accumulated context that lives only in your head — hard-won lessons, the "why" behind non-obvious choices, how the user works, what experiments revealed, what shaped the current design. This command captures that **tacit knowledge** into a persistent document.
+
+The key question: **What did you learn that can't be recovered from CLAUDE.md, the doc tree, the Architect briefing, or re-reading the code?** That's what belongs here. Everything else already has a home.
 
 ## Why This Matters
 
-Your session context is rich but ephemeral. This export creates a durable record of what you know, useful for:
+Your session context is rich but ephemeral. This export creates a durable record of what would otherwise be lost, useful for:
 - **Transitioning to MAMA**: Your knowledge becomes the initial `implementor_state.md` that future Implementor teammates will load on startup
 - **Knowledge preservation**: Even within MAM, this document can be read at the start of future Implementor sessions to bootstrap understanding
 - **Onboarding**: A new person (or session) picking up this project gets a concentrated knowledge transfer
@@ -25,21 +27,27 @@ Look for the project's state directory:
 
 ### 2. Review Your Context
 
-Before writing, mentally inventory what you know:
-- **Codebase structure**: How is the code organized? What are the key modules/components?
-- **Patterns**: What patterns does this codebase follow? What's idiomatic here?
-- **Gotchas**: What's non-obvious? What broke in surprising ways? What looks simple but isn't?
-- **Component relationships**: How do the pieces connect? What are the hidden dependencies?
-- **Testing**: What's the testing strategy? What's well-tested vs. fragile?
-- **Build and tooling**: What quirks does the build have? What commands matter?
-- **Technical debt**: What shortcuts exist? What's known to be fragile?
-- **Recent work**: What was just changed? What's the current state of the implementation?
+Before writing, mentally inventory **what you know that has no other home**. The categories below are prompts, not a checklist — skip any that aren't relevant, and add what is.
+
+**Technical tacit knowledge:**
+- **Gotchas and empirical findings**: What has experimentation revealed — things that broke surprisingly, behaviors that only show up at scale, calibration notes from real runs, what's actually expensive vs. cheap? What looks simple but isn't?
+- **Component relationships**: How do the pieces connect? What are the hidden dependencies that aren't obvious from the code structure?
+- **Build and tooling quirks**: What non-obvious things about the build, environment, or tooling would trip someone up?
+
+**Historical and contextual knowledge:**
+- **Project history and load-bearing lessons**: What past mistakes or pivots shaped the current design? What was tried before and why it was abandoned?
+- **Why it's built this way**: Where the code does something non-obvious, what's the rationale? What alternative was considered and rejected, and why?
+- **Working context**: How does the user work? What's their expertise, preferences, communication style? What do they care about most? How do they like to collaborate?
+
+**State and trajectory:**
+- **Current state**: What was just completed, what's in flight, what's the trajectory?
+- **Technical debt**: What shortcuts exist that aren't tracked elsewhere? What's fragile in ways the tests don't cover?
 
 ### 3. Write the State Document
 
 Write `{state_dir}/implementor_state.md`. If a prior version exists, read it first and incorporate anything still relevant.
 
-Structure it as **compacted working knowledge** — not a log of what you did, but a distillation of what matters going forward. Write it as if briefing a skilled engineer who's about to pick up where you left off.
+Structure it as **compacted tacit knowledge** — not a summary of the codebase or a log of what you did, but a distillation of what would be lost if this session ended. Write it as if briefing a skilled engineer who has access to CLAUDE.md, the full doc tree, and the Architect's briefing — but none of your experience.
 
 Suggested structure (adapt to what's relevant):
 
@@ -50,38 +58,61 @@ Suggested structure (adapt to what's relevant):
 **Last updated**: [Date]
 **After sprint**: [N]
 
-## Codebase Overview
-[How the code is organized, key entry points, architectural patterns]
+## Why It's Built This Way
+[Rationale behind non-obvious architectural choices — what was considered and rejected, and why]
 
-## Patterns and Conventions
-[What's idiomatic in this codebase, naming conventions, common patterns]
+## Project History and Lessons Learned
+[Load-bearing past mistakes or pivots that shaped current work — what you'd need to know to avoid repeating history]
 
-## Key Components
-[Important modules/classes/services and how they relate]
+## Empirical Findings
+[What experiments and real runs have revealed — calibration data, performance characteristics, surprising behaviors, what's actually expensive vs. cheap]
 
 ## Known Gotchas
-[Non-obvious things that will bite you if you don't know about them]
+[Non-obvious things that will bite you if you don't know about them — hidden dependencies, subtle ordering requirements, things that look simple but aren't]
+
+## Working Context
+[How the user works — their expertise, preferences, working style, what they care about, how they like to collaborate]
 
 ## Build and Tooling
-[Build quirks, important commands, environment setup notes]
-
-## Testing
-[Testing strategy, what's well-covered vs. fragile, how to run tests]
-
-## Technical Debt
-[Known shortcuts, fragile areas, things that need future attention]
+[Non-obvious quirks — things the README or CLAUDE.md don't cover that would trip you up]
 
 ## Current State
-[What was just completed, what's in flight, what's next]
+[What was just completed, what's in flight, trajectory and momentum]
+
+## Technical Debt
+[Known shortcuts and fragile areas not tracked elsewhere]
 ```
 
-### 4. Confirm with the User
+### 4. Reflect Before Finalizing
+
+Before presenting to the user, ask yourself: **if someone only had this document plus CLAUDE.md plus the Architect briefing, would they:**
+- Know *why* the codebase is the way it is?
+- Avoid the mistakes that came from past painful learnings?
+- Know how the user works and what they care about?
+- Have the empirical calibration from real runs and experiments?
+
+If any answer is "not really," flesh out the relevant section.
+
+### 5. Confirm with the User
 
 Present a summary of what you captured and confirm it's written. Note anything the user might want to add or correct.
 
+## What NOT to Include
+
+Don't duplicate content that lives elsewhere:
+- **CLAUDE.md** is auto-loaded every session — don't repeat project patterns, conventions, or build commands that are already there
+- **docs/** (roadmap, product docs, tech debt trackers) — reference by path when the state doc needs to orient the reader, don't summarize
+- **Sprint logs and implementation logs** — the history is in the artifacts, don't re-narrate it
+- **Anything recoverable from reading the code** — structure, APIs, type signatures
+
+Your job is to capture the context those sources don't hold.
+
 ## Size Discipline
 
-Keep this document readable in **under 5 minutes**. It's a concentrated knowledge transfer, not a comprehensive reference. If something is obvious from reading the code, don't include it. Focus on what would surprise someone or save them from a mistake.
+Keep this document readable in **under 5 minutes**. It's a concentrated knowledge transfer, not a comprehensive reference.
+
+- If something is obvious from reading the code, don't include it.
+- **Do** include things that aren't in code but would take weeks to rediscover — project history, user preferences, empirical findings from experimentation, the "why" behind architectural choices. These have no other home.
 
 ## Begin
 

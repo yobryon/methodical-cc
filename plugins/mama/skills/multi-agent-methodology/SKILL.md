@@ -162,23 +162,24 @@ This is updated during `arch-sprint-complete` and `arch-resume`.
 
 ### Implementor State
 
-The `implementor_state.md` file is the Implementor's **persistent working memory** -- the document equivalent of what happens naturally when a long-lived session compacts its context.
+The `implementor_state.md` file captures the Implementor's **tacit knowledge** -- what was learned that can't be recovered from CLAUDE.md, the doc tree, the Architect briefing, or re-reading the code.
 
 **What goes in:**
-- Codebase patterns and conventions discovered through implementation
-- Component relationships and architectural patterns
-- Known gotchas, fragile areas, non-obvious dependencies
-- Testing approaches that work for this codebase
-- Build/deploy quirks learned through experience
-- Things that would surprise a new engineer picking up the codebase
+- Why the codebase is built this way -- rationale behind non-obvious choices, what was considered and rejected
+- Project history and load-bearing lessons -- past mistakes or pivots that shaped current work
+- Empirical findings -- what experiments and real runs revealed, calibration data, what's actually expensive vs. cheap
+- Known gotchas -- non-obvious things that will bite you, hidden dependencies, subtle ordering requirements
+- Working context -- how the user works, their expertise, preferences, what they care about
+- Build/tooling quirks not covered in CLAUDE.md
 
 **What does NOT go in:**
-- Specific sprint tasks or what was done when (that's the implementation log)
-- Design decisions or rationale (that's product documentation)
-- Who asked for what (that's sprint artifacts)
+- Content already in CLAUDE.md (auto-loaded every session)
+- Content in docs/ (roadmap, product docs, tech debt trackers) -- reference by path instead
+- Sprint logs or implementation log narratives -- the history is in the artifacts
+- Anything recoverable from reading the code -- structure, APIs, type signatures
 
 **Lifecycle:**
-1. **Sprint 1 (impl-end)**: Implementor reviews its full context and writes `implementor_state.md` from scratch -- everything it learned that matters going forward
+1. **Sprint 1 (impl-end)**: Implementor reviews its full context and writes `implementor_state.md` from scratch -- the tacit knowledge it accumulated that has no other home
 2. **Sprint 2 (impl-begin)**: A fresh Implementor spawns, SessionStart hook loads the state document, priming it with accumulated knowledge before reading the brief
 3. **Sprint 2 (impl-end)**: Implementor re-reads its state doc if needed, then **rewrites** it -- a fresh compaction of previous knowledge + new knowledge. Stuff no longer relevant drops off naturally.
 4. **Sprint N**: The state doc stays bounded in size because it's been compacted N-1 times. It contains the distilled essence of all prior implementation experience.
