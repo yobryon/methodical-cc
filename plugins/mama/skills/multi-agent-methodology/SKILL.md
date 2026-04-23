@@ -180,7 +180,7 @@ The `implementor_state.md` file captures the Implementor's **tacit knowledge** -
 
 **Lifecycle:**
 1. **Sprint 1 (impl-end)**: Implementor reviews its full context and writes `implementor_state.md` from scratch -- the tacit knowledge it accumulated that has no other home
-2. **Sprint 2 (impl-begin)**: A fresh Implementor spawns, SessionStart hook loads the state document, priming it with accumulated knowledge before reading the brief
+2. **Sprint 2 (arch-sprint-start)**: A fresh Implementor spawns, SessionStart hook loads the state document, priming it with accumulated knowledge before reading the brief
 3. **Sprint 2 (impl-end)**: Implementor re-reads its state doc if needed, then **rewrites** it -- a fresh compaction of previous knowledge + new knowledge. Prune superseded empirical data (calibration numbers, performance characteristics have half-lives); carry forward history and rationale (these age well).
 4. **Sprint N**: The state doc stays bounded in size because it's been compacted N-1 times. It contains the distilled essence of all prior implementation experience.
 
@@ -296,15 +296,16 @@ A sprint is a coherent chunk of work with a clear outcome:
 - Drives toward alignment on scope
 - Output: Delta documents, refined scope understanding
 
-**3. Finalization (Architect)**
+**3. Finalization & Kickoff (Architect)**
 - Converge on final sprint scope
 - Write implementation plan with phases
 - Write Implementor brief
 - Create phase tasks in the shared task list
-- Output: Sprint artifacts in `docs/sprint/X/`
+- Spawn the Implementor and hand off the sprint in one continuous flow (`arch-sprint-start`)
+- Output: Sprint artifacts in `docs/sprint/X/`, Implementor running
 
 **4. Implementation (Implementor Teammate)**
-- Implementor spawned as teammate, reads state + brief + plan
+- Implementor reads state + brief + plan
 - Executes phases in order, updating shared tasks as phases complete
 - Messages Architect when genuine questions arise
 - User may interact directly with feedback, nudges, test results

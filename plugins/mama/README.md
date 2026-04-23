@@ -58,7 +58,7 @@ claude --plugin-dir /path/to/plugins/mama
 | `/mama:arch-create-docs` | Create initial product documentation |
 | `/mama:arch-roadmap` | Create implementation roadmap |
 | `/mama:arch-sprint-prep` | Prepare sprint proposal |
-| `/mama:arch-sprint-start` | Lock scope, write plan and brief |
+| `/mama:arch-sprint-start` | Lock scope, write plan/brief, spawn Implementor, begin work |
 | `/mama:arch-sprint-complete` | Process completed sprint, reconcile docs, update state |
 | `/mama:arch-review` | Architectural review of codebase against design |
 | `/mama:consult-pdt` | Formalize a design question for PDT |
@@ -69,7 +69,6 @@ claude --plugin-dir /path/to/plugins/mama
 ### Implementor Commands
 | Command | Purpose |
 |---------|---------|
-| `/mama:impl-begin` | Spawn Implementor teammate, begin sprint work |
 | `/mama:impl-end` | Finalize work, write state document, shut down Implementor |
 
 ### Shared Commands
@@ -161,12 +160,11 @@ docs/sprint/2/
 3. /mama:arch-roadmap           Plan the roadmap
 4. /mama:arch-sprint-prep       Propose sprint scope
 5. /mama:arch-discuss           Discuss with user, refine scope
-6. /mama:arch-sprint-start      Lock scope, write plan and brief
-7. /mama:impl-begin             Spawn Implementor, begin work
+6. /mama:arch-sprint-start      Lock scope, write plan/brief, spawn Implementor, begin work
    ↕ User interacts directly with Implementor during implementation
    ↕ Implementor messages Architect when questions arise
-8. /mama:impl-end               Finalize, write state, shut down Implementor
-9. /mama:arch-sprint-complete   Reconcile docs, update state, propose next sprint
+7. /mama:impl-end               Finalize, write state, shut down Implementor
+8. /mama:arch-sprint-complete   Reconcile docs, update state, propose next sprint
    → Repeat from step 4
 ```
 

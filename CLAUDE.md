@@ -62,7 +62,7 @@ Session-based workflow where you run Architect and Implementor as separate Claud
 
 ### MAMA (Multi-Agent Methodology with Agents)
 Team-based workflow where Architect orchestrates Implementor and UX Designer as agent teammates.
-- Commands namespaced as `/mama:arch-init`, `/mama:impl-begin`, etc.
+- Commands namespaced as `/mama:arch-init`, `/mama:arch-sprint-start`, etc.
 - User can interact directly with Implementor and UX Designer teammates
 - Implementor maintains persistent working knowledge via compacted state document
 - MAMA internal state kept in `.mama/` (or `.mama-{scope}/` for multi-product)
@@ -95,7 +95,7 @@ Team-based workflow where Architect orchestrates Implementor and UX Designer as 
 - `/arch-create-docs` - Create initial product documentation
 - `/arch-roadmap` - Create implementation roadmap
 - `/arch-sprint-prep` - Prepare sprint proposal (auto-loads context, checks for PDT commissions)
-- `/arch-sprint-start` - Lock scope, write plan and brief
+- `/arch-sprint-start` - Lock scope, write plan and brief (MAMA: also spawns Implementor and begins work)
 - `/arch-sprint-complete` - Process completed sprint, reconcile docs (auto-loads context)
 - `/arch-review` - Architectural review of codebase against design intent
 - `/consult-pdt` - Formalize a design question for PDT, write a consultation request
@@ -104,9 +104,9 @@ Team-based workflow where Architect orchestrates Implementor and UX Designer as 
 - `/ux-consult` - Collaborate with UX Designer teammate
 
 ### Implementor Commands
-- `/impl-begin` - Begin implementation (MAM: read brief; MAMA: spawn Implementor teammate)
+- `/mam:impl-begin` - Begin implementation (MAM only: read brief, start execution in Implementor session)
 - `/impl-end` - Wrap up implementation, write state, shut down Implementor
-- `/impl-export` - Export accumulated implementation knowledge to state document (MAM only)
+- `/mam:impl-export` - Export accumulated implementation knowledge to state document (MAM only)
 
 ### Shared Commands
 - `/pattern-add` - Add or update a project pattern in CLAUDE.md
@@ -201,7 +201,8 @@ The Implementor accumulates expertise across sprints via `implementor_state.md`:
 Key commands prompt Claude to read relevant files before proceeding:
 - `arch-sprint-prep` - Reads architect state, roadmap, active deltas
 - `arch-sprint-complete` - Reads implementation log, updates architect state and sprint log
-- `impl-begin` - Spawns Implementor teammate with brief, plan, and state references
+- `arch-sprint-start` (MAMA) - Writes sprint artifacts and spawns Implementor teammate in one step
+- `mam:impl-begin` - Reads brief, plan, and state references in the Implementor session
 - `arch-resume` - Reads `.mama*/` state for session resumption
 
 ## Development Notes

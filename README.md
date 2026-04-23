@@ -131,19 +131,16 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
    /mama:arch-init
    ```
 
-2. **Prep Sprint**:
+2. **Prep and Start Sprint**:
    ```
    /mama:arch-sprint-prep
+   /mama:arch-sprint-start
    ```
-
-3. **Spawn Implementor Teammate**:
-   ```
-   /mama:impl-begin Sprint 1
-   ```
-   → Implementor spawns as teammate, you can interact directly
+   → Architect writes plan/brief, spawns Implementor teammate, and kicks off work in one flow
    → Implementor loads persistent working knowledge from prior sprints
+   → User can interact directly with Implementor during execution
 
-4. **Complete Sprint**:
+3. **Complete Sprint**:
    ```
    /mama:impl-end          # Implementor writes state, shuts down
    /mama:arch-sprint-complete
@@ -179,7 +176,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 | `arch-create-docs` | Create product documentation |
 | `arch-roadmap` | Create implementation roadmap |
 | `arch-sprint-prep` | Prepare sprint proposal |
-| `arch-sprint-start` | Lock scope, write plan and brief |
+| `arch-sprint-start` | Lock scope, write plan and brief (MAMA: also spawns Implementor, begins work) |
 | `arch-sprint-complete` | Complete sprint, reconcile docs |
 | `arch-review` | Architectural review — DRY, fragmentation, pattern drift |
 | `consult-pdt` | Formalize a design question for PDT |
@@ -190,7 +187,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 ### Implementor Commands
 | Command | MAM Behavior | MAMA Behavior |
 |---------|--------------|---------------|
-| `impl-begin` | Read brief, begin work | Spawn Implementor teammate |
+| `impl-begin` | Read brief, begin work | *(merged into `arch-sprint-start`)* |
 | `impl-end` | Write retrospective | Finalize, write state, shut down teammate |
 | `impl-export` | Export implementation knowledge to state doc | *(not needed — impl-end writes state)* |
 
