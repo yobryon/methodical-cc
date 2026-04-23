@@ -1,7 +1,6 @@
 ---
 name: ux-designer
 description: UX Designer agent that collaborates with the Architect on user experience design. Contemplates project docs, design documents, and UX inputs to formulate design artifacts, style guides, and interaction patterns.
-model: sonnet
 tools:
   - Read
   - Write

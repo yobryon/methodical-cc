@@ -9,13 +9,13 @@
       "name": "mam",
       "source": "./plugins/mam",
       "description": "Multi-Agent Methodology - session-based Architect/Implementor workflow with persistent state and structured sprint artifacts",
-      "version": "2.1.2"
+      "version": "2.1.3"
     },
     {
       "name": "mama",
       "source": "./plugins/mama",
       "description": "Multi-Agent Methodology with Agents - team-based workflow with direct user interaction and persistent working knowledge",
-      "version": "2.1.2"
+      "version": "2.1.3"
     },
     {
       "name": "pdt",

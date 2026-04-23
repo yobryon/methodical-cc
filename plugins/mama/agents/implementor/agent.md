@@ -1,7 +1,6 @@
 ---
 name: implementor
 description: Implementor agent for executing sprint work. A skilled software engineer who follows implementation plans with precision, maintains detailed logs, and communicates with the Architect when questions arise.
-model: sonnet
 tools:
   - Read
   - Write
