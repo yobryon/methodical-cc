@@ -132,8 +132,8 @@ For multi-product projects sharing a directory, each MAMA instance scopes itself
 
 Sprint artifacts follow the same pattern:
 ```
-docs/backend/sprint/1/{implementation_plan,implementor_brief,implementation_log}.md
-docs/app/sprint/1/{implementation_plan,implementor_brief,implementation_log}.md
+docs/backend/sprint/1/{implementation_plan,implementation_log}.md
+docs/app/sprint/1/{implementation_plan,implementation_log}.md
 ```
 
 ## Sprint Artifact Organization
@@ -142,15 +142,15 @@ Sprint artifacts use a hierarchical layout:
 
 ```
 docs/sprint/1/
-├── implementation_plan.md
-├── implementor_brief.md
-└── implementation_log.md
+├── implementation_plan.md     # Phase breakdown, files, verification criteria, design constraints
+└── implementation_log.md      # Opens with Sprint Kickoff (spawn prompt verbatim), then the working journal
 
 docs/sprint/2/
 ├── implementation_plan.md
-├── implementor_brief.md
 └── implementation_log.md
 ```
+
+The Implementor brief that MAM produces is replaced in MAMA by the **spawn prompt**, which the Architect sends directly to the Implementor and records as the `## Sprint Kickoff` section at the top of the implementation log. This eliminates the duplication that crept in once orientation became conversational rather than document-driven.
 
 ## Typical Workflow
 

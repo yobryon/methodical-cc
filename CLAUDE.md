@@ -161,8 +161,8 @@ claude --plugin-dir ./plugins/mama
 - **Product Docs**: Source of truth (in target project's `docs/`)
 - **Deltas**: Design explorations (`delta_XX_name.md`) - working papers, not commitments
 - **Implementation Plan**: Phase-by-phase breakdown for sprints
-- **Implementor Brief**: Context handoff document
-- **Implementation Log**: Running journal of actual work
+- **Implementor Brief**: Context handoff document (MAM only — MAMA replaces this with the spawn prompt recorded in the log's Sprint Kickoff section)
+- **Implementation Log**: Running journal of actual work (MAMA: opens with Sprint Kickoff section containing the spawn prompt)
 
 ### Sprint Lifecycle
 1. Prep → 2. Discuss → 3. Start → 4. Begin (implementation) → 5. End (implementation) → 6. Complete

@@ -85,7 +85,7 @@ The Architect is the design partner and team lead. Maintains comprehensive under
 - Product documentation (structure appropriate to the project)
 - `delta_XX_topic.md` - Incremental design explorations and captured ideas
 - `docs/sprint/X/implementation_plan.md` - Phase breakdowns for implementors
-- `docs/sprint/X/implementor_brief.md` - Context and instructions for the Implementor
+- The spawn prompt (recorded as the `## Sprint Kickoff` section at the top of `implementation_log.md`) - orientation, rationale, sprint-specific constraints
 - `.mama/architect_state.md` - Running project knowledge and sprint history
 - `.mama/sprint_log.md` - Chronological sprint record
 
@@ -94,7 +94,7 @@ The Architect is the design partner and team lead. Maintains comprehensive under
 The Implementor executes. Focused on code, not design decisions.
 
 **Responsibilities:**
-- Read the implementation plan and brief
+- Read the spawn prompt (durable record in the log's `## Sprint Kickoff` section) and the implementation plan
 - Execute phases in order
 - Maintain an implementation log with decisions, discoveries, bugs/fixes, and reflections
 - Communicate with the Architect when genuine questions arise
@@ -220,9 +220,10 @@ Sprint artifacts live in `docs/sprint/X/` (or `docs/{scope}/sprint/X/` for scope
 ```
 docs/sprint/1/
 ├── implementation_plan.md    # Phase breakdown for the Implementor
-├── implementor_brief.md      # Context and instructions
-└── implementation_log.md     # Running journal of actual work
+└── implementation_log.md     # Running journal — opens with the Sprint Kickoff section (the spawn prompt verbatim)
 ```
+
+In MAMA there is no separate brief document. Orientation that briefs used to provide is now the **spawn prompt**, sent directly to the Implementor and recorded as the `## Sprint Kickoff` section at the top of the implementation log. This eliminates duplication and concentrates effort on the artifact the Implementor actually engages with first.
 
 This hierarchical organization keeps sprint artifacts grouped and prevents `docs/` from getting cluttered over many sprints.
 
@@ -246,15 +247,16 @@ This hierarchical organization keeps sprint artifacts grouped and prevents `docs
 
 **Key Rule:** The Implementor owns the log. The Architect reads it but doesn't edit it.
 
-**Implementor Brief:**
-- Preamble establishing the Implementor's role and expertise expectations
-- Project context (minimal, relevant)
-- Current state summary
-- What has already been decided
-- What files/systems are relevant
-- What NOT to touch
-- Reference to the implementation plan
-- Instructions for maintaining the implementation log
+**Sprint Kickoff (the spawn prompt, recorded in the log):**
+- Identity and sprint context ("You are the Implementor for Sprint X")
+- State directory path (e.g., `.mama/` or `.mama-backend/`)
+- Reading order: state doc → plan → log
+- Why this sprint matters (1–2 sentences of rationale)
+- Sprint-specific patterns or constraints (curated from CLAUDE.md, plus decisions from the discussion)
+- Communication norms (when to message back, when to proceed independently)
+- Exit conditions (what "done" looks like)
+
+The spawn prompt is the orientation contract. It's substantive but tight (a few hundred words), and it's the durable record of how the sprint was framed — useful for retrospectives many sprints later.
 
 ## The Sprint Lifecycle
 
@@ -299,13 +301,13 @@ A sprint is a coherent chunk of work with a clear outcome:
 **3. Finalization & Kickoff (Architect)**
 - Converge on final sprint scope
 - Write implementation plan with phases
-- Write Implementor brief
+- Compose the spawn prompt and record it as the `## Sprint Kickoff` section at the top of the implementation log
 - Create phase tasks in the shared task list
 - Spawn the Implementor and hand off the sprint in one continuous flow (`arch-sprint-start`)
 - Output: Sprint artifacts in `docs/sprint/X/`, Implementor running
 
 **4. Implementation (Implementor Teammate)**
-- Implementor reads state + brief + plan
+- Implementor reads state + plan + log (kickoff section)
 - Executes phases in order, updating shared tasks as phases complete
 - Messages Architect when genuine questions arise
 - User may interact directly with feedback, nudges, test results

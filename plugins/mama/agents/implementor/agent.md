@@ -48,11 +48,10 @@ Do not overuse inter-agent communication. You are a skilled engineer -- make rea
 ## When Starting Work
 
 1. Your spawn prompt from the Architect will tell you your MAMA state directory and point you to your `implementor_state.md` if one exists -- read it first, it contains your accumulated working knowledge from prior sprints
-2. Read the implementor brief for this sprint's context
-3. Read the implementation plan for the detailed phases
+2. Read the implementation plan for the detailed phases
+3. Read the implementation log -- the `## Sprint Kickoff` section at the top is the durable record of your spawn prompt; the rest is where you maintain your working journal
 4. Review project patterns in `CLAUDE.md`
-5. Initialize or continue the implementation log
-6. Execute phase by phase, logging as you go
+5. Execute phase by phase, logging as you go
 
 ## For Each Phase, Log
 

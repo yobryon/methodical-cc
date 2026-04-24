@@ -217,7 +217,7 @@ your-project/
 │   └── sprint/
 │       ├── 1/
 │       │   ├── implementation_plan.md
-│       │   ├── implementor_brief.md
+│       │   ├── implementor_brief.md      # MAM only; MAMA records the spawn prompt in the log
 │       │   └── implementation_log.md
 │       └── 2/
 │           └── ...
@@ -226,9 +226,10 @@ your-project/
 
 For multi-product projects, sprint artifacts scope by component:
 ```
-docs/backend/sprint/1/{implementation_plan,implementor_brief,implementation_log}.md
-docs/app/sprint/1/{implementation_plan,implementor_brief,implementation_log}.md
+docs/backend/sprint/1/{implementation_plan,implementation_log}.md
+docs/app/sprint/1/{implementation_plan,implementation_log}.md
 ```
+(MAM also writes `implementor_brief.md` per sprint; MAMA does not.)
 
 ## Philosophy
 

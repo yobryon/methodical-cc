@@ -7,6 +7,14 @@
 
 ---
 
+## Sprint Kickoff
+
+[The Architect's spawn prompt verbatim — the durable record of how this sprint was framed.
+Includes identity, state directory, reading order, why-this-matters framing,
+sprint-specific constraints, communication norms, and exit conditions.]
+
+---
+
 ## Phase Progress
 
 | Phase | Name | Status | Notes |
