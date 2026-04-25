@@ -14,6 +14,8 @@ tools:
   - TaskGet
   - TaskList
   - TaskUpdate
+model: opus
+effort: medium
 hooks:
   SessionStart:
     - hooks:
