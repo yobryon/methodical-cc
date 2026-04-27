@@ -6,6 +6,7 @@ Usage:
   mcc list                 List all registered sessions in this project
   mcc status               Show plugin state and registered sessions
   mcc setup                Interactive first-time setup (install + enable user-wide)
+  mcc update               Update the methodical-cc marketplace and all three plugins
   mcc enable <plugin>      Enable plugin (pdt|mam|mama) in current project
   mcc disable <plugin>     Disable plugin (pdt|mam|mama) in current project
   mcc switch <target>      Swap impl plugin: mam | mama | off (leaves pdt alone)
@@ -324,6 +325,36 @@ def cmd_switch(argv):
         print("→ Implementation plugins disabled in this project. (pdt unchanged.)")
 
 
+def cmd_update(argv):
+    if not have_claude():
+        die("'claude' command not found on PATH.")
+
+    print(f"Updating {MARKETPLACE} marketplace and plugins...")
+    print()
+
+    failed = []
+
+    print(f"→ marketplace ({MARKETPLACE})")
+    rc = subprocess.run(["claude", "plugin", "marketplace", "update", MARKETPLACE]).returncode
+    if rc != 0:
+        failed.append(f"marketplace update (rc={rc})")
+
+    for plugin in PLUGINS:
+        print(f"→ {plugin}")
+        rc = subprocess.run(["claude", "plugin", "update", f"{plugin}@{MARKETPLACE}"]).returncode
+        if rc != 0:
+            failed.append(f"{plugin} update (rc={rc})")
+
+    print()
+    if failed:
+        print("Some updates returned non-zero exit codes:")
+        for f in failed:
+            print(f"  • {f}")
+        print("(A plugin not installed locally will report an error here — that's expected.)")
+        sys.exit(1)
+    print("Update complete. Restart any active Claude Code sessions to pick up changes.")
+
+
 def cmd_setup(argv):
     print("Methodical-CC setup")
     print("===================")
@@ -391,6 +422,7 @@ HANDLERS = {
     "list": cmd_list,
     "status": cmd_status,
     "setup": cmd_setup,
+    "update": cmd_update,
     "enable": cmd_enable,
     "disable": cmd_disable,
     "switch": cmd_switch,

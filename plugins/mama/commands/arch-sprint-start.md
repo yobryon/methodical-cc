@@ -23,7 +23,7 @@ The Agent tool can spawn agents in two modes, and getting this wrong silently br
 Before doing anything else, make sure you have an agent team. The team persists across sprints — you only create it once per session.
 
 - If you've already called `TeamCreate` earlier in this session, skip this step.
-- Otherwise, call `TeamCreate` now with a sensible team name (e.g., `mama-{project}` or `{project}-impl`) and a short description. Remember the team name — every subsequent Agent and SendMessage call will reference it.
+- Otherwise, call `TeamCreate` now with a sensible `team_name` (e.g., `mama-{project}` or `{project}-impl`) and a short `description`. The session that calls `TeamCreate` is automatically the team lead — that's you. No additional assertion needed. Remember the team name — every subsequent `Agent` and `SendMessage` call will reference it.
 
 If you cannot create a team (the tool is missing or fails), **stop and tell the user**. Do not fall back to spawning Agents without a team_name — that produces a one-shot subagent and breaks the sprint.
 

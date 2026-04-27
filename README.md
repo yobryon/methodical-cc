@@ -238,6 +238,7 @@ docs/app/sprint/1/{implementation_plan,implementation_log}.md
 ```
 mcc setup                     # First-time install of pdt/mam/mama at user scope,
                               #   choose which to enable user-wide, install mcc on PATH
+mcc update                    # Pull marketplace updates and update all three plugins
 mcc status                    # Show what's enabled, project state, registered sessions
 mcc switch mam|mama|off       # Swap implementation plugin in current project (leaves pdt alone)
 mcc enable|disable <plugin>   # Granular per-project plugin control
