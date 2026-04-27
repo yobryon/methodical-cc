@@ -21,6 +21,23 @@ This skill provides the foundational methodology for managing complex software p
 
 MAMA uses **agent teams** for orchestration. The Architect is the team lead; the Implementor and UX Designer are teammates.
 
+### Critical: Teammate vs One-Shot Subagent
+
+Every time MAMA mentions "spawn," "bring on," or "teammate," the mechanic underneath is:
+
+> Call the **Agent tool** with `subagent_type` set to the agent definition (e.g. `implementor`), `team_name` set to your team, and `name` set to a human-readable label.
+
+The `team_name` parameter is what makes this a **teammate**: it joins your team, persists across turns, the user can see and talk to it, and you can `SendMessage` to it.
+
+If you call `Agent` *without* `team_name`, you get a **one-shot subagent**: it runs for a single turn, returns one response, and is gone. The user can't interact with it. This is the wrong model for MAMA — but it's also the default if you forget to specify a team.
+
+**Symptoms of the wrong path:**
+- The Implementor produces a single big response and then there's nothing to talk to
+- The user can't switch panes to interact with the Implementor
+- You can't `SendMessage` to it later because it doesn't exist
+
+**The fix:** before any Agent call, ensure you have a team (`TeamCreate` if not), and always pass `team_name` on the Agent call.
+
 ### Why Teams
 
 - The **user can interact directly** with any teammate -- give the Implementor test feedback, nudge direction, answer questions -- without proxying through the Architect
