@@ -231,6 +231,40 @@ docs/app/sprint/1/{implementation_plan,implementation_log}.md
 ```
 (MAM also writes `implementor_brief.md` per sprint; MAMA does not.)
 
+## The `mcc` Helper
+
+`mcc` is a small CLI that manages methodical-cc workflows from outside Claude Code:
+
+```
+mcc setup                     # First-time install of pdt/mam/mama at user scope,
+                              #   choose which to enable user-wide, install mcc on PATH
+mcc status                    # Show what's enabled, project state, registered sessions
+mcc switch mam|mama|off       # Swap implementation plugin in current project (leaves pdt alone)
+mcc enable|disable <plugin>   # Granular per-project plugin control
+mcc <name>                    # Resume a session registered as <name>
+mcc list                      # List registered sessions in the current project
+```
+
+Sessions are registered from inside Claude Code with `/pdt:session set <name>`, `/mam:session set <name>`, or `/mama:session set <name>` — useful when you switch between CLI and IDE and want to deterministically return to a specific persona's session.
+
+### First-time setup
+
+After adding the marketplace and installing the plugin, bootstrap `mcc` once:
+
+**Linux / macOS:**
+```bash
+~/.claude/plugins/marketplaces/methodical-cc/tools/mcc setup
+```
+
+**Windows:**
+```cmd
+%USERPROFILE%\.claude\plugins\marketplaces\methodical-cc\tools\mcc.cmd setup
+```
+
+`mcc setup` will install the plugins at user scope, ask which (if any) to enable user-wide, and offer to install `mcc` itself onto your PATH (`~/.local/bin/mcc`) — using a symlink on Linux/Mac and a generated forwarder on Windows. After that, plain `mcc` works from any terminal. Re-running `setup` later is safe — already-installed pieces are detected and updated transparently.
+
+Requires Python 3.6+ (preinstalled on most Linux/Mac systems; on Windows install from python.org if needed).
+
 ## Philosophy
 
 This methodology embraces that:
@@ -250,7 +284,7 @@ methodical-cc/
 │   ├── pdt/              # Product design thinking plugin
 │   ├── mam/              # Session-based implementation plugin
 │   └── mama/             # Team-based implementation plugin
-├── tools/                # Utilities (including `cc` session resume script)
+├── tools/                # Utilities (including `mcc` — session resume + plugin management)
 └── docs/                 # Design documentation
 ```
 

@@ -109,12 +109,15 @@ MAM runs Architect and Implementor as separate sessions. Use `/mam:session` to r
 /mam:session set impl
 
 # Later, from any terminal:
-cc arch              # resumes the Architect session
-cc impl              # resumes the Implementor session
-cc list              # shows all registered sessions
+mcc arch              # resumes the Architect session
+mcc impl              # resumes the Implementor session
+mcc list              # shows all registered sessions
+mcc status            # show plugin state, version, and registered sessions
 ```
 
-The `cc` script is in `tools/cc`. Add it to your PATH or copy it to a location that's already on your PATH.
+The `mcc` script is in `tools/mcc` (with `mcc.cmd` for Windows). Add it to your PATH or copy it to a location that's already on your PATH. It requires Python 3.6+ — most platforms ship this; on Windows you may need to install it from python.org.
+
+`mcc` also handles plugin management — see `mcc help` for `setup`, `enable`, `disable`, and `switch` (for swapping between MAM and MAMA per-project).
 
 ## Typical Workflow
 

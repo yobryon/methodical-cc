@@ -28,7 +28,7 @@ Show all registered sessions for this project.
 1. Find the state directory
 2. Read `{state_dir}/sessions`
 3. Display each name and its session ID
-4. Note which ones can be resumed with: `cc <name>` (or whatever the resume script is named)
+4. Note which ones can be resumed with: `mcc <name>` (the methodical-cc helper, found in `tools/mcc`)
 
 ### `clear <name>`
 
