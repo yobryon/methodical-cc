@@ -54,6 +54,8 @@ Good implementation plans:
 - Don't over-specify (leave room for reasonable judgment)
 - Reference relevant deltas and product docs
 
+**Every phase in the plan is committed scope.** Don't include items as optional, stretch, or "if time permits" — those hedges get exploited by the Implementor as skippable, and the deferred work accumulates as debt across sprints. If you and the user weren't ready to commit to it, leave it out of the plan entirely (drop it or schedule for a future sprint). The plan is what will get done.
+
 ## Implementor Brief Guidelines
 
 Good briefs:

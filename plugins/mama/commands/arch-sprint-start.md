@@ -150,6 +150,8 @@ Good implementation plans:
 - Reference relevant deltas and product docs
 - Capture design constraints (e.g., "Pydantic v2 not v1") — these used to live in briefs
 
+**Every phase in the plan is committed scope.** Don't include items as optional, stretch, or "if time permits" — those hedges get exploited by the Implementor as skippable, and the deferred work accumulates as debt across sprints. If you and the user weren't ready to commit to it, leave it out of the plan entirely (drop it or schedule for a future sprint). The plan is what will get done.
+
 ## Kickoff Message Guidelines
 
 Good kickoff messages:

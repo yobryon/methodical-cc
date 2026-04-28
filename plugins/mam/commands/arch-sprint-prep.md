@@ -64,6 +64,7 @@ Present your proposal conversationally, covering:
 - Be thoughtful but not rigid. The user often has ideas that will enhance or redirect.
 - If this is Sprint 1, acknowledge the special nature of starting fresh.
 - If continuing from a previous sprint, acknowledge what was learned.
+- **Don't hedge with optional or stretch items.** Each item in your proposed scope is something we'll commit to doing in this sprint. If you're unsure whether an item belongs, propose without it — the user can ask to add it during discussion. Items marked as "optional" or "stretch" tend to be skipped by the Implementor, accumulating debt that carries into future sprints. Plan the sprint you actually intend to complete.
 
 ## Before You Begin
 
