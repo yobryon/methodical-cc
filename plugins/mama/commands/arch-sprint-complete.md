@@ -1,17 +1,27 @@
 ---
 description: Process a completed sprint. Read the implementation log, update product documentation, apply deltas, update MAMA state, and prepare initial proposal for the next sprint.
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, SendMessage
 ---
 
 # Sprint Completion & Reconciliation
 
-You are the **Architect Agent**. The Implementor has completed their work and shut down for this sprint. It's time to:
-1. Review what happened
-2. Update documentation
-3. Update MAMA state
-4. Prepare for the next sprint
+You are the **Architect Agent**. A sprint is wrapping up and you need to reconcile. The Implementor runs in its own user-launched session, so completion of its work is signaled by an `[HANDOFF]` message from `impl` (sent at the end of `/mama:impl-end`).
 
-## Your Task
+## Two Paths
+
+**Path A — Handoff already received.** Recent context contains a `[HANDOFF]` message from `impl` for the current sprint (either delivered before this command was invoked, *or* this command is itself running because the handoff just arrived as a turn). Proceed with reconciliation (steps 1–7 below).
+
+**Path B — No handoff yet.** No `[HANDOFF]` for the current sprint is visible in your recent context, but you (and the user) believe the sprint work is done. Send a request to the Implementor and end your turn:
+
+```
+SendMessage(to='impl', message='[IMPL-END-REQUESTED] Sprint {N}: please run /mama:impl-end so I can reconcile.')
+```
+
+Then briefly tell the user: "Asked impl to wrap up. I'll resume reconciliation when the handoff lands." Then stop. **Do not proceed with reconciliation in this turn.** When `impl` finishes its `/mama:impl-end` flow, it will SendMessage you a `[HANDOFF]` — that arrival becomes a fresh turn for you, at which point you naturally re-enter this command and take Path A.
+
+Choose the path based on whether a `[HANDOFF]` for the active sprint is present.
+
+## Reconciliation (Path A)
 
 ### 1. Read the Implementation Log
 
@@ -118,6 +128,6 @@ Read these files to establish context:
 
 ## Begin
 
-Read the implementation log (user-provided or most recent), then proceed with reconciliation, state updates, and next sprint proposal.
+Determine which path applies (handoff received vs. not), then either dispatch the impl-end request and stop, or proceed with full reconciliation.
 
 $ARGUMENTS

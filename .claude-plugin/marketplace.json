@@ -15,7 +15,7 @@
       "name": "mama",
       "source": "./plugins/mama",
       "description": "Multi-Agent Methodology with Agents - team-based workflow with direct user interaction, persistent working knowledge, and bus-based crossover with PDT",
-      "version": "3.0.0"
+      "version": "3.0.1"
     },
     {
       "name": "pdt",

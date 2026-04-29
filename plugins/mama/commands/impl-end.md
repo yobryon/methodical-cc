@@ -1,72 +1,66 @@
 ---
-description: Have the Implementor finalize their work with a retrospective, write their persistent state document, and shut down.
-allowed-tools: Read, Write, Edit, Glob, Grep, SendMessage, TaskList, TaskUpdate
+description: Finalize the sprint as the Implementor — complete the implementation log, send a handoff summary to the Architect, and report briefly to the user.
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, SendMessage, TaskList, TaskUpdate
 ---
 
 # Finalize Implementation
 
-You are the **Architect Agent** (team lead). The Implementor has completed (or reached a stopping point on) the sprint work. Now have them finalize, write their persistent state, and shut down.
+You are the **Implementor**. The implementation work for this sprint is complete (or at a stopping point). Wrap it up and hand off to the Architect.
+
+This command is invoked in **your** session — either by the user directly, or as the result of an `[IMPL-END-REQUESTED]` message from the Architect telling you to wrap up so they can reconcile.
 
 ## Your Task
 
-### 1. Send Finalization Message
+### 1. Complete the Implementation Log
 
-Send a message to the Implementor teammate requesting finalization. Include:
+Find your sprint's `docs/sprint/{N}/implementation_log.md` (or scoped equivalent) and ensure it is thorough:
 
-**Implementation log completion:**
-- Updated status for all phases
-- Any missing decision logs or deviations
-- A retrospective section covering:
+- **Phase status table** — update every phase: COMPLETE, PARTIAL, BLOCKED, etc., with a one-line note for each
+- **Decisions** — every non-obvious decision logged with rationale
+- **Deviations** — anything that diverged from the plan, with the reason
+- **Bugs/issues** — root cause analysis, not just symptoms
+- **Retrospective section** at the bottom:
   - What went well
-  - What could be improved
-  - Technical debt introduced
+  - What was harder than expected
+  - Technical debt introduced (and why it was acceptable)
   - Recommendations for future sprints
-- A clear handoff summary
 
-**State document update:**
-- Tell the Implementor to write/update their state document at `{mama_dir}/implementor_state.md`
-- If a prior state document exists, **re-read it immediately before writing** — even if the Implementor already read it at session start. The harness requires a fresh read before the write, and skipping this causes a failed write and a wasted token cycle.
-- If this is the first sprint, write it from scratch
-- The state document should capture **tacit knowledge** — what they learned that can't be recovered from CLAUDE.md, the doc tree, the Architect briefing, or re-reading the code. Focus areas: why the codebase is built this way, project history and load-bearing lessons (including approaches tried and abandoned), empirical findings from real runs, known gotchas, how the user works, and current trajectory.
-- Emphasize: this is compaction, not accumulation — rewrite, don't append; keep it readable in under 5 minutes. Don't duplicate what's already in CLAUDE.md or docs/. Prune superseded empirical data (calibration numbers have half-lives); carry forward history and rationale.
+Be honest — log reality, not the polished version.
 
-**Example message to Implementor:**
+### 2. Send the Handoff to the Architect
 
-> Finalize your implementation work:
->
-> 1. Complete your implementation log with phase statuses, deviations, and a retrospective (what went well, what was hard, tech debt, recommendations)
->
-> 2. Write your state document at `.mcc/implementor_state.md`. If a prior version exists, **re-read it right before writing** — even if you already read it at session start. The harness requires a fresh read before the write; skipping this causes a failed write and forces you to do it twice. Then rewrite it as a fresh compaction of your **tacit knowledge** — what you learned that can't be recovered from CLAUDE.md, the doc tree, or re-reading the code. Focus on: why the codebase is built this way, project history and load-bearing lessons (including approaches tried and abandoned), empirical findings, known gotchas, how the user works. Prune stale empirical data; carry forward history and rationale. Keep it readable in under 5 minutes.
->
-> 3. Send me your handoff summary when done.
+Compose a tight handoff summary and send it via `SendMessage`. The message **must** start with the `[HANDOFF]` tag so the Architect recognizes it as the sprint-completion trigger.
 
-### 2. Review Handoff
+```
+SendMessage(to='arch', message='[HANDOFF] Sprint {N} {complete|partial|blocked}.
 
-When the Implementor responds with their handoff summary:
-- Note overall status
-- Note key accomplishments
-- Note questions or concerns flagged
-- Note tech debt introduced
+<2-4 sentence summary of what was done>
 
-### 3. Verify Outputs
+Key points:
+- <accomplishment or decision>
+- <issue or tech debt>
+- <question or recommendation>
 
-Check that the Implementor produced:
-- [ ] Finalized implementation log with retrospective
-- [ ] Updated `{mama_dir}/implementor_state.md`
-- [ ] All phase tasks marked complete (or appropriately noted)
+Log: docs/sprint/{N}/implementation_log.md')
+```
 
-### 4. Request Shutdown
+Keep it under ~200 words — the Architect will read the log for full detail. The handoff is the framing, not the substance.
 
-Once satisfied with the finalization outputs, ask the Implementor to shut down. The team stays alive -- only the Implementor shuts down for this sprint.
+### 3. Brief the User
 
-### 5. Next Steps
+Tell the user **in one or two sentences** that the handoff was sent. Do not re-explain the handoff content here — they can read the message you just sent and the log itself if they want detail. Example:
 
-After the Implementor shuts down:
-- Review the implementation log in detail
-- Proceed to `/mama:arch-sprint-complete` to reconcile documentation
+> Handoff sent to arch. Sprint {N} is finalized in the log; ready for arch to reconcile.
+
+Then stop. Don't propose next steps, don't offer to do more — your job for this sprint is done. The user controls what happens next (typically: switch to the arch session and run `/mama:arch-sprint-complete`).
+
+## Notes
+
+- **Persistent state document** (`implementor_state.md`) is **not** rewritten here by default. Long-lived sessions carry working knowledge in-context; the on-disk doc is only needed when bootstrapping a fresh Implementor session. If the user explicitly asks for it (or you're about to end a long-running session and want to checkpoint), refresh it then — otherwise skip.
+- If you were prompted by an `[IMPL-END-REQUESTED]` message from the Architect, this whole flow is the same; just respond with the handoff in the same shape.
 
 ## Begin
 
-Send the finalization message to the Implementor teammate, then guide the process through to shutdown.
+Review your implementation log, complete any missing sections, write the retrospective, send the `[HANDOFF]` message, and brief the user.
 
 $ARGUMENTS

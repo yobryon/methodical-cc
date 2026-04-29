@@ -19,6 +19,8 @@ Usage:
                                    for the current project (also runs implicitly
                                    on every `mcc <name>` and `mcc create <name>`)
   mcc team status                  Show the project's bus team state
+  mcc migrate                      Consolidate legacy .mam/.mama/.pdt[-scope]/
+                                   state directories into .mcc[-scope]/
   mcc version                      Show mcc version
   mcc help                         Show this help
 
@@ -36,7 +38,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.1.0"
+MCC_VERSION = "1.1.1"
 
 import json
 import time
@@ -44,6 +46,7 @@ import time
 PLUGINS = ("pdt", "mam", "mama", "bus")
 MARKETPLACE = "methodical-cc"
 STATE_DIR_GLOBS = (".mcc", ".mcc-*")
+LEGACY_PLUGIN_PREFIXES = ("pdt", "mam", "mama")  # legacy state-dir prefixes (pre-3.0.0)
 TEAMS_ROOT = Path.home() / ".claude" / "teams"
 PHANTOM_LEAD_NAME = "coordinator"
 PHANTOM_LEAD_SESSION_ID = "00000000-0000-0000-0000-000000000000"
@@ -427,6 +430,127 @@ def cmd_team_status(argv):
         print(f"  - {m['name']} ({m['agentId']}){marker}{pending}")
 
 
+# ----------------------------- Migration -----------------------------
+
+def find_legacy_dirs():
+    """Return list of (legacy_path, target_path) pairs for any pre-3.0.0 plugin dirs."""
+    cwd = Path.cwd()
+    pairs = []
+    for prefix in LEGACY_PLUGIN_PREFIXES:
+        for path in sorted(cwd.glob(f".{prefix}")) + sorted(cwd.glob(f".{prefix}-*")):
+            if not path.is_dir():
+                continue
+            name = path.name  # e.g. ".mama-backend" or ".pdt"
+            scope = name[len(prefix) + 2:]  # strip ".{prefix}-" or ".{prefix}"
+            target_name = ".mcc" + (f"-{scope}" if scope else "")
+            pairs.append((path, cwd / target_name))
+    return pairs
+
+
+def in_git_repo():
+    try:
+        r = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, check=False,
+        )
+        return r.returncode == 0 and r.stdout.strip() == "true"
+    except FileNotFoundError:
+        return False
+
+
+def _git_mv(src, dst):
+    """git mv if in repo, else plain rename. Returns True on success."""
+    if in_git_repo():
+        r = subprocess.run(["git", "mv", str(src), str(dst)], capture_output=True, text=True)
+        if r.returncode == 0:
+            return True
+        # fall through to plain mv if git refuses (e.g. file isn't tracked)
+    try:
+        shutil.move(str(src), str(dst))
+        return True
+    except Exception as e:
+        print(f"  ! could not move {src} → {dst}: {e}")
+        return False
+
+
+def _merge_sessions_files(src, dst):
+    """Merge src sessions file into dst (concat + dedupe by name, last write wins)."""
+    src_lines = src.read_text().splitlines() if src.exists() else []
+    dst_lines = dst.read_text().splitlines() if dst.exists() else []
+    merged = {}
+    order = []
+    for line in dst_lines + src_lines:  # src wins on collision (later)
+        line = line.strip()
+        if not line or "=" not in line:
+            continue
+        name, sid = line.split("=", 1)
+        name = name.strip()
+        if name not in merged:
+            order.append(name)
+        merged[name] = sid.strip()
+    dst.write_text("\n".join(f"{n}={merged[n]}" for n in order) + "\n")
+
+
+def cmd_migrate(argv):
+    """Migrate legacy .mam/.mama/.pdt[-scope]/ state dirs into .mcc[-scope]/."""
+    pairs = find_legacy_dirs()
+    if not pairs:
+        print("No legacy plugin state directories found. Nothing to migrate.")
+        return
+
+    print("Legacy state directories detected:")
+    for src, dst in pairs:
+        print(f"  {src.name}/  →  {dst.name}/")
+    print()
+    if not confirm("Proceed with migration?", default=True):
+        print("Aborted.")
+        return
+
+    print()
+    git_avail = in_git_repo()
+    if git_avail:
+        print("(git repo detected — using `git mv` to preserve history)")
+        print()
+
+    for src, dst in pairs:
+        print(f"Migrating {src.name}/ → {dst.name}/")
+        dst.mkdir(exist_ok=True)
+        for entry in sorted(src.iterdir()):
+            target = dst / entry.name
+            if entry.name == "sessions" and target.exists():
+                print(f"  merge sessions: {entry} + {target}")
+                _merge_sessions_files(entry, target)
+                if git_avail:
+                    subprocess.run(["git", "rm", "-f", str(entry)], capture_output=True)
+                    subprocess.run(["git", "add", str(target)], capture_output=True)
+                else:
+                    entry.unlink()
+                continue
+            if target.exists():
+                print(f"  ! collision (skipping): {target} already exists, leaving {entry} in place")
+                continue
+            print(f"  move: {entry.name}")
+            _git_mv(entry, target)
+
+        # Try to remove the now-empty legacy dir
+        try:
+            remaining = list(src.iterdir())
+        except FileNotFoundError:
+            remaining = []
+        if not remaining:
+            try:
+                src.rmdir()
+                print(f"  removed empty {src.name}/")
+            except OSError as e:
+                print(f"  ! could not remove {src}: {e}")
+        else:
+            print(f"  ! {src.name}/ still has {len(remaining)} item(s); leaving in place")
+
+    print()
+    print("Migration complete. Verify with `git status` (if applicable) before committing.")
+    print("Next: in each session, run `/<plugin>:upgrade` to refresh the agent's mental model.")
+
+
 # ----------------------------- Commands -----------------------------
 
 def _team_launch_args(name, sid, team_name):
@@ -581,6 +705,17 @@ def cmd_resume(argv):
     name = argv[0]
     sid, src = find_session(name)
     if not sid:
+        # If we can't find the session but legacy plugin dirs are present,
+        # the session likely lives there — prompt the user to migrate first.
+        legacy = find_legacy_dirs()
+        if legacy:
+            print(f"No session '{name}' found in .mcc/, but legacy plugin state dirs exist:",
+                  file=sys.stderr)
+            for src_dir, dst_dir in legacy:
+                print(f"  {src_dir.name}/  →  {dst_dir.name}/", file=sys.stderr)
+            print(f"\nRun `mcc migrate` to consolidate them under .mcc/, then try again.",
+                  file=sys.stderr)
+            sys.exit(1)
         print(f"No session registered as '{name}'.", file=sys.stderr)
         print()
         cmd_list([])
@@ -812,6 +947,7 @@ HANDLERS = {
     "switch": cmd_switch,
     "team": cmd_team,
     "create": cmd_create,
+    "migrate": cmd_migrate,
     "version": cmd_version,
 }
 

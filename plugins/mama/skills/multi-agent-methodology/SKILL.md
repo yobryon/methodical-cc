@@ -65,7 +65,7 @@ Team set up by mcc (idempotent) ────────────────
 ```
 
 - **Team**: Set up once (by `mcc team setup` or implicitly on first `mcc create`/`mcc <name>`); persists across sprints and across days
-- **Implementor session**: Sprint-scoped — user launches at sprint start, exits at sprint end (state is written to `.mcc/implementor_state.md` first)
+- **Implementor session**: Often spans many sprints — the user keeps it open and runs `/mama:impl-end` at the end of each sprint, but the underlying Claude Code session can persist across sprints (compaction handles in-session context). The on-disk `implementor_state.md` is written on demand (e.g., before closing the session for an extended break or starting a fresh session), not every sprint.
 - **UX Designer**: One-shot subagent for routine consults; user-launched `design-ux` session for sustained design work
 
 ### Inter-Agent Communication
