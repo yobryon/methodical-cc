@@ -2,20 +2,14 @@
 """mcc - methodical-cc helper CLI
 
 Usage:
-  mcc <name>               Resume Claude Code session registered as <name>.
-                           Auto-adds bus channel flags if bus is set up here.
+  mcc <name>               Resume Claude Code session registered as <name>
   mcc list                 List all registered sessions in this project
   mcc status               Show plugin state and registered sessions
   mcc setup                Interactive first-time setup (install + enable user-wide)
-  mcc update               Update the methodical-cc marketplace and all plugins
-  mcc enable <plugin>      Enable plugin (pdt|mam|mama|bus) in current project
-  mcc disable <plugin>     Disable plugin (pdt|mam|mama|bus) in current project
+  mcc update               Update the methodical-cc marketplace and all three plugins
+  mcc enable <plugin>      Enable plugin (pdt|mam|mama) in current project
+  mcc disable <plugin>     Disable plugin (pdt|mam|mama) in current project
   mcc switch <target>      Swap impl plugin: mam | mama | off (leaves pdt alone)
-  mcc bus setup            Install + enable bus plugin for this project; verify
-                           Node >= 20 is on PATH and the server bundle is present
-  mcc bus status           Show bus state for this project (identities, threads,
-                           pending counts, runtime state)
-  mcc version              Show mcc version
   mcc help                 Show this help
 
 Sessions are registered from inside Claude Code via /pdt:session, /mam:session,
@@ -32,13 +26,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.0.0"
-
-PLUGINS = ("pdt", "mam", "mama", "bus")
+PLUGINS = ("pdt", "mam", "mama")
 MARKETPLACE = "methodical-cc"
 STATE_DIR_GLOBS = (".pdt", ".pdt-*", ".mam", ".mam-*", ".mama", ".mama-*")
-BUS_INBOX_ROOT = Path(".mcc/bus/inbox")
-BUS_CROSSOVER_ROOT = Path("docs/crossover")
 
 
 # ----------------------------- Helpers -----------------------------
@@ -215,24 +205,6 @@ def warn_if_target_not_on_path(target_dir):
 
 # ----------------------------- Commands -----------------------------
 
-def _bus_active_in_project():
-    """Best-effort detection: was `mcc bus setup` run in this project?
-
-    The presence of `.mcc/bus/inbox/` means the user explicitly set up the bus
-    here. We use this as the signal to add channel-loading flags to claude
-    invocations, so the user doesn't have to remember the dev flag every time.
-    """
-    return BUS_INBOX_ROOT.exists()
-
-
-def _build_claude_resume_args(sid):
-    """Build the argv for `claude -r <sid>` with channel flags if appropriate."""
-    args = ["claude", "-r", sid]
-    if _bus_active_in_project():
-        args.extend(["--dangerously-load-development-channels", f"plugin:bus@{MARKETPLACE}"])
-    return args
-
-
 def cmd_resume(argv):
     if not argv:
         die("usage: mcc <name>")
@@ -245,10 +217,8 @@ def cmd_resume(argv):
         sys.exit(1)
     if not have_claude():
         die("'claude' command not found on PATH.")
-    args = _build_claude_resume_args(sid)
-    bus_note = " (+bus channel)" if _bus_active_in_project() else ""
-    print(f"Resuming '{name}' from {src}{bus_note}", file=sys.stderr)
-    os.execvp(args[0], args)
+    print(f"Resuming '{name}' from {src} → claude -r {sid}", file=sys.stderr)
+    os.execvp("claude", ["claude", "-r", sid])
 
 
 def cmd_list(argv):
@@ -389,13 +359,8 @@ def cmd_setup(argv):
     print("Methodical-CC setup")
     print("===================")
     print()
-    print("This installs pdt, mam, mama, and bus at user scope, then asks which (if")
-    print("any) should be enabled user-wide. Any combination is valid — including")
-    print("all-off (you can enable per-project later).")
-    print()
-    print("The opinionated default is 'pdt bus' — PDT for design thinking and the bus")
-    print("so design and implementation sessions can talk to each other directly.")
-    print("Add 'mam' or 'mama' to that if you usually use one of those impl plugins.")
+    print("This installs pdt, mam, and mama at user scope, then asks which (if any)")
+    print("should be enabled user-wide. Any combination is valid — including all-off.")
     print()
     if not have_claude():
         die("'claude' command not found on PATH. Install Claude Code first.")
@@ -414,9 +379,9 @@ def cmd_setup(argv):
 
     print()
     print("Which plugins should be enabled user-wide?")
-    print("Enter a space-separated list (e.g. 'pdt bus mama'), 'all', or 'none'.")
+    print("Enter a space-separated list (e.g. 'pdt mam'), 'all', or 'none'.")
     print(f"Available: {', '.join(PLUGINS)}")
-    choice = prompt("Enabled user-wide", default="pdt bus").strip().lower()
+    choice = prompt("Enabled user-wide", default="pdt").strip().lower()
 
     if choice == "all":
         enabled = set(PLUGINS)
@@ -427,21 +392,6 @@ def cmd_setup(argv):
         invalid = enabled - set(PLUGINS)
         if invalid:
             die(f"unknown plugins: {', '.join(invalid)}")
-
-    # If bus is in the enabled set, verify Node ≥ 20. Don't block, but warn loudly.
-    if "bus" in enabled:
-        node_ok, node_ver = _node_version_ok()
-        if not node_ok:
-            print()
-            if node_ver:
-                print(f"  ⚠️  Node v{node_ver} found, but the bus MCP server requires Node ≥ 20.")
-                print(f"      Bus will install but won't run until Node is upgraded.")
-                print(f"      Update Node: https://nodejs.org/")
-            else:
-                print(f"  ⚠️  Node.js not found on PATH. The bus MCP server requires Node ≥ 20.")
-                print(f"      Bus will install but won't run until Node is installed.")
-                print(f"      Install Node: https://nodejs.org/")
-            print(f"      (After installing/upgrading, re-run `mcc bus setup` to verify.)")
 
     print()
     for plugin in PLUGINS:
@@ -466,208 +416,6 @@ def cmd_setup(argv):
     print("  mcc switch mam|mama|off - swap implementation plugin")
 
 
-def cmd_version(argv):
-    print(f"mcc {MCC_VERSION}")
-    print(f"  script: {Path(__file__).resolve()}")
-
-
-# ----------------------------- Bus subcommands -----------------------------
-
-def _bus_server_dir():
-    """Locate plugins/bus/server/ relative to mcc.py."""
-    mcc_dir = Path(__file__).resolve().parent  # /tools
-    return mcc_dir.parent / "plugins" / "bus" / "server"
-
-
-def _bus_bundle_path():
-    return _bus_server_dir() / "server.bundle.js"
-
-
-def _ensure_gitignore_for_mcc():
-    gitignore = Path(".gitignore")
-    line = ".mcc/"
-    if not gitignore.exists():
-        gitignore.write_text(f"{line}\n")
-        return True
-    content = gitignore.read_text()
-    if line in content.splitlines():
-        return False
-    if not content.endswith("\n"):
-        content += "\n"
-    gitignore.write_text(content + f"{line}\n")
-    return True
-
-
-def _node_version_ok():
-    """Return (ok, version_str). ok=True if Node is installed and >= v20."""
-    if not shutil.which("node"):
-        return False, None
-    try:
-        result = subprocess.run(["node", "--version"], capture_output=True, text=True)
-        if result.returncode != 0:
-            return False, None
-        ver = result.stdout.strip().lstrip("v")
-        major = int(ver.split(".")[0])
-        return major >= 20, ver
-    except Exception:
-        return False, None
-
-
-def cmd_bus(argv):
-    if not argv:
-        die("usage: mcc bus <setup|status>")
-    sub = argv[0]
-    if sub == "setup":
-        return cmd_bus_setup(argv[1:])
-    if sub == "status":
-        return cmd_bus_status(argv[1:])
-    die(f"unknown bus subcommand '{sub}' (expected: setup, status)")
-
-
-def cmd_bus_setup(argv):
-    if not have_claude():
-        die("'claude' command not found on PATH.")
-
-    print("Bus setup")
-    print("=========")
-    print()
-
-    # 0. Verify Node ≥ 20 (required to run the bundled MCP server)
-    node_ok, node_ver = _node_version_ok()
-    if not node_ok:
-        if node_ver:
-            print(f"  Error: Node {node_ver} found, but v20+ is required for the bus MCP server.")
-        else:
-            print("  Error: Node.js not found on PATH.")
-        print("  Install Node ≥ 20 from https://nodejs.org/ then re-run `mcc bus setup`.")
-        sys.exit(1)
-    print(f"→ Node v{node_ver} OK")
-
-    # 1. Verify the bundled server is present in the marketplace clone
-    bundle = _bus_bundle_path()
-    if not bundle.exists():
-        print(f"  Error: bus server bundle not found at {bundle}")
-        print("  This usually means the marketplace clone is incomplete or out of date.")
-        print("  Try `mcc update` to refresh, or report this as a bug.")
-        sys.exit(1)
-    size_kb = bundle.stat().st_size // 1024
-    print(f"→ Bus server bundle present ({size_kb} KB)")
-
-    # 2. Install at user scope (idempotent)
-    print(f"→ Ensuring bus@{MARKETPLACE} is installed at user scope...")
-    result = claude_plugins("install", "-s", "user", f"bus@{MARKETPLACE}", capture=True)
-    if result.returncode != 0:
-        stderr = (result.stderr or "").strip()
-        print(f"  (note: {stderr or 'install returned non-zero — may already be installed'})")
-
-    # 3. Enable for project
-    print(f"→ Enabling bus for current project...")
-    rc = claude_plugins("enable", "-s", "project", f"bus@{MARKETPLACE}").returncode
-    if rc != 0:
-        print(f"  Warning: enable returned rc={rc}")
-
-    # 4. Create inbox directory structure
-    BUS_INBOX_ROOT.mkdir(parents=True, exist_ok=True)
-    print(f"→ Created {BUS_INBOX_ROOT}/")
-
-    # 5. Update .gitignore
-    if _ensure_gitignore_for_mcc():
-        print(f"→ Added .mcc/ to .gitignore")
-
-    print()
-    print("Bus setup complete.")
-    print()
-    print("Note: Channels are in research preview. To use the bus, launch Claude Code with:")
-    print("  claude --dangerously-load-development-channels plugin:bus@methodical-cc")
-    print()
-    print("Inside a Claude session, register identity with /pdt:session, /mam:session,")
-    print("or /mama:session — that name becomes your bus identity.")
-
-
-def cmd_bus_status(argv):
-    print("Bus status")
-    print("==========")
-    print()
-
-    # Plugin state
-    if have_claude():
-        print("Plugin state (from `claude plugins list`):")
-        result = claude_plugins("list", capture=True)
-        if result.returncode == 0:
-            for line in (result.stdout or "").splitlines():
-                if "bus" in line.lower():
-                    print(f"  {line.strip()}")
-        else:
-            print("  (claude plugins list failed)")
-    print()
-
-    # Identities (from sessions files in cwd)
-    print("Registered identities in this project:")
-    found_any = False
-    for d in find_state_dirs():
-        sf = d / "sessions"
-        if sf.exists():
-            for line in sf.read_text().splitlines():
-                line = line.strip()
-                if not line or "=" not in line:
-                    continue
-                name, sid = line.split("=", 1)
-                inbox = BUS_INBOX_ROOT / name.strip()
-                pending = 0
-                if inbox.exists():
-                    pending = len([p for p in inbox.iterdir()
-                                   if p.is_file() and p.suffix == ".json"])
-                pending_str = f"  ({pending} pending)" if pending else ""
-                print(f"  {name.strip():<14} {sf}{pending_str}")
-                found_any = True
-    if not found_any:
-        print("  (none — register sessions via /pdt:session, /mam:session, or /mama:session)")
-
-    # Active threads
-    print()
-    print("Active threads:")
-    crossover = BUS_CROSSOVER_ROOT
-    found_threads = False
-    if crossover.exists():
-        for d in sorted(crossover.iterdir()):
-            if not d.is_dir():
-                continue
-            state_file = d / ".bus-state.json"
-            if not state_file.exists():
-                continue
-            try:
-                import json as _json
-                state = _json.loads(state_file.read_text())
-            except Exception:
-                continue
-            if state.get("status") != "open":
-                continue
-            participants = ", ".join(state.get("participants", []))
-            last = state.get("last_activity_at", "?")
-            awaiting = state.get("awaiting") or "—"
-            print(f"  {d.name}  [{participants}]  last: {last}, awaiting: {awaiting}")
-            found_threads = True
-    if not found_threads:
-        print("  (none open)")
-
-    # Runtime status
-    print()
-    print("Runtime:")
-    node_ok, node_ver = _node_version_ok()
-    if node_ok:
-        print(f"  ✓ Node v{node_ver}")
-    elif node_ver:
-        print(f"  ✗ Node v{node_ver} found but v20+ required — install a newer Node")
-    else:
-        print("  ✗ Node not on PATH — install Node ≥ 20")
-    bundle = _bus_bundle_path()
-    if bundle.exists():
-        size_kb = bundle.stat().st_size // 1024
-        print(f"  ✓ server.bundle.js ({size_kb} KB) at {bundle}")
-    else:
-        print(f"  ✗ server.bundle.js missing at {bundle} — try `mcc update`")
-
-
 # ----------------------------- Dispatch -----------------------------
 
 HANDLERS = {
@@ -678,8 +426,6 @@ HANDLERS = {
     "enable": cmd_enable,
     "disable": cmd_disable,
     "switch": cmd_switch,
-    "bus": cmd_bus,
-    "version": cmd_version,
 }
 
 
@@ -691,9 +437,6 @@ def main():
     argv = sys.argv[1:]
     if not argv or argv[0] in ("help", "-h", "--help"):
         print_help()
-        return
-    if argv[0] in ("--version", "-v"):
-        cmd_version(argv[1:])
         return
 
     cmd = argv[0]

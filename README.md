@@ -2,16 +2,15 @@
 
 Claude Code plugins for structured product design and implementation workflows.
 
-## Four Plugins
+## Three Plugins
 
 | Plugin | Description | Best For |
 |--------|-------------|----------|
 | **PDT** | Product Design Thinking - Socratic design partner for pre-implementation thinking | Product vision, concept development, documentation crystallization |
 | **MAM** | Session-based - Architect and Implementor as separate Claude sessions | Explicit context separation, document-based handoffs |
 | **MAMA** | Team-based - Architect orchestrates Implementor and UX Designer as teammates | Direct interaction with agents, real-time communication, persistent knowledge |
-| **Bus** | Channels-based MCP for peer messaging across Claude Code sessions | Eliminating user-as-courier between PDT and MAM/MAMA workflows |
 
-PDT is the natural predecessor to MAM/MAMA. Design your product with PDT, then build it with MAM or MAMA. Add Bus when you want PDT and the Architect to communicate directly without you relaying messages.
+PDT is the natural predecessor to MAM/MAMA. Design your product with PDT, then build it with MAM or MAMA.
 
 ## Features
 
@@ -46,9 +45,6 @@ claude plugin install mam@methodical-cc
 
 # Team-based implementation workflow
 claude plugin install mama@methodical-cc
-
-# Peer messaging bus (cross-session communication)
-claude plugin install bus@methodical-cc
 ```
 
 ### Test Locally

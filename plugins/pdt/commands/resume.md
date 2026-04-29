@@ -88,10 +88,6 @@ Invite correction: "Does this match your understanding? Tell me if anything need
 - Confirm your understanding
 - Propose the next logical action
 
-## Note for Long-Running Projects
-
-If this project predates PDT v2.0.0 (the bus-based crossover model) — or you're not sure — suggest the user run `/pdt:upgrade`. That command briefs you on methodology shifts that may have happened since the project's accumulated state was last touched, so your behavior aligns with the current methodology rather than a stale mental model. Especially relevant if you find yourself reading `concept_backlog.md` or other state docs that reference file-based crossover patterns (`commission_NNN_request.md`, etc.) — those are legacy; new crossover goes through the bus.
-
 ## Begin
 
 Review the auto-loaded state, listen to any user corrections, and re-establish the design effort context.
