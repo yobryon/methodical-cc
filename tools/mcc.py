@@ -2,11 +2,12 @@
 """mcc - methodical-cc helper CLI
 
 Usage:
-  mcc <name>               Resume Claude Code session registered as <name>
+  mcc <name>               Resume Claude Code session registered as <name>.
+                           Auto-adds bus channel flags if bus is set up here.
   mcc list                 List all registered sessions in this project
   mcc status               Show plugin state and registered sessions
   mcc setup                Interactive first-time setup (install + enable user-wide)
-  mcc update               Update the methodical-cc marketplace and all three plugins
+  mcc update               Update the methodical-cc marketplace and all plugins
   mcc enable <plugin>      Enable plugin (pdt|mam|mama|bus) in current project
   mcc disable <plugin>     Disable plugin (pdt|mam|mama|bus) in current project
   mcc switch <target>      Swap impl plugin: mam | mama | off (leaves pdt alone)
@@ -14,6 +15,7 @@ Usage:
                            Node >= 20 is on PATH and the server bundle is present
   mcc bus status           Show bus state for this project (identities, threads,
                            pending counts, runtime state)
+  mcc version              Show mcc version
   mcc help                 Show this help
 
 Sessions are registered from inside Claude Code via /pdt:session, /mam:session,
@@ -29,6 +31,8 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+MCC_VERSION = "1.0.0"
 
 PLUGINS = ("pdt", "mam", "mama", "bus")
 MARKETPLACE = "methodical-cc"
@@ -211,6 +215,24 @@ def warn_if_target_not_on_path(target_dir):
 
 # ----------------------------- Commands -----------------------------
 
+def _bus_active_in_project():
+    """Best-effort detection: was `mcc bus setup` run in this project?
+
+    The presence of `.mcc/bus/inbox/` means the user explicitly set up the bus
+    here. We use this as the signal to add channel-loading flags to claude
+    invocations, so the user doesn't have to remember the dev flag every time.
+    """
+    return BUS_INBOX_ROOT.exists()
+
+
+def _build_claude_resume_args(sid):
+    """Build the argv for `claude -r <sid>` with channel flags if appropriate."""
+    args = ["claude", "-r", sid]
+    if _bus_active_in_project():
+        args.extend(["--dangerously-load-development-channels", f"plugin:bus@{MARKETPLACE}"])
+    return args
+
+
 def cmd_resume(argv):
     if not argv:
         die("usage: mcc <name>")
@@ -223,8 +245,10 @@ def cmd_resume(argv):
         sys.exit(1)
     if not have_claude():
         die("'claude' command not found on PATH.")
-    print(f"Resuming '{name}' from {src} → claude -r {sid}", file=sys.stderr)
-    os.execvp("claude", ["claude", "-r", sid])
+    args = _build_claude_resume_args(sid)
+    bus_note = " (+bus channel)" if _bus_active_in_project() else ""
+    print(f"Resuming '{name}' from {src}{bus_note}", file=sys.stderr)
+    os.execvp(args[0], args)
 
 
 def cmd_list(argv):
@@ -442,6 +466,11 @@ def cmd_setup(argv):
     print("  mcc switch mam|mama|off - swap implementation plugin")
 
 
+def cmd_version(argv):
+    print(f"mcc {MCC_VERSION}")
+    print(f"  script: {Path(__file__).resolve()}")
+
+
 # ----------------------------- Bus subcommands -----------------------------
 
 def _bus_server_dir():
@@ -650,6 +679,7 @@ HANDLERS = {
     "disable": cmd_disable,
     "switch": cmd_switch,
     "bus": cmd_bus,
+    "version": cmd_version,
 }
 
 
@@ -661,6 +691,9 @@ def main():
     argv = sys.argv[1:]
     if not argv or argv[0] in ("help", "-h", "--help"):
         print_help()
+        return
+    if argv[0] in ("--version", "-v"):
+        cmd_version(argv[1:])
         return
 
     cmd = argv[0]
