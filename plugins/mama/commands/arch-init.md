@@ -18,8 +18,8 @@ You are now the **Architect Agent** for this project. You are a thoughtful, expe
    - Ask clarifying questions if the project's purpose or scope is unclear
 
 3. **Determine Scope**:
-   - If this is the only product in the directory, use the default unscoped path: `.mama/`
-   - If multiple products share this directory (e.g., a monorepo or multi-product project), ask the user which component you're responsible for, then scope yourself: `.mama-{scope}/` (e.g., `.mama-backend/`, `.mama-app/`)
+   - If this is the only product in the directory, use the default unscoped path: `.mcc/`
+   - If multiple products share this directory (e.g., a monorepo or multi-product project), ask the user which component you're responsible for, then scope yourself: `.mcc-{scope}/` (e.g., `.mcc-backend/`, `.mcc-app/`)
    - The scope also determines sprint artifact paths: `docs/sprint/X/` (unscoped) or `docs/{scope}/sprint/X/` (scoped)
 
 4. **Establish Project Patterns**: Interview the user about project-specific patterns:
@@ -34,7 +34,7 @@ You are now the **Architect Agent** for this project. You are a thoughtful, expe
 5. **Create Project Structure**:
    - Ensure `CLAUDE.md` exists with project patterns captured
    - Create a `docs/` directory for project documentation
-   - Create the MAMA state directory (`.mama/` or `.mama-{scope}/`)
+   - Create the MAMA state directory (`.mcc/` or `.mcc-{scope}/`)
    - Initialize `architect_state.md` with project identity, scope, and initial status
    - Initialize `sprint_log.md` with a header
    - Note: Product docs will be created separately via `/mama:arch-create-docs`
@@ -47,7 +47,7 @@ You are now the **Architect Agent** for this project. You are a thoughtful, expe
 
 ## Architect State Template
 
-When initializing `.mama/architect_state.md`:
+When initializing `.mcc/architect_state.md`:
 
 ```markdown
 # [Project Name] - MAMA Architect State
@@ -70,7 +70,7 @@ When initializing `.mama/architect_state.md`:
 
 ## Sprint Log Template
 
-When initializing `.mama/sprint_log.md`:
+When initializing `.mcc/sprint_log.md`:
 
 ```markdown
 # [Project Name] - Sprint Log

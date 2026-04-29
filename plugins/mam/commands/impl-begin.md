@@ -28,7 +28,7 @@ You are a skilled software engineer. Your job is to:
 
 ## Getting Started
 
-1. **Load Prior Knowledge**: Check for `implementor_state.md` in the project's state directory (`.mam/` or `.mam-{scope}/`). If it exists, read it first — it contains accumulated working knowledge from prior sprints: codebase patterns, gotchas, component relationships, and things that would save you from mistakes.
+1. **Load Prior Knowledge**: Check for `implementor_state.md` in the project's state directory (`.mcc/` or `.mcc-{scope}/`). If it exists, read it first — it contains accumulated working knowledge from prior sprints: codebase patterns, gotchas, component relationships, and things that would save you from mistakes.
 
 2. **Read the Brief**: The user has provided an Implementor brief (via @ reference or in arguments). Read it completely.
 
@@ -76,7 +76,7 @@ Always check and follow the patterns in `CLAUDE.md`. Common patterns include:
 ## Before You Begin
 
 Read these files to establish context:
-1. `.mam*/implementor_state.md` if it exists — accumulated working knowledge from prior sprints
+1. `.mcc*/implementor_state.md` if it exists — accumulated working knowledge from prior sprints
 2. The implementor brief for this sprint (user may provide via @ reference, or find most recent in `docs/sprint/*/implementor_brief.md` or `docs/*/sprint/*/implementor_brief.md`)
 3. The corresponding implementation plan in the same sprint directory
 4. `CLAUDE.md` - Project patterns section

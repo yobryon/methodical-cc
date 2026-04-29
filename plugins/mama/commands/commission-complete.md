@@ -1,6 +1,6 @@
 ---
 description: Send results of a PDT commission via the bus. Read the original commission, compose findings, and reply on the same thread.
-allowed-tools: Read, Write, Edit, Glob, Grep
+allowed-tools: Read, Write, Edit, Glob, Grep, SendMessage
 ---
 
 # Complete a PDT Commission
@@ -9,16 +9,16 @@ You are the **Architect Agent**. You have completed work that PDT commissioned �
 
 ## Prerequisites
 
-- Bus enabled and PDT registered (verify with `peer_list` if unsure)
-- The original commission was received as a `<channel mode='consult'>` message earlier; its artifact lives at `docs/crossover/{thread_id}/`
+- Bus enabled and PDT registered (verify with the SessionStart bus block)
+- The original commission was received as a message earlier; its artifact lives at `docs/crossover/{thread_id}/`
 
 ## Your Task
 
 ### 1. Locate the Commission
 
-If the user specifies a thread ID, look at `docs/crossover/{thread_id}/`. If not, scan `docs/crossover/` for thread directories with `commission` in the name and a `.bus-state.json` showing `status: open` and you in `participants`. Present them to the user; let them choose.
+If the user specifies a thread ID, look at `docs/crossover/{thread_id}/`. If not, scan `docs/crossover/` for thread directories with `commission` in the name and a recent commission artifact (typically `001-pdt-commission.md`). Present them to the user; let them choose.
 
-Read the original commission artifact (the highest-numbered turn from PDT, typically `001-pdt-commission.md`):
+Read the original commission artifact:
 - What was requested?
 - What were the success criteria?
 - What constraints were specified?
@@ -34,73 +34,68 @@ Work with the user to compile the results:
 
 If the work was done during a sprint, review the relevant implementation log.
 
-### 3. Compose the Response and Send via Bus
+### 3. Write the Response Artifact
 
-Compose the **artifact body** using this structure:
+Use the `Write` tool to create `docs/crossover/{thread_id}/{NNN}-arch-response.md` (where `{NNN}` is the next zero-padded turn number — typically `002` if responding to PDT's turn 001):
 
 ```markdown
+---
+thread_id: {thread_id}
+turn: {NNN}
+type: response
+from: arch
+to: pdt
+sent_at: {ISO timestamp}
+status: open
+---
+
 # Commission Response: [Title]
 
 ## What Was Requested
-
-[Brief restatement of the commission so the response is self-contained.]
+[Brief restatement so the response is self-contained.]
 
 ## What We Did
-
-[Description of the approach taken. What was built, tested, or investigated.]
+[Approach taken — built/tested/investigated.]
 
 ## Findings
-
-[The core results. Be specific and honest. If the prototype worked, say how well. If it failed, say why. If the investigation was inconclusive, say what would be needed to get a clear answer.]
+[Core results. Specific and honest. If it failed, say why. If inconclusive, say what would help.]
 
 ## Design Implications
-
-[What these findings mean for the design. Does it hold up? Does it need adjustment? Are there new constraints or possibilities?]
+[What these findings mean for the design.]
 
 ## Recommendations
-
-[Your perspective as the Architect. Based on what you learned, what do you recommend? PDT owns the design decisions, but your implementation perspective is valuable input.]
+[Your perspective. PDT owns design decisions; your implementation context is valuable input.]
 
 ## Artifacts
-
-[If the commission produced code, prototypes, or other artifacts, note where they are and their status (keep/discard/iterate).]
+[Code/prototypes produced and their status (keep/discard/iterate).]
 ```
 
-Compose a short **body** (channel-notification framing):
+### 4. Send the Bus Message
+
+Compose a framing message and use `SendMessage` to send to `pdt`, on the **same thread** as the original commission:
 
 ```
-PDT — commission-013-validation results. Headline: prototype validated approach A; approach B fails at expected scale. See artifact for findings, design implications, and my recommendation. Closing the thread with this response unless you want to dig further.
-```
-
-Then call `peer_send` on the **same thread**, with `close=true` if this is the final response and no further back-and-forth is expected:
-
-```
-peer_send(
+SendMessage(
   to="pdt",
-  body="<the framing above>",
-  mode="consult",
-  thread_id="commission-013-validation",  # SAME thread as the original commission
-  artifact_body="<the structured response above>",
-  artifact_type="response",
-  close=True  # set to false if you expect follow-up
+  message="[CONSULT-RESPONSE] commission-013-validation\n\nCommission results. Headline: prototype validated approach A; approach B fails at expected scale. See artifact at docs/crossover/commission-013-validation/002-arch-response.md for findings, design implications, and my recommendation. Closing the thread with this response unless you want to dig further."
 )
 ```
 
-### 4. Confirm
+### 5. Confirm
 
 Tell the user:
 - Summarize what you sent
-- Note the thread is closed (or not, if you left it open for follow-up)
-- The artifact landed at `docs/crossover/{thread_id}/{NNN}-arch-response.md`
+- Note the artifact landed at the right path
+- Note whether the thread is closed or left open for follow-up
 
 ## Your Posture
 
-Be thorough and honest. PDT is waiting on these results to make design decisions. If the prototype failed, that is valuable information — do not soften it. If the investigation raised more questions than it answered, say so and suggest what would help. PDT needs truth, not optimism.
+Be thorough and honest. PDT is waiting on these results to make design decisions. If the prototype failed, that is valuable information — do not soften it. If the investigation raised more questions than it answered, say so and suggest what would help.
 
 Include your recommendations. You have implementation context PDT does not. Your perspective on buildability, performance, maintenance, and architecture is exactly what PDT needs to make good design decisions.
 
 ## Begin
 
-Locate the commission, gather results with the user, then compose and send the response on the same thread.
+Locate the commission, gather results with the user, then write the response artifact and send the bus message on the same thread.
 
 $ARGUMENTS

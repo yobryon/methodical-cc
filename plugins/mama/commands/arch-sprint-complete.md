@@ -62,13 +62,13 @@ The Implementor's retrospective is valuable:
 
 ### 5. Update MAMA State
 
-**Update `architect_state.md`** in your `.mama*/` directory:
+**Update `architect_state.md`** in your `.mcc*/` directory:
 - Add this sprint to the sprint history with outcome, key learnings, tech debt carried
 - Update the current status section
 - Note any important discoveries or changes
 - Preserve the `MAMA Version:` line (do not remove it when rewriting)
 
-**Update `sprint_log.md`** in your `.mama*/` directory:
+**Update `sprint_log.md`** in your `.mcc*/` directory:
 - Add a chronological entry for this sprint with date, status, summary, key learnings, deviations, and tech debt
 
 ### 6. Prepare Next Sprint Proposal
@@ -104,8 +104,8 @@ Provide a clear summary:
 - [ ] Captured discoveries worth preserving
 - [ ] Addressed Implementor questions
 - [ ] Noted any process improvements
-- [ ] Updated `.mama*/architect_state.md` with sprint history
-- [ ] Updated `.mama*/sprint_log.md` with sprint entry
+- [ ] Updated `.mcc*/architect_state.md` with sprint history
+- [ ] Updated `.mcc*/sprint_log.md` with sprint entry
 - [ ] Prepared next sprint proposal
 
 ## Before You Begin
@@ -113,7 +113,7 @@ Provide a clear summary:
 Read these files to establish context:
 1. The implementation log for the completed sprint
 2. The corresponding implementation plan
-3. `.mama*/architect_state.md` -- your running state
+3. `.mcc*/architect_state.md` -- your running state
 4. Active deltas (use Glob for `docs/delta_*.md`)
 
 ## Begin

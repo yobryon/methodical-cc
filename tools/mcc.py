@@ -2,24 +2,28 @@
 """mcc - methodical-cc helper CLI
 
 Usage:
-  mcc <name>               Resume Claude Code session registered as <name>.
-                           Auto-adds bus channel flags if bus is set up here.
-  mcc list                 List all registered sessions in this project
-  mcc status               Show plugin state and registered sessions
-  mcc setup                Interactive first-time setup (install + enable user-wide)
-  mcc update               Update the methodical-cc marketplace and all plugins
-  mcc enable <plugin>      Enable plugin (pdt|mam|mama|bus) in current project
-  mcc disable <plugin>     Disable plugin (pdt|mam|mama|bus) in current project
-  mcc switch <target>      Swap impl plugin: mam | mama | off (leaves pdt alone)
-  mcc bus setup            Install + enable bus plugin for this project; verify
-                           Node >= 20 is on PATH and the server bundle is present
-  mcc bus status           Show bus state for this project (identities, threads,
-                           pending counts, runtime state)
-  mcc version              Show mcc version
-  mcc help                 Show this help
+  mcc <name>                       Resume Claude Code session registered as <name>,
+                                   joined to the project's bus team automatically
+  mcc create <name> [--persona <plugin>:<role>] [--plugin <p>]
+                                   Create a new session, register it under <name>,
+                                   optionally pre-load a persona profile (e.g.
+                                   `mcc create impl --persona mama:implementor`)
+  mcc list                         List all registered sessions in this project
+  mcc status                       Show plugin state and registered sessions
+  mcc setup                        Interactive first-time setup (install + enable user-wide)
+  mcc update                       Update the methodical-cc marketplace and all plugins
+  mcc enable <plugin>              Enable plugin (pdt|mam|mama|bus) in current project
+  mcc disable <plugin>             Disable plugin (pdt|mam|mama|bus) in current project
+  mcc switch <target>              Swap impl plugin: mam | mama | off (leaves pdt alone)
+  mcc team setup                   Explicitly create/update the bus team config
+                                   for the current project (also runs implicitly
+                                   on every `mcc <name>` and `mcc create <name>`)
+  mcc team status                  Show the project's bus team state
+  mcc version                      Show mcc version
+  mcc help                         Show this help
 
 Sessions are registered from inside Claude Code via /pdt:session, /mam:session,
-or /mama:session.
+or /mama:session — and via `mcc create <name>` from the shell.
 
 Plugin scoping: enable/disable/switch operate on the current project; setup
 operates on the user scope. Per-project always wins over user when both are set.
@@ -32,13 +36,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.0.0"
+MCC_VERSION = "1.1.0"
+
+import json
+import time
 
 PLUGINS = ("pdt", "mam", "mama", "bus")
 MARKETPLACE = "methodical-cc"
-STATE_DIR_GLOBS = (".pdt", ".pdt-*", ".mam", ".mam-*", ".mama", ".mama-*")
-BUS_INBOX_ROOT = Path(".mcc/bus/inbox")
-BUS_CROSSOVER_ROOT = Path("docs/crossover")
+STATE_DIR_GLOBS = (".mcc", ".mcc-*")
+TEAMS_ROOT = Path.home() / ".claude" / "teams"
+PHANTOM_LEAD_NAME = "coordinator"
+PHANTOM_LEAD_SESSION_ID = "00000000-0000-0000-0000-000000000000"
+DEFAULT_LEAD_MODEL = "claude-opus-4-7"
 
 
 # ----------------------------- Helpers -----------------------------
@@ -213,24 +222,357 @@ def warn_if_target_not_on_path(target_dir):
         print('      export PATH="$HOME/.local/bin:$PATH"')
 
 
+# ----------------------------- Team management -----------------------------
+
+def derive_team_name(cwd=None):
+    """Team name = sanitized repo basename. Lowercase, replace dots/spaces with dashes."""
+    cwd = cwd or Path.cwd()
+    base = cwd.name
+    # Sanitize: lowercase, replace non-alphanumeric (except - and _) with -
+    sanitized = re.sub(r"[^a-zA-Z0-9_-]+", "-", base).lower().strip("-")
+    return sanitized or "project"
+
+
+def team_dir(team_name):
+    return TEAMS_ROOT / team_name
+
+
+def team_config_path(team_name):
+    return team_dir(team_name) / "config.json"
+
+
+def team_inboxes_dir(team_name):
+    return team_dir(team_name) / "inboxes"
+
+
+def now_ms():
+    return int(time.time() * 1000)
+
+
+def make_member(name, team_name, agent_type="teammate", model=DEFAULT_LEAD_MODEL,
+                cwd=None):
+    return {
+        "agentId": f"{name}@{team_name}",
+        "name": name,
+        "agentType": agent_type,
+        "model": model,
+        "joinedAt": now_ms(),
+        "tmuxPaneId": "",
+        "cwd": str(cwd or Path.cwd()),
+        "subscriptions": [],
+    }
+
+
+def read_team_config(team_name):
+    p = team_config_path(team_name)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text())
+    except Exception:
+        return None
+
+
+def write_team_config(team_name, config):
+    p = team_config_path(team_name)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(config, indent=2))
+
+
+def collect_registered_identities():
+    """Find all (name, session_id) pairs across this project's sessions files."""
+    out = []
+    for d in find_state_dirs():
+        sf = d / "sessions"
+        if not sf.exists():
+            continue
+        for line in sf.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            n, sid = line.split("=", 1)
+            out.append((n.strip(), sid.strip()))
+    return out
+
+
+def ensure_team_setup(verbose=False):
+    """Idempotent: ensure the team config exists and members are current.
+
+    Returns the team_name. Safe to call repeatedly. Logs only when changes happen
+    (or always, when verbose=True).
+    """
+    team_name = derive_team_name()
+    config = read_team_config(team_name)
+    cwd = Path.cwd().resolve()
+
+    created = False
+    if config is None:
+        # Bootstrap a fresh config with phantom lead
+        config = {
+            "name": team_name,
+            "description": f"methodical-cc team for {team_name}",
+            "createdAt": now_ms(),
+            "leadAgentId": f"{PHANTOM_LEAD_NAME}@{team_name}",
+            "leadSessionId": PHANTOM_LEAD_SESSION_ID,
+            "members": [
+                make_member(PHANTOM_LEAD_NAME, team_name,
+                            agent_type="team-lead", cwd=cwd)
+            ],
+        }
+        created = True
+        if verbose:
+            print(f"  Created team '{team_name}' at {team_config_path(team_name)}")
+
+    # Ensure inboxes dir
+    inbox_dir = team_inboxes_dir(team_name)
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+
+    # Top up members from registered identities
+    existing_names = {m["name"] for m in config["members"]}
+    added = []
+    for name, _sid in collect_registered_identities():
+        if name in existing_names:
+            continue
+        config["members"].append(make_member(name, team_name, cwd=cwd))
+        existing_names.add(name)
+        added.append(name)
+
+    if created or added:
+        write_team_config(team_name, config)
+        if verbose and added:
+            print(f"  Added members: {', '.join(added)}")
+
+    # Ensure CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in project settings
+    ensure_experimental_teams_flag(verbose=verbose)
+
+    return team_name
+
+
+def ensure_experimental_teams_flag(verbose=False):
+    """Add CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 to .claude/settings.json env."""
+    settings_path = Path(".claude") / "settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text())
+        except Exception:
+            settings = {}
+    else:
+        settings = {}
+
+    env = settings.setdefault("env", {})
+    if env.get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS") == "1":
+        return False  # already set
+
+    env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+    if verbose:
+        print(f"  Set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 in {settings_path}")
+    return True
+
+
+def cmd_team(argv):
+    if not argv:
+        die("usage: mcc team <setup|status>")
+    sub = argv[0]
+    if sub == "setup":
+        return cmd_team_setup(argv[1:])
+    if sub == "status":
+        return cmd_team_status(argv[1:])
+    die(f"unknown team subcommand '{sub}' (expected: setup, status)")
+
+
+def cmd_team_setup(argv):
+    print("Bus team setup")
+    print("==============")
+    print()
+    team_name = ensure_team_setup(verbose=True)
+    config = read_team_config(team_name)
+    print()
+    print(f"Team: {team_name}")
+    print(f"Config: {team_config_path(team_name)}")
+    print(f"Inboxes: {team_inboxes_dir(team_name)}")
+    print(f"Members ({len(config['members'])}):")
+    for m in config["members"]:
+        marker = " (lead — phantom)" if m["name"] == PHANTOM_LEAD_NAME else ""
+        print(f"  - {m['name']} ({m['agentId']}){marker}")
+    print()
+    print("Setup complete. Sessions registered via /{plugin}:session set <name> or")
+    print("`mcc create <name>` automatically join this team on launch.")
+
+
+def cmd_team_status(argv):
+    team_name = derive_team_name()
+    config = read_team_config(team_name)
+    print(f"Team: {team_name}")
+    print(f"Config: {team_config_path(team_name)}")
+    if config is None:
+        print("  (not set up — run `mcc team setup` or any `mcc <name>` will create it)")
+        return
+    print(f"Lead (phantom): {config.get('leadAgentId', '?')}")
+    print(f"Members ({len(config['members'])}):")
+    inbox_root = team_inboxes_dir(team_name)
+    for m in config["members"]:
+        marker = " (phantom)" if m["name"] == PHANTOM_LEAD_NAME else ""
+        inbox_file = inbox_root / f"{m['name']}.json"
+        pending = ""
+        if inbox_file.exists():
+            try:
+                inbox = json.loads(inbox_file.read_text())
+                unread = sum(1 for msg in inbox if not msg.get("read"))
+                if unread:
+                    pending = f"  ({unread} unread)"
+            except Exception:
+                pass
+        print(f"  - {m['name']} ({m['agentId']}){marker}{pending}")
+
+
 # ----------------------------- Commands -----------------------------
 
-def _bus_active_in_project():
-    """Best-effort detection: was `mcc bus setup` run in this project?
+def _team_launch_args(name, sid, team_name):
+    """Build claude argv with team flags."""
+    return [
+        "claude", "-r", sid,
+        "--team-name", team_name,
+        "--agent-name", name,
+        "--agent-id", f"{name}@{team_name}",
+    ]
 
-    The presence of `.mcc/bus/inbox/` means the user explicitly set up the bus
-    here. We use this as the signal to add channel-loading flags to claude
-    invocations, so the user doesn't have to remember the dev flag every time.
-    """
-    return BUS_INBOX_ROOT.exists()
+
+def _resolve_persona(persona_arg):
+    """Parse 'plugin:role' → (plugin, role, persona_path). Returns (None, None, None) on error."""
+    if ":" not in persona_arg:
+        return (None, None, None)
+    plugin, role = persona_arg.split(":", 1)
+    if plugin not in PLUGINS:
+        return (None, None, None)
+    # Persona file lives at <marketplace-clone>/plugins/<plugin>/agents/<role>/agent.md
+    mcc_dir = Path(__file__).resolve().parent  # /tools
+    persona_path = mcc_dir.parent / "plugins" / plugin / "agents" / role / "agent.md"
+    if not persona_path.exists():
+        return (plugin, role, None)
+    return (plugin, role, persona_path)
 
 
-def _build_claude_resume_args(sid):
-    """Build the argv for `claude -r <sid>` with channel flags if appropriate."""
-    args = ["claude", "-r", sid]
-    if _bus_active_in_project():
-        args.extend(["--dangerously-load-development-channels", f"plugin:bus@{MARKETPLACE}"])
-    return args
+def _ensure_settings_local_allows_read(path):
+    """Add Read(<path>) to .claude/settings.local.json's permissions.allow if absent."""
+    settings_path = Path(".claude") / "settings.local.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text())
+        except Exception:
+            settings = {}
+    else:
+        settings = {}
+    perms = settings.setdefault("permissions", {})
+    allow = perms.setdefault("allow", [])
+    rule = f"Read({path})"
+    if rule in allow:
+        return False
+    allow.append(rule)
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+    return True
+
+
+def cmd_create(argv):
+    """Create a new session, register it, optionally pre-load persona profile."""
+    if not argv:
+        die("usage: mcc create <name> [--persona <plugin>:<role>] [--plugin <p>]")
+
+    # Parse args
+    name = None
+    persona = None
+    plugin = None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--persona":
+            if i + 1 >= len(argv):
+                die("--persona requires an argument like 'mama:implementor'")
+            persona = argv[i + 1]
+            i += 2
+        elif a == "--plugin":
+            if i + 1 >= len(argv):
+                die("--plugin requires an argument like 'mama'")
+            plugin = argv[i + 1]
+            i += 2
+        elif name is None:
+            name = a
+            i += 1
+        else:
+            die(f"unexpected argument: {a}")
+    if not name:
+        die("usage: mcc create <name> [--persona <plugin>:<role>] [--plugin <p>]")
+
+    if not have_claude():
+        die("'claude' command not found on PATH.")
+
+    # Resolve persona (if given) and derive plugin from it
+    persona_path = None
+    if persona:
+        persona_plugin, persona_role, persona_path = _resolve_persona(persona)
+        if persona_plugin is None:
+            die(f"invalid --persona '{persona}'. Expected '<plugin>:<role>' where plugin is one of {PLUGINS}")
+        if persona_path is None:
+            die(f"persona file not found at expected path for '{persona}'")
+        if plugin is None:
+            plugin = persona_plugin
+        elif plugin != persona_plugin:
+            die(f"--plugin '{plugin}' conflicts with --persona '{persona}' (plugin '{persona_plugin}')")
+
+    # If no plugin given/derived, infer from common conventions
+    if plugin is None:
+        # Default: mama (covers most multi-agent scenarios)
+        plugin = "mama"
+        print(f"(no --plugin specified; defaulting to '{plugin}'. Pass --plugin <p> to override.)",
+              file=sys.stderr)
+
+    if plugin not in PLUGINS:
+        die(f"unknown plugin '{plugin}' (expected one of {PLUGINS})")
+
+    # Ensure team setup
+    team_name = ensure_team_setup(verbose=False)
+
+    # If persona loading, ensure read permission
+    if persona_path:
+        if _ensure_settings_local_allows_read(persona_path):
+            print(f"  Granted read permission for {persona_path} in .claude/settings.local.json",
+                  file=sys.stderr)
+
+    # Construct prompt for `claude -p`
+    if persona_path:
+        prompt_text = (
+            f"/{plugin}:session set {name}\n\n"
+            f"Then read your persona profile at @{persona_path} "
+            f"and acknowledge with \"ok\"."
+        )
+    else:
+        prompt_text = f"/{plugin}:session set {name}"
+
+    # Launch claude -p
+    print(f"Creating session '{name}' on team '{team_name}'"
+          f"{' with persona ' + persona if persona else ''}...", file=sys.stderr)
+    print(f"  (claude -p will run; this may take a few seconds)", file=sys.stderr)
+    print(file=sys.stderr)
+
+    rc = subprocess.run(["claude", "-p", prompt_text]).returncode
+    if rc != 0:
+        die(f"claude -p exited with rc={rc}; session may not have been created")
+
+    # Verify registration
+    sid, src = find_session(name)
+    print(file=sys.stderr)
+    if sid:
+        print(f"✓ Created session '{name}' (id {sid}) registered in {src}.")
+        print(f"  Resume with: mcc {name}")
+        # Top up team config now that the new identity is registered
+        ensure_team_setup(verbose=False)
+    else:
+        print(f"⚠ claude -p completed but no session registered as '{name}' was found.",
+              file=sys.stderr)
+        print(f"  Try running /{plugin}:session set {name} manually inside the new session.",
+              file=sys.stderr)
 
 
 def cmd_resume(argv):
@@ -245,9 +587,11 @@ def cmd_resume(argv):
         sys.exit(1)
     if not have_claude():
         die("'claude' command not found on PATH.")
-    args = _build_claude_resume_args(sid)
-    bus_note = " (+bus channel)" if _bus_active_in_project() else ""
-    print(f"Resuming '{name}' from {src}{bus_note}", file=sys.stderr)
+    # Implicitly ensure team setup is current (idempotent — fast no-op when nothing changed)
+    team_name = ensure_team_setup(verbose=False)
+    args = _team_launch_args(name, sid, team_name)
+    print(f"Resuming '{name}' from {src} on team '{team_name}' → "
+          f"claude -r {sid} (+team flags)", file=sys.stderr)
     os.execvp(args[0], args)
 
 
@@ -428,21 +772,6 @@ def cmd_setup(argv):
         if invalid:
             die(f"unknown plugins: {', '.join(invalid)}")
 
-    # If bus is in the enabled set, verify Node ≥ 20. Don't block, but warn loudly.
-    if "bus" in enabled:
-        node_ok, node_ver = _node_version_ok()
-        if not node_ok:
-            print()
-            if node_ver:
-                print(f"  ⚠️  Node v{node_ver} found, but the bus MCP server requires Node ≥ 20.")
-                print(f"      Bus will install but won't run until Node is upgraded.")
-                print(f"      Update Node: https://nodejs.org/")
-            else:
-                print(f"  ⚠️  Node.js not found on PATH. The bus MCP server requires Node ≥ 20.")
-                print(f"      Bus will install but won't run until Node is installed.")
-                print(f"      Install Node: https://nodejs.org/")
-            print(f"      (After installing/upgrading, re-run `mcc bus setup` to verify.)")
-
     print()
     for plugin in PLUGINS:
         if plugin in enabled:
@@ -471,203 +800,6 @@ def cmd_version(argv):
     print(f"  script: {Path(__file__).resolve()}")
 
 
-# ----------------------------- Bus subcommands -----------------------------
-
-def _bus_server_dir():
-    """Locate plugins/bus/server/ relative to mcc.py."""
-    mcc_dir = Path(__file__).resolve().parent  # /tools
-    return mcc_dir.parent / "plugins" / "bus" / "server"
-
-
-def _bus_bundle_path():
-    return _bus_server_dir() / "server.bundle.js"
-
-
-def _ensure_gitignore_for_mcc():
-    gitignore = Path(".gitignore")
-    line = ".mcc/"
-    if not gitignore.exists():
-        gitignore.write_text(f"{line}\n")
-        return True
-    content = gitignore.read_text()
-    if line in content.splitlines():
-        return False
-    if not content.endswith("\n"):
-        content += "\n"
-    gitignore.write_text(content + f"{line}\n")
-    return True
-
-
-def _node_version_ok():
-    """Return (ok, version_str). ok=True if Node is installed and >= v20."""
-    if not shutil.which("node"):
-        return False, None
-    try:
-        result = subprocess.run(["node", "--version"], capture_output=True, text=True)
-        if result.returncode != 0:
-            return False, None
-        ver = result.stdout.strip().lstrip("v")
-        major = int(ver.split(".")[0])
-        return major >= 20, ver
-    except Exception:
-        return False, None
-
-
-def cmd_bus(argv):
-    if not argv:
-        die("usage: mcc bus <setup|status>")
-    sub = argv[0]
-    if sub == "setup":
-        return cmd_bus_setup(argv[1:])
-    if sub == "status":
-        return cmd_bus_status(argv[1:])
-    die(f"unknown bus subcommand '{sub}' (expected: setup, status)")
-
-
-def cmd_bus_setup(argv):
-    if not have_claude():
-        die("'claude' command not found on PATH.")
-
-    print("Bus setup")
-    print("=========")
-    print()
-
-    # 0. Verify Node ≥ 20 (required to run the bundled MCP server)
-    node_ok, node_ver = _node_version_ok()
-    if not node_ok:
-        if node_ver:
-            print(f"  Error: Node {node_ver} found, but v20+ is required for the bus MCP server.")
-        else:
-            print("  Error: Node.js not found on PATH.")
-        print("  Install Node ≥ 20 from https://nodejs.org/ then re-run `mcc bus setup`.")
-        sys.exit(1)
-    print(f"→ Node v{node_ver} OK")
-
-    # 1. Verify the bundled server is present in the marketplace clone
-    bundle = _bus_bundle_path()
-    if not bundle.exists():
-        print(f"  Error: bus server bundle not found at {bundle}")
-        print("  This usually means the marketplace clone is incomplete or out of date.")
-        print("  Try `mcc update` to refresh, or report this as a bug.")
-        sys.exit(1)
-    size_kb = bundle.stat().st_size // 1024
-    print(f"→ Bus server bundle present ({size_kb} KB)")
-
-    # 2. Install at user scope (idempotent)
-    print(f"→ Ensuring bus@{MARKETPLACE} is installed at user scope...")
-    result = claude_plugins("install", "-s", "user", f"bus@{MARKETPLACE}", capture=True)
-    if result.returncode != 0:
-        stderr = (result.stderr or "").strip()
-        print(f"  (note: {stderr or 'install returned non-zero — may already be installed'})")
-
-    # 3. Enable for project
-    print(f"→ Enabling bus for current project...")
-    rc = claude_plugins("enable", "-s", "project", f"bus@{MARKETPLACE}").returncode
-    if rc != 0:
-        print(f"  Warning: enable returned rc={rc}")
-
-    # 4. Create inbox directory structure
-    BUS_INBOX_ROOT.mkdir(parents=True, exist_ok=True)
-    print(f"→ Created {BUS_INBOX_ROOT}/")
-
-    # 5. Update .gitignore
-    if _ensure_gitignore_for_mcc():
-        print(f"→ Added .mcc/ to .gitignore")
-
-    print()
-    print("Bus setup complete.")
-    print()
-    print("Note: Channels are in research preview. To use the bus, launch Claude Code with:")
-    print("  claude --dangerously-load-development-channels plugin:bus@methodical-cc")
-    print()
-    print("Inside a Claude session, register identity with /pdt:session, /mam:session,")
-    print("or /mama:session — that name becomes your bus identity.")
-
-
-def cmd_bus_status(argv):
-    print("Bus status")
-    print("==========")
-    print()
-
-    # Plugin state
-    if have_claude():
-        print("Plugin state (from `claude plugins list`):")
-        result = claude_plugins("list", capture=True)
-        if result.returncode == 0:
-            for line in (result.stdout or "").splitlines():
-                if "bus" in line.lower():
-                    print(f"  {line.strip()}")
-        else:
-            print("  (claude plugins list failed)")
-    print()
-
-    # Identities (from sessions files in cwd)
-    print("Registered identities in this project:")
-    found_any = False
-    for d in find_state_dirs():
-        sf = d / "sessions"
-        if sf.exists():
-            for line in sf.read_text().splitlines():
-                line = line.strip()
-                if not line or "=" not in line:
-                    continue
-                name, sid = line.split("=", 1)
-                inbox = BUS_INBOX_ROOT / name.strip()
-                pending = 0
-                if inbox.exists():
-                    pending = len([p for p in inbox.iterdir()
-                                   if p.is_file() and p.suffix == ".json"])
-                pending_str = f"  ({pending} pending)" if pending else ""
-                print(f"  {name.strip():<14} {sf}{pending_str}")
-                found_any = True
-    if not found_any:
-        print("  (none — register sessions via /pdt:session, /mam:session, or /mama:session)")
-
-    # Active threads
-    print()
-    print("Active threads:")
-    crossover = BUS_CROSSOVER_ROOT
-    found_threads = False
-    if crossover.exists():
-        for d in sorted(crossover.iterdir()):
-            if not d.is_dir():
-                continue
-            state_file = d / ".bus-state.json"
-            if not state_file.exists():
-                continue
-            try:
-                import json as _json
-                state = _json.loads(state_file.read_text())
-            except Exception:
-                continue
-            if state.get("status") != "open":
-                continue
-            participants = ", ".join(state.get("participants", []))
-            last = state.get("last_activity_at", "?")
-            awaiting = state.get("awaiting") or "—"
-            print(f"  {d.name}  [{participants}]  last: {last}, awaiting: {awaiting}")
-            found_threads = True
-    if not found_threads:
-        print("  (none open)")
-
-    # Runtime status
-    print()
-    print("Runtime:")
-    node_ok, node_ver = _node_version_ok()
-    if node_ok:
-        print(f"  ✓ Node v{node_ver}")
-    elif node_ver:
-        print(f"  ✗ Node v{node_ver} found but v20+ required — install a newer Node")
-    else:
-        print("  ✗ Node not on PATH — install Node ≥ 20")
-    bundle = _bus_bundle_path()
-    if bundle.exists():
-        size_kb = bundle.stat().st_size // 1024
-        print(f"  ✓ server.bundle.js ({size_kb} KB) at {bundle}")
-    else:
-        print(f"  ✗ server.bundle.js missing at {bundle} — try `mcc update`")
-
-
 # ----------------------------- Dispatch -----------------------------
 
 HANDLERS = {
@@ -678,7 +810,8 @@ HANDLERS = {
     "enable": cmd_enable,
     "disable": cmd_disable,
     "switch": cmd_switch,
-    "bus": cmd_bus,
+    "team": cmd_team,
+    "create": cmd_create,
     "version": cmd_version,
 }
 

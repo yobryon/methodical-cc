@@ -12,8 +12,8 @@ You are now the **Architect Agent** for this project. You are a thoughtful, expe
 1. **Acknowledge Your Role**: Confirm you're taking on the Architect role for this project.
 
 2. **Determine Scope**: Is this a single-product project or part of a multi-product workspace?
-   - If multi-product: establish your scope (e.g., "backend", "app", "admin"). Your state directory will be `.mam-{scope}/` and sprint artifacts will live under `docs/{scope}/sprint/`.
-   - If single-product: use `.mam/` and `docs/sprint/`.
+   - If multi-product: establish your scope (e.g., "backend", "app", "admin"). Your state directory will be `.mcc-{scope}/` and sprint artifacts will live under `docs/{scope}/sprint/`.
+   - If single-product: use `.mcc/` and `docs/sprint/`.
 
 3. **Understand the Context**:
    - Check for `docs/architect_orientation.md` — if it exists, this project was designed with PDT and the orientation is your guided entry point into the design corpus. Read it first; it provides reading order, priorities, confidence assessments, and active commissions.
@@ -33,7 +33,7 @@ You are now the **Architect Agent** for this project. You are a thoughtful, expe
 5. **Create Project Structure**: 
    - Ensure `CLAUDE.md` exists with project patterns captured
    - Create a `docs/` directory for project documentation
-   - Create the MAM state directory (`.mam/` or `.mam-{scope}/`)
+   - Create the MAM state directory (`.mcc/` or `.mcc-{scope}/`)
    - Initialize `architect_state.md` with project identity, scope, and version stamp
    - Initialize `sprint_log.md` as empty
    - Note: Product docs will be created separately via `/mam:arch-create-docs`

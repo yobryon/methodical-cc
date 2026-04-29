@@ -29,7 +29,7 @@ The Architect is the design partner. Maintains comprehensive understanding, crea
 - Review implementation logs
 - Reconcile deltas and discoveries back into product documentation
 - Facilitate alignment discussions with the User
-- Maintain the `.mam/` state directory with running project knowledge
+- Maintain the `.mcc/` state directory with running project knowledge
 
 **Key Artifacts the Architect Produces:**
 - Product documentation (structure appropriate to the project)
@@ -56,10 +56,10 @@ In MAM, the user runs the Implementor session directly. The Implementor executes
 
 ## MAM State Directory
 
-MAM keeps its internal operational state in `.mam/` at the project root (or `.mam-{scope}/` for multi-product projects):
+MAM keeps its internal operational state in `.mcc/` at the project root (or `.mcc-{scope}/` for multi-product projects):
 
 ```
-.mam/
+.mcc/
 ├── architect_state.md      # Architect's running project knowledge
 └── sprint_log.md           # Chronological sprint record
 ```
@@ -82,9 +82,9 @@ This separates MAM's internal bookkeeping from the project's `docs/` directory.
 For multi-product projects sharing a working directory, each MAM instance scopes itself:
 
 ```
-.mam-backend/     # Backend architect's state
-.mam-app/         # App architect's state  
-.mam-admin/       # Admin architect's state
+.mcc-backend/     # Backend architect's state
+.mcc-app/         # App architect's state  
+.mcc-admin/       # Admin architect's state
 ```
 
 Scope is established during `arch-init` when the Architect identifies its product focus. Sprint artifacts follow the same scoping:
@@ -94,7 +94,7 @@ docs/backend/sprint/1/{implementation_plan,implementor_brief,implementation_log}
 docs/app/sprint/1/{implementation_plan,implementor_brief,implementation_log}.md
 ```
 
-An unscoped MAM uses `.mam/` and `docs/sprint/X/` — the default for single-product projects.
+An unscoped MAM uses `.mcc/` and `docs/sprint/X/` — the default for single-product projects.
 
 ## Document Types
 
@@ -234,7 +234,7 @@ A sprint is a coherent chunk of work with a clear outcome:
 - Update product docs with validated changes
 - Apply deltas that were implemented
 - Capture discoveries worth preserving
-- Update `.mam*/architect_state.md` and `sprint_log.md`
+- Update `.mcc*/architect_state.md` and `sprint_log.md`
 - Propose scope for next sprint
 - Output: Updated product docs, updated MAM state, next sprint proposal
 
@@ -273,17 +273,17 @@ If `docs/architect_orientation.md` exists, the project was designed with PDT. Th
 
 ### Crossover via the Bus
 
-PDT and MAM communicate over the **bus** plugin — a Channels-based MCP server that lets sessions message each other directly. The bus must be installed and enabled in the project (`mcc bus setup`) and both sessions must have registered identities (via `/{plugin}:session set <name>`).
+PDT and MAM communicate over the **bus** plugin — built on Claude Code's agent-team protocol. Each project has its own team (managed by `mcc`); each session joins as a teammate addressable by name; messages flow via the standard `SendMessage` tool. The bus must be enabled in the project (`mcc team setup`, or any `mcc <name>` does it implicitly) and both sessions must have registered identities (via `/{plugin}:session set <name>` or `mcc create <name>`).
 
-Three categories of crossover, all going through `peer_send` with `mode='consult'`:
+Three categories of crossover, all using `SendMessage` for the channel and the `Write` tool for durable artifacts:
 
-- **Commissions** (PDT→Architect): PDT sends a commission via `peer_send(to='arch', mode='consult', artifact_type='commission', ...)`. The Architect receives it as a `<channel mode='consult' from='pdt'>` notification and acts on it. The artifact lives at `docs/crossover/{thread_id}/`. Check for active commission threads during sprint prep.
-- **Consultations** (Architect→PDT): Use `/mam:consult-pdt` when you hit a design flaw, ambiguity, or trade-off that needs PDT's input. The command composes a structured artifact and sends via `peer_send`. PDT responds on the same thread.
+- **Commissions** (PDT→Architect): PDT writes a commission artifact at `docs/crossover/{thread_id}/001-pdt-commission.md` and sends a framing `SendMessage(to='arch', message='[CONSULT] {thread_id}\\n\\n...')`. The Architect receives it as a turn and acts on it. Check for active commission threads during sprint prep.
+- **Consultations** (Architect→PDT): Use `/mam:consult-pdt` when you hit a design flaw, ambiguity, or trade-off that needs PDT's input. The command composes a structured artifact and sends a framing message. PDT responds on the same thread.
 - **Debriefs** (Architect→PDT): Use `/mam:debrief-pdt` when you reach a milestone (MVP, phase completion, version release). Same mechanism.
 
-All consult-mode messages produce **durable artifacts** in `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` — citable forever, separate from the ephemeral channel notification body. Threading is sender-declared kebab-case (e.g. `consult-013-pref-storage-shape`).
+All consult-mode crossover produces **durable artifacts** in `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` — citable forever, separate from the bus message body. Threading is sender-declared kebab-case (e.g. `consult-013-pref-storage-shape`).
 
-Inbound `<channel>` notifications arrive automatically; no polling needed. The `bus-protocol` skill (in the bus plugin) covers full protocol details. If the bus isn't installed, fall back to discussing with the user about manual courier — but install the bus to remove that friction.
+Inbound bus messages arrive automatically as new turns (the harness polls each session's inbox at `~/.claude/teams/<team>/inboxes/<your-name>.json`); no polling needed on your part. The `bus-protocol` skill (in the bus plugin) covers full protocol details, including the chat-vs-consult discipline distinction.
 
 ### Phase Transitions
 
@@ -297,9 +297,9 @@ PDT may update `docs/architect_orientation.md` with new priorities and reading g
 3. Write briefs that save time - good context reduces back-and-forth
 4. Read implementation logs carefully - reality often differs from plan
 5. Reconcile promptly - don't let sprints pile up
-6. Check the SessionStart bus digest and `peer_list` for active threads - PDT may have sent commissions or there may be open consults awaiting your response
+6. Check the SessionStart bus block and `mcc team status` for active threads - PDT may have sent commissions or there may be open consults awaiting your response
 7. Run architectural reviews periodically (every 5-10 sprints) - codebases fragment faster than you expect, and sprint-level reconciliation doesn't catch systemic drift
-8. Keep `.mam*/architect_state.md` current - it is your running memory across sessions
+8. Keep `.mcc*/architect_state.md` current - it is your running memory across sessions
 
 ### For Implementors
 1. Log decisions, not just actions - "why" matters more than "what"

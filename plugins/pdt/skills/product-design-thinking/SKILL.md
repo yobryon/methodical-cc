@@ -157,7 +157,7 @@ After intensive iteration, run a coherence audit (`/pdt:coherence`) to catch dri
 
 ## Launch and Ongoing Collaboration with MAM/MAMA
 
-PDT and MAM/MAMA are peers with different domains. PDT owns the design indefinitely. MAM/MAMA owns execution. After launch, they run concurrently and communicate over the **bus** plugin — a Channels-based MCP server that lets sessions message each other directly.
+PDT and MAM/MAMA are peers with different domains. PDT owns the design indefinitely. MAM/MAMA owns execution. After launch, they run concurrently and communicate over the **bus** plugin — built on Claude Code's agent-team protocol, where each project's sessions join a shared team and message each other via the standard `SendMessage` tool.
 
 ### Launch
 
@@ -165,7 +165,7 @@ When the design effort reaches sufficient completeness:
 - The `/pdt:coherence` command will confirm the corpus is internally consistent
 - The `/pdt:gaps` command will naturally show that critical areas are resolved
 - The `/pdt:orient` command writes the architect orientation — the Architect's entry point into the design corpus, with reading guidance, priorities, and confidence assessments
-- The user installs MAM or MAMA and (recommended) the bus plugin: `mcc bus setup` in the project
+- The user installs MAM or MAMA and the bus plugin: `mcc team setup` in the project (or any `mcc <name>` does it implicitly)
 - Both sessions register identities (`/pdt:session set design`, `/mam:session set arch` or `/mama:session set arch`) so they can address each other on the bus
 - The Architect reads `docs/architect_orientation.md` as their starting point
 - Optionally, `/pdt:commission` sends an initial commission via the bus
@@ -174,17 +174,17 @@ There is no rigid gate. Readiness is a gradient that the gap analysis makes visi
 
 ### Crossover via the Bus
 
-PDT and the Architect communicate through `peer_send` (the bus plugin's MCP tool) using `mode='consult'`. Three categories:
+PDT and the Architect communicate via `SendMessage` (Claude Code's standard team-messaging tool) plus the `Write` tool for durable artifacts. Three categories:
 
-- **Commissions** (PDT→Architect): `/pdt:commission` composes a structured commission and sends it via `peer_send(to='arch', mode='consult', artifact_type='commission', ...)`. The Architect receives a `<channel>` notification and can act on it.
+- **Commissions** (PDT→Architect): `/pdt:commission` writes a commission artifact at `docs/crossover/{thread_id}/001-pdt-commission.md` and sends a framing `SendMessage(to='arch', ...)`. The Architect receives it as a turn and acts on it.
 - **Consultations** (Architect→PDT): The Architect sends a design question via `/mam:consult-pdt` or `/mama:consult-pdt`. PDT responds via `/pdt:consult` (or reactively, guided by skill).
 - **Debriefs** (Architect→PDT): The Architect sends a milestone debrief via `/mam:debrief-pdt` or `/mama:debrief-pdt`. PDT processes via `/pdt:debrief`.
 
-All consult-mode messages produce **durable artifacts** in `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` — citable forever, separate from the ephemeral channel notification body. Threading is sender-declared kebab-case (e.g. `consult-013-pref-storage-shape`).
+All consult-mode crossover produces **durable artifacts** in `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` — citable forever, separate from the bus message body. Threading is sender-declared kebab-case (e.g. `consult-013-pref-storage-shape`).
 
-Inbound `<channel>` notifications arrive automatically. The SessionStart bus digest shows your active threads. The `bus-protocol` skill in the bus plugin covers the full protocol — modes, threading conventions, response composition discipline.
+Inbound bus messages arrive automatically as new turns (Claude Code's harness polls each session's mailbox once a second). The `bus-protocol` skill in the bus plugin covers the full protocol — modes, threading conventions, response composition discipline.
 
-If the bus isn't installed, you can still discuss with the user about manual courier (writing files in `docs/crossover/` for the user to relay). But install the bus to remove that friction — it's what the methodology assumes going forward.
+If the bus plugin isn't enabled in this project (`mcc team status` will tell you), you can still discuss with the user about manual courier (writing files in `docs/crossover/` for the user to relay). But the methodology going forward assumes bus is enabled.
 
 ### Milestone Debriefs
 

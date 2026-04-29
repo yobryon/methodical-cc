@@ -38,11 +38,10 @@ methodical-cc/
 │   │   │   ├── ux-designer/     # UX Designer teammate definition
 │   │   │   └── implementor/     # Implementor teammate definition
 │   │   └── hooks/
-│   └── bus/                     # Peer messaging bus (Channels-based MCP)
+│   └── bus/                     # Peer messaging bus (agent-team mailbox)
 │       ├── .claude-plugin/
 │       │   └── plugin.json
-│       ├── server/              # FastMCP server + launcher
-│       ├── hooks/               # SessionStart hook for identity resolution
+│       ├── hooks/               # SessionStart hook for team membership orientation
 │       ├── skills/
 │       └── commands/
 ├── tools/                       # Migration and utility scripts (mcc, etc.)
@@ -72,18 +71,17 @@ Team-based workflow where Architect orchestrates Implementor and UX Designer as 
 - Commands namespaced as `/mama:arch-init`, `/mama:arch-sprint-start`, etc.
 - User can interact directly with Implementor and UX Designer teammates
 - Implementor maintains persistent working knowledge via compacted state document
-- MAMA internal state kept in `.mama/` (or `.mama-{scope}/` for multi-product)
+- All operational state unified under `.mcc/` (or `.mcc-{scope}/` for multi-product)
 - Sprint artifacts organized hierarchically: `docs/sprint/X/`
-- Requires agent teams feature enabled
+- Requires agent teams feature enabled (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`)
 
 ### Bus (Peer Messaging)
-Channels-based MCP server that lets PDT, Architect, Implementor, and UX Designer sessions message each other directly across plugins.
+Built on Claude Code's native agent-team mailbox protocol. Sessions in a project join a shared team and message each other via the standard `SendMessage` tool — no MCP server, no extra dependencies.
 - Replaces user-as-courier between PDT and MAM/MAMA workflows
-- Two modes: `chat` (lightweight, ephemeral) and `consult` (durable, produces artifact in `docs/crossover/`)
-- Identity comes from existing session-name registry (`/{plugin}:session set <name>`)
-- Tools: `peer_send`, `peer_list`
-- Set up via `mcc bus setup`; launch Claude Code with `--dangerously-load-development-channels plugin:bus@methodical-cc` during channels research preview
-- Implemented in Python (FastMCP 2) with hybrid uv/venv dependency management
+- Two modes: `chat` (lightweight, ephemeral) and `consult` (durable, produces artifact in `docs/crossover/{thread_id}/`)
+- Identity comes from existing session-name registry in `.mcc/sessions` (`/{plugin}:session set <name>`)
+- Send: native `SendMessage`. Receive: harness polls each session's mailbox automatically once a second
+- Set up implicitly when launching any session via `mcc <name>` or `mcc create <name>`; manual setup via `mcc team setup`
 - Full design at `docs/bus-design.md`
 
 ## Commands
@@ -188,25 +186,27 @@ claude --plugin-dir ./plugins/mama
 
 ### SessionStart Hook
 On session start, the plugin auto-detects project state:
-- Checks for `.mama/` or `.mama-{scope}/` state directories
+- Checks for `.mcc/` or `.mcc-{scope}/` state directories
 - Reads architect state for sprint history
 - Falls back to scanning `CLAUDE.md` and `docs/` if no state directory exists
 - Displays detected state and invites correction ("We're actually in sprint X")
 
-### MAMA State Directory
-MAMA keeps its internal state in `.mama/` (or `.mama-{scope}/` for multi-product projects):
+### Unified `.mcc/` State Directory
+All operational state lives under `.mcc/` (or `.mcc-{scope}/` for multi-product projects):
+- `sessions` - registered session identities for the project
 - `architect_state.md` - Architect's running project knowledge and sprint history
 - `implementor_state.md` - Implementor's compacted working memory across sprints
 - `sprint_log.md` - Chronological sprint record
+- `bus/inbox/` - per-session inbox staging used by the bus plugin
 
 ### Agent Teams
-MAMA uses agent teams for orchestration:
-- Architect is the team lead
-- Implementor and UX Designer are spawned as teammates
-- User can interact directly with any teammate (Shift+Down to cycle, or split panes)
-- Teammates communicate directly via SendMessage
+The bus plugin uses a phantom-lead team pattern:
+- All real participants (PDT, Architect, Implementor, UX) are symmetric peers
+- A non-running phantom "coordinator" satisfies Claude Code's flat-roster requirement
+- Teammates cannot spawn other teammates — the user launches each session via `mcc create <name>` and resumes via `mcc <name>`
+- For long-running UX work, launch a separate `design-ux` session; for one-shots the Architect uses the Agent tool (subagent semantics)
 - Shared task list provides live sprint progress visibility
-- Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+- Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (set automatically by `mcc team setup`)
 
 ### Implementor Persistent Working Knowledge
 The Implementor accumulates expertise across sprints via `implementor_state.md`:
@@ -218,9 +218,9 @@ The Implementor accumulates expertise across sprints via `implementor_state.md`:
 Key commands prompt Claude to read relevant files before proceeding:
 - `arch-sprint-prep` - Reads architect state, roadmap, active deltas
 - `arch-sprint-complete` - Reads implementation log, updates architect state and sprint log
-- `arch-sprint-start` (MAMA) - Writes sprint artifacts and spawns Implementor teammate in one step
+- `arch-sprint-start` (MAMA) - Writes sprint artifacts and sends kickoff `SendMessage` to the user-launched Implementor session
 - `mam:impl-begin` - Reads brief, plan, and state references in the Implementor session
-- `arch-resume` - Reads `.mama*/` state for session resumption
+- `arch-resume` - Reads `.mcc*/` state for session resumption
 
 ## Development Notes
 
@@ -228,20 +228,6 @@ Key commands prompt Claude to read relevant files before proceeding:
 - Plugin names are `pdt`, `mam`, `mama`, and `bus` for brevity, so commands are invoked as `/pdt:init`, `/mam:arch-init`, `/mama:arch-init`, `/bus:status`, etc.
 - To test changes, restart Claude Code with `claude --plugin-dir ./`
 
-## Contributing — One-Time Setup
+## Contributing
 
-The bus plugin includes a Node MCP server that's shipped as a pre-built bundle (`plugins/bus/server/server.bundle.js`) so users don't need to run `npm install`. To work on the bus server source, do this once per clone:
-
-```bash
-# Enable the committed git hooks (so the bundle stays in sync with source)
-git config core.hooksPath tools/git-hooks
-
-# Install dev dependencies for the bus server (needed for the pre-commit hook)
-cd plugins/bus/server
-npm install
-cd -
-```
-
-After that, the `pre-commit` hook detects when you've changed bus server source and rebuilds the bundle automatically before each commit (skipping commits that don't touch that area). To bypass in an emergency: `git commit --no-verify`. To rebuild manually: `cd plugins/bus/server && npm run build`.
-
-This setup is for **repo contributors only** — end users who just install the plugin from the marketplace get the pre-built bundle and never see Node tooling.
+The bus plugin is now pure-Python/shell — no Node, no MCP server, no build step. Plugin changes can be tested directly with `claude --plugin-dir ./`.

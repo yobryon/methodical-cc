@@ -9,7 +9,7 @@ Claude Code plugins for structured product design and implementation workflows.
 | **PDT** | Product Design Thinking - Socratic design partner for pre-implementation thinking | Product vision, concept development, documentation crystallization |
 | **MAM** | Session-based - Architect and Implementor as separate Claude sessions | Explicit context separation, document-based handoffs |
 | **MAMA** | Team-based - Architect orchestrates Implementor and UX Designer as teammates | Direct interaction with agents, real-time communication, persistent knowledge |
-| **Bus** | Channels-based MCP for peer messaging across Claude Code sessions | Eliminating user-as-courier between PDT and MAM/MAMA workflows |
+| **Bus** | Peer messaging built on Claude Code's agent-team mailbox protocol | Eliminating user-as-courier between PDT and MAM/MAMA workflows |
 
 PDT is the natural predecessor to MAM/MAMA. Design your product with PDT, then build it with MAM or MAMA. Add Bus when you want PDT and the Architect to communicate directly without you relaying messages.
 
@@ -140,9 +140,10 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
    /mama:arch-sprint-prep
    /mama:arch-sprint-start
    ```
-   → Architect writes plan/brief, spawns Implementor teammate, and kicks off work in one flow
+   → Architect writes plan/brief and sends a kickoff `SendMessage` to the user-launched Implementor session
+   → Launch the Implementor session in a separate terminal: `mcc create impl --persona mama:implementor` then `mcc impl`
    → Implementor loads persistent working knowledge from prior sprints
-   → User can interact directly with Implementor during execution
+   → User can interact directly with the Implementor session during execution
 
 3. **Complete Sprint**:
    ```
@@ -180,7 +181,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 | `arch-create-docs` | Create product documentation |
 | `arch-roadmap` | Create implementation roadmap |
 | `arch-sprint-prep` | Prepare sprint proposal |
-| `arch-sprint-start` | Lock scope, write plan and brief (MAMA: also spawns Implementor, begins work) |
+| `arch-sprint-start` | Lock scope, write plan and brief (MAMA: also sends kickoff `SendMessage` to user-launched Implementor) |
 | `arch-sprint-complete` | Complete sprint, reconcile docs |
 | `arch-review` | Architectural review — DRY, fragmentation, pattern drift |
 | `consult-pdt` | Formalize a design question for PDT |
@@ -210,10 +211,12 @@ After initialization, projects typically have:
 your-project/
 ├── .claude/
 │   └── CLAUDE.md              # Project patterns and context
-├── .mama/                     # MAMA internal state (or .mama-{scope}/)
+├── .mcc/                      # Methodical-cc state (or .mcc-{scope}/)
+│   ├── sessions               # Registered session identities
 │   ├── architect_state.md     # Architect's running project knowledge
 │   ├── implementor_state.md   # Implementor's compacted working memory
-│   └── sprint_log.md          # Chronological sprint record
+│   ├── sprint_log.md          # Chronological sprint record
+│   └── bus/inbox/             # Per-session bus inbox staging
 ├── docs/
 │   ├── [product_docs]         # Product documentation
 │   ├── roadmap.md             # Implementation roadmap
@@ -247,6 +250,8 @@ mcc status                    # Show what's enabled, project state, registered s
 mcc switch mam|mama|off       # Swap implementation plugin in current project (leaves pdt alone)
 mcc enable|disable <plugin>   # Granular per-project plugin control
 mcc <name>                    # Resume a session registered as <name>
+mcc create <name> [--persona] # Create a new persona-flavored session and register it
+mcc team setup|status         # Set up or inspect the project's bus team
 mcc list                      # List registered sessions in the current project
 ```
 

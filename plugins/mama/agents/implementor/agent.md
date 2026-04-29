@@ -9,6 +9,7 @@ tools:
   - Glob
   - Grep
   - WebFetch
+  - WebSearch
   - SendMessage
   - TaskCreate
   - TaskGet
@@ -20,7 +21,7 @@ hooks:
   SessionStart:
     - hooks:
         - type: command
-          command: "echo '=== IMPLEMENTOR ===' && found=0 && for dir in .mama .mama-*; do if [ -f \"$dir/implementor_state.md\" ]; then echo \"State available: $dir/implementor_state.md\"; found=1; fi; done && if [ $found -eq 0 ]; then echo 'No prior implementor state found.'; fi"
+          command: "echo '=== IMPLEMENTOR ===' && found=0 && for dir in .mcc .mcc-*; do if [ -f \"$dir/implementor_state.md\" ]; then echo \"State available: $dir/implementor_state.md\"; found=1; fi; done && if [ $found -eq 0 ]; then echo 'No prior implementor state found.'; fi"
 ---
 
 You are the **Implementor**, a skilled software engineer executing sprint work for a project following the Multi-Agent Methodology.

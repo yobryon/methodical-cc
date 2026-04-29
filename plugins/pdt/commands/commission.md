@@ -1,6 +1,6 @@
 ---
 description: Send a commission to MAM/MAMA via the bus. Compose a task brief — validation, prototyping, investigation, or any execution work needed to advance the design — and dispatch it to the Architect.
-allowed-tools: Read, Write, Edit, Glob, Grep
+allowed-tools: Read, Write, Edit, Glob, Grep, SendMessage
 ---
 
 # Commission Work for the Architect
@@ -9,8 +9,8 @@ You are the **Design Partner**. The design effort has identified work that requi
 
 ## Prerequisites
 
-- The bus plugin must be installed and enabled (`mcc bus setup` if unsure)
-- An Architect session must be registered as `arch` (or the appropriate identity name) — verify with `peer_list`
+- The bus plugin must be enabled and the project's team set up (`mcc team setup` or any `mcc <name>` does this)
+- An Architect session must be registered as `arch` (or whatever name was established) — check the SessionStart bus block for current members
 - If the Architect isn't running right now, the message still queues for them
 
 ## What Is a Commission?
@@ -28,9 +28,9 @@ Common commission types:
 ### 1. Read Current State
 
 Review the design corpus to ground yourself:
-- `CLAUDE.md` — project context
-- `docs/architect_orientation.md` — current architect orientation (if it exists)
-- `docs/crossover/` — existing commission and consult threads (each in its own subdirectory)
+- `CLAUDE.md`
+- `docs/architect_orientation.md` (if it exists)
+- `docs/crossover/` — existing commission and consult threads
 - Relevant product documents and deltas
 - `docs/concept_backlog.md` — for items flagged as needing prototyping or validation
 
@@ -39,84 +39,79 @@ Review the design corpus to ground yourself:
 Work with the user to define exactly what is needed:
 - **What** needs to be done? Be specific about the task, not just the topic.
 - **Why** does the design need this? What question does it answer, what risk does it retire, what decision does it unblock?
-- **What does success look like?** What information or artifact should come back? What would constitute a clear answer?
-- **What constraints matter?** Are there design decisions the Architect must respect? Boundaries they should not cross?
-- **How urgent is this?** Is it blocking the design from proceeding, or important but not blocking?
+- **What does success look like?** What information or artifact should come back?
+- **What constraints matter?**
+- **How urgent is this?**
 
 ### 3. Decide on Thread ID
 
-Pick a kebab-case thread ID describing the commission, e.g. `commission-013-pref-storage-validation`. Each commission is typically its own thread (commissions are discrete tasks, not ongoing conversations).
+Pick a kebab-case thread ID, e.g. `commission-013-pref-storage-validation`. Each commission is typically its own thread.
 
-### 4. Compose the Commission and Send via Bus
+### 4. Write the Commission Artifact
 
-Compose the **artifact body** (the substantive commission the Architect will act on):
+Use the `Write` tool to create `docs/crossover/{thread_id}/001-pdt-commission.md`:
 
 ```markdown
+---
+thread_id: {thread_id}
+turn: 1
+type: commission
+from: pdt
+to: arch
+sent_at: {ISO timestamp}
+status: open
+---
+
 # Commission: [Title]
 
 ## What We Need
-
-[Specific description of the work to be done. Be concrete — the Architect should be able to act on this without needing to come back for clarification.]
+[Specific description of the work. Be concrete — the Architect should be able to act without coming back for clarification.]
 
 ## Why This Matters
-
-[What design question this answers, what risk it retires, what decision it unblocks. Connect it to specific documents, deltas, or decisions.]
+[What design question this answers. Connect to specific documents, deltas, or decisions.]
 
 ## Success Criteria
-
-[What a good result looks like. What information should come back. What would constitute a clear answer.]
+[What a good result looks like.]
 
 ## Constraints
-
-[Design decisions that must be respected. Boundaries. Things the Architect should know before starting.]
+[Design decisions to respect. Boundaries.]
 
 ## Context
-
-[Pointers to relevant documents, deltas, decisions. The Architect should read these before starting.]
+[Pointers to relevant documents. The Architect should read these before starting.]
 
 ## Notes
-
-[Anything else — related commissions, timing considerations, dependencies, urgency.]
+[Related commissions, timing, dependencies, urgency.]
 ```
 
-Compose a short **body** (channel-notification framing):
+### 5. Send the Bus Message
+
+Compose a framing message and use `SendMessage`:
 
 ```
-Arch — sending commission-013-pref-storage-validation. We need a quick prototype to test whether normalized vs JSON-blob storage actually behaves differently at expected scale. Blocking the User-prefs design decision in delta_07. See artifact for success criteria and constraints. Important but not urgent — schedule when natural.
-```
-
-Then call `peer_send`:
-
-```
-peer_send(
+SendMessage(
   to="arch",
-  body="<the framing above>",
-  mode="consult",
-  thread_id="commission-013-pref-storage-validation",
-  artifact_body="<the structured commission above>",
-  artifact_type="commission"
+  message="[CONSULT] commission-013-pref-storage-validation\n\nCommission for prototype validation. We need to test whether normalized vs JSON-blob storage actually behaves differently at expected scale. Blocking the User-prefs design decision in delta_07. See docs/crossover/commission-013-pref-storage-validation/001-pdt-commission.md for success criteria and constraints. Important but not urgent — schedule when natural."
 )
 ```
 
-### 5. Update Tracking
+### 6. Update Tracking
 
 - If this commission relates to a concept backlog item, update the backlog to reference the thread ID
 - If this commission relates to an active delta, note the thread ID in the delta
 
-### 6. Confirm
+### 7. Confirm
 
 Tell the user:
 - Summarize what was asked and the thread ID
 - Note urgency and what it unblocks
-- The artifact landed at `docs/crossover/{thread_id}/001-pdt-commission.md`
 - The Architect will see the message when their session is active
 
 ## Quality Notes
 
-- A commission should be self-contained. The Architect reads this artifact and knows what to do. If they need to read other documents, tell them which ones.
-- Be honest about urgency. Not everything is blocking. The Architect needs to know what to prioritize.
+- A commission should be self-contained. The Architect reads this artifact and knows what to do.
+- Be honest about urgency. Not everything is blocking.
 - State success criteria clearly. Vague commissions get vague results.
-- If the commission is large enough to be its own sprint, say so. If it's a small investigation, say that too. Let the Architect decide how to schedule it.
+- If the commission is large enough to be its own sprint, say so. If it's a small investigation, say that too.
 
 ## Begin
 

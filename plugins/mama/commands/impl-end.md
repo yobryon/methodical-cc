@@ -36,7 +36,7 @@ Send a message to the Implementor teammate requesting finalization. Include:
 >
 > 1. Complete your implementation log with phase statuses, deviations, and a retrospective (what went well, what was hard, tech debt, recommendations)
 >
-> 2. Write your state document at `.mama/implementor_state.md`. If a prior version exists, **re-read it right before writing** — even if you already read it at session start. The harness requires a fresh read before the write; skipping this causes a failed write and forces you to do it twice. Then rewrite it as a fresh compaction of your **tacit knowledge** — what you learned that can't be recovered from CLAUDE.md, the doc tree, or re-reading the code. Focus on: why the codebase is built this way, project history and load-bearing lessons (including approaches tried and abandoned), empirical findings, known gotchas, how the user works. Prune stale empirical data; carry forward history and rationale. Keep it readable in under 5 minutes.
+> 2. Write your state document at `.mcc/implementor_state.md`. If a prior version exists, **re-read it right before writing** — even if you already read it at session start. The harness requires a fresh read before the write; skipping this causes a failed write and forces you to do it twice. Then rewrite it as a fresh compaction of your **tacit knowledge** — what you learned that can't be recovered from CLAUDE.md, the doc tree, or re-reading the code. Focus on: why the codebase is built this way, project history and load-bearing lessons (including approaches tried and abandoned), empirical findings, known gotchas, how the user works. Prune stale empirical data; carry forward history and rationale. Keep it readable in under 5 minutes.
 >
 > 3. Send me your handoff summary when done.
 

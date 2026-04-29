@@ -84,36 +84,55 @@ Apply each transition in order, skipping any that are already complete:
 
 ---
 
-#### Transition: pre-3.0.0 → 3.0.0 — Crossover via the Bus
+#### Transition: pre-3.0.0 → 3.0.0 — `.mcc/` unification + team-based bus + Implementor as user-launched
 
-**Conditions**: Apply this transition for any project whose `architect_state.md` shows version < 3.0.0 (or whose mental model predates the bus). This is a **methodology shift, not a state migration** — there are no on-disk changes required, but the agent's behavior should re-orient.
+**Conditions**: Apply this transition if any of the legacy state directories exist (`.mam/`, `.mama/`, `.pdt/`, or scoped equivalents like `.mama-backend/`), OR `architect_state.md` shows version < 3.0.0.
 
-**What changed.** PDT and MAMA used to communicate through discrete files in `docs/crossover/` (`commission_NNN_request.md`, `consult_NNN_request.md`, `debrief_NNN.md`), with the user as the manual courier between sessions. Starting in v3.0.0, that crossover happens over the **bus** plugin — a Channels-based MCP server that lets sessions message each other directly.
+**What changed in v3.0.0.**
+
+1. **State directories unified to `.mcc/`.** All operational state — sessions registry, architect_state.md, sprint_log.md, implementor_state.md — now lives in a single `.mcc/` directory (or `.mcc-{scope}/` for scoped projects). The unified layout matches `.mcc/bus/` (which has been there from the start).
+
+2. **Crossover via the bus.** PDT and MAMA used to communicate through discrete files in `docs/crossover/` with the user as manual courier. Starting in v3.0.0, that crossover happens via the bus plugin — built on Claude Code's agent-team protocol. Sessions in a project join a shared team and message each other via `SendMessage`.
+
+3. **Implementor is now user-launched, not Architect-spawned.** Claude Code's flat-roster team protocol prevents teammates from spawning teammates, so the Architect no longer calls `TeamCreate` or spawns the Implementor via the Agent tool. The user launches the Implementor as a separate session via `mcc create impl --persona mama:implementor`, then enters it via `mcc impl`. The Architect uses `SendMessage` to send the kickoff once the Implementor is online.
+
+4. **UX Designer falls back to subagent semantics.** Same constraint — UX is now a one-shot subagent (Agent tool without `team_name`) by default. For long-running UX, the user can launch a separate `design-ux` session.
 
 **What still works.**
-- Existing flat crossover files remain valid history — readable, citable, part of the project's record. Don't delete or migrate them unless the user explicitly asks.
+- Existing flat crossover files remain valid history. Don't delete unless the user explicitly asks.
 - The conceptual structure — commissions, consults, debriefs — is unchanged.
+- `arch-sprint-start` still writes the implementation plan and kickoff message; just doesn't spawn the Implementor anymore.
 
-**What's different now.**
-- Sending: `/mama:consult-pdt`, `/mama:debrief-pdt`, and `/mama:commission-complete` now call `peer_send(to='pdt', mode='consult', ...)` instead of writing files
-- Receiving: when PDT sends a commission, you receive a `<channel from='pdt' mode='consult'>` notification automatically — no polling for files in `docs/crossover/`
-- Storage: new crossover lives in **thread directories** at `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` (one directory per ongoing thread, sequentially numbered turns)
-- Threading: each conversation has a sender-declared kebab-case `thread_id` (e.g. `consult-013-pref-storage-shape`); responses go on the same thread
-- Identity: you're addressable on the bus by your registered session name — set via `/mama:session set <name>` (typically `arch` or similar)
+**Step A — Migrate state directory** (if not already done):
+- Detect the existing state directory: `.mam/`, `.mama/`, `.pdt/`, or scoped variants
+- Determine target name:
+  - `.mam/` or `.mama/` or `.pdt/` → `.mcc/`
+  - `.mam-{scope}/` or `.mama-{scope}/` or `.pdt-{scope}/` → `.mcc-{scope}/`
+- Move all files inside the legacy dir into the new `.mcc[-scope]/` dir using `git mv` (preserves history)
+- After moving, the legacy directory should be empty — remove it
+- If multiple legacy directories exist, ask the user which is current and migrate that one
+
+**Step B — Update version stamp**:
+- Update `architect_state.md` (now in `.mcc/`) to reflect `MAMA Version: 3.0.0`
+
+**Step C — Bus methodology brief** (no on-disk migration; the agent re-orients):
+
+The methodology now uses the bus for cross-session communication:
+- Sending: `/mama:consult-pdt`, `/mama:debrief-pdt`, and `/mama:commission-complete` now compose a structured artifact in `docs/crossover/{thread_id}/` and send a framing `SendMessage(to='pdt', ...)` instead of writing courier files
+- Receiving: messages from teammates arrive as turns automatically (the harness polls your team mailbox)
+- Storage: new crossover lives in **thread directories** at `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md`
+- Identity: you're addressable on the bus by your registered session name — set via `/mama:session set <name>` or `mcc create <name>`
 
 **Action items for the user.**
-1. Install and enable the bus plugin if not already: `mcc bus setup` in this project's directory
-2. Register the Architect session's identity: `/mama:session set arch`
-3. Verify PDT's session has registered an identity too (typically `design`) — `peer_list` will show registered identities
-4. Note: Channels are in research preview — Claude Code must be launched with `--dangerously-load-development-channels plugin:bus@methodical-cc` for the bus to function
+1. The bus plugin should be enabled: `mcc team setup` (or any `mcc <name>` does it implicitly)
+2. Register the Architect session's identity: `/mama:session set arch` (if not already done)
+3. For sprint work: launch the Implementor via `mcc create impl --persona mama:implementor` in a new terminal, then `mcc impl` to enter it
+4. Verify PDT's session has registered (typically `design`) — `mcc team status` from the shell shows registered members
 
 **Reorientation cue for you (the agent).**
-- If your `architect_state.md` or `sprint_log.md` references the file-based pattern (e.g., notes about awaiting `consult_NNN_response.md`), that's legacy context. Your current behavior follows the bus protocol. When you next need to consult PDT, use `peer_send` rather than writing a crossover file directly.
-- If you find yourself about to write a `consult_NNN_request.md` file: stop. Use the bus. Old files stay where they are; new ones go through `peer_send`.
-- The `bus-protocol` skill (in the bus plugin) covers the full protocol. Read it if you need the full reference.
-
-**Step — Update version stamp**:
-- Update `architect_state.md` to reflect `MAMA Version: 3.0.0`
+- If your `architect_state.md` or `sprint_log.md` references the file-based courier pattern, that's legacy context. Your current behavior follows the bus protocol.
+- If you find yourself about to call `TeamCreate` or `Agent(team_name=..., subagent_type=implementor, ...)`: stop. The team already exists (mcc maintains it). The user starts the Implementor session via `mcc create impl`.
+- The `bus-protocol` skill (in the bus plugin) covers the full protocol.
 
 ---
 

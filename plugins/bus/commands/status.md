@@ -1,22 +1,27 @@
 ---
-description: Show methodical-cc bus status — registered identities, recent activity, pending message counts, active threads in this project.
+description: Show methodical-cc bus status — current team, registered teammates, recent inbox activity, and active threads in this project.
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
 # Bus Status
 
-Show the bus state for the current project: who's registered, what's pending, and what threads are active.
+Show the bus state for the current project.
 
 ## Your Task
 
-1. Call `peer_list` (the bus MCP tool) to get the registered identities, last activity, and pending message counts.
-2. Walk `docs/crossover/*/` to enumerate active threads (status = "open" in `.bus-state.json`).
-3. Note the current session's resolved identity (visible in the `=== METHODICAL-CC BUS ===` SessionStart context).
-4. Present a compact summary:
-   - **Identities**: each name → registered file, last activity, pending count
-   - **Active threads**: thread_id → participants, last activity, awaiting whom
-   - **You**: your resolved identity (or note that you're anonymous)
+1. **Note your own identity** — visible in the `=== METHODICAL-CC BUS ===` SessionStart context block. If you're anonymous or no team block appeared, say so.
 
-If the bus isn't enabled or the MCP tools aren't available, tell the user to run `mcc bus setup`.
+2. **Read the team config** at `~/.claude/teams/<team-name>/config.json` (where `<team-name>` is the project's team — derive from the cwd basename, sanitized). List the members.
+
+3. **Check inbox state** for each member by reading `~/.claude/teams/<team-name>/inboxes/<name>.json` (if it exists). Report unread message counts.
+
+4. **Enumerate active threads** by walking `docs/crossover/*/` for thread directories. List recent ones, especially those with the current session's identity as a participant.
+
+5. **Present a compact summary** in this shape:
+   - **You**: your resolved identity on team `<team>` (or anonymous)
+   - **Members**: each name + agent_id, with unread counts
+   - **Active threads**: thread_id → participants, recent activity
+
+If the team config doesn't exist, tell the user to run `mcc team setup` (or just resume any session with `mcc <name>`, which sets it up implicitly).
 
 $ARGUMENTS

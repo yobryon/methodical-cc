@@ -9,23 +9,26 @@ The current session ID is: **${CLAUDE_SESSION_ID}**
 
 ## Your Task
 
-Parse the user's arguments and perform the requested action.
+Parse the user's arguments and perform the requested action. All session registry data lives at `.mcc/sessions` in the project root (or `.mcc-{scope}/sessions` for scoped projects).
 
 ### `set <name>`
 
 Register the current session under the given name (e.g., `arch`, `impl`, `design`).
 
-1. Find the project's state directory (`.mam/` or `.mam-{scope}/`)
-   - If no state directory exists, tell the user to run `/mam:arch-init` first
+1. Find the project's state directory:
+   - Check for `.mcc/` (unscoped) or `.mcc-{scope}/` (scoped) directories
+   - If no state directory exists, create `.mcc/` (default unscoped)
 2. Read `{state_dir}/sessions` if it exists (simple `name=id` format, one per line)
 3. Add or update the line for the given name with the session ID shown above
 4. Write the file back
+
+After registering, also report the result so a calling shell command (e.g. `mcc create`) can verify success. Print: `Registered <name>=<id>. Resume with: mcc <name>`.
 
 ### `list`
 
 Show all registered sessions for this project.
 
-1. Find the state directory
+1. Find the state directory (`.mcc/` or `.mcc-{scope}/`)
 2. Read `{state_dir}/sessions`
 3. Display each name and its session ID
 4. Note which ones can be resumed with: `mcc <name>` (the methodical-cc helper, found in `tools/mcc`)

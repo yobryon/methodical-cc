@@ -4,32 +4,31 @@ A peer-messaging bus that lets PDT, Architect, Implementor, and UX Designer sess
 
 ## Why
 
-In MAMA, the team-based model (Architect + Implementor + UX) gives you real-time collaboration with a shared task list and `SendMessage` between teammates — it's a quality unlock. But across plugins (Architect ↔ PDT), collaboration goes through `docs/crossover/` files manually couriered by the user. That's slow, lossy, and leans hard on the user.
+In MAMA, the team-based model (Architect + Implementor + UX) gives you real-time collaboration with a shared task list and `SendMessage` between teammates — it's a quality unlock. But across plugins (Architect ↔ PDT), collaboration historically went through `docs/crossover/` files manually couriered by the user. That's slow, lossy, and leans hard on the user.
 
 The bus eliminates the courier without losing the discipline that made the courier model produce crisp consults. Two modes:
 - **Chat** — lightweight, ephemeral, no artifact written
-- **Consult** — durable, structured artifact in `docs/crossover/`, citable forever
+- **Consult** — durable, structured artifact in `docs/crossover/{thread_id}/`, citable forever
+
+## How it works
+
+The bus is built on Claude Code's native **agent-team mailbox protocol** — there's no MCP server, no Node, no extra dependencies. Sessions in a project join a shared team (under `~/.claude/teams/<team>/`) and message each other via the standard `SendMessage` tool. Claude Code's harness polls each session's mailbox once a second and delivers new messages as turns automatically.
+
+A phantom "coordinator" lead satisfies the team protocol's flat-roster requirement; all real participants (PDT, Architect, Implementor, UX) are symmetric peers, each launched as its own user-driven session.
 
 ## Install
 
-**Prerequisite:** Node.js ≥ 20 on your PATH. Install from https://nodejs.org/ if needed.
-
 ```bash
-mcc bus setup
+mcc team setup
 ```
 
 This:
-1. Installs the plugin at user scope
-2. Enables it for the current project
-3. Verifies Node ≥ 20 is available and the server bundle is present
+1. Ensures the bus plugin is enabled at user scope
+2. Sets `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in the project's `.claude/settings.json`
+3. Creates the team config under `~/.claude/teams/<team>/` with the phantom lead
 4. Adds `.mcc/` to `.gitignore`
 
-The bus server ships as a pre-built bundle (`server.bundle.js`) — there's no `npm install` step at user time. Just enable and go.
-
-> **Channels are in research preview.** Until the bus is on Anthropic's approved allowlist, you'll need to launch Claude Code with the dev flag:
-> ```bash
-> claude --dangerously-load-development-channels plugin:bus@methodical-cc
-> ```
+Most users never need to call this directly — `mcc <name>` and `mcc create <name>` invoke it implicitly.
 
 ## Identity
 
@@ -40,40 +39,38 @@ The bus uses your registered session name as your identity. Register from inside
 /mama:session set arch
 ```
 
-That name (`design`, `arch`, etc.) is your bus identity — peers address you by it. If you don't register, you're `anonymous` and can send messages but can't be addressed back.
+That name (`design`, `arch`, etc.) is your bus identity — peers address you by it via `SendMessage(to=...)`. If you don't register, you're `anonymous` and can send messages but can't be addressed back.
 
 ## Sending a message
 
-Two MCP tools are available to Claude:
+Use Claude Code's native `SendMessage` tool:
 
-**`peer_send`** — send to a named peer
 ```
-peer_send(
-  to="pdt",
-  body="PDT — sending consult-007. See artifact for the request.",
-  mode="consult",
-  thread_id="consult-007-depth-visibility",
-  artifact_body="...full structured request..."
-)
+SendMessage(to="pdt", message="...")
 ```
 
-**`peer_list`** — see registered identities and pending counts
+For **consult mode**, also Write the structured artifact:
+
+```
+Write("docs/crossover/consult-007-depth-visibility/001-arch-request.md", ...)
+SendMessage(to="pdt", message="PDT — sending consult-007. See artifact at docs/crossover/consult-007-depth-visibility/001-arch-request.md")
+```
+
+The `bus-protocol` skill covers the full convention.
 
 ## Receiving a message
 
-Messages arrive automatically as `<channel source="bus" from="..." mode="..." thread_id="..." artifact_path="...">` tags in the recipient's context. No polling needed. When `mode="consult"`, the artifact at `artifact_path` has the full structured content.
+Inbound messages arrive automatically as new turns — Claude Code's harness polls each session's mailbox once a second. No explicit receive call needed.
 
 ## Threading
 
 Threads are sender-declared kebab-case strings (`consult-007-depth-visibility`, `commission-013-validation`). Each thread gets a directory under `docs/crossover/{thread_id}/` with sequentially-numbered turn files (`001-arch-request.md`, `002-pdt-response.md`, ...).
 
-Mark a thread closed with `close=true` on the final message.
-
 ## Inspect
 
 From the terminal:
 ```bash
-mcc bus status
+mcc team status
 ```
 
 Inside a Claude session:
@@ -82,40 +79,34 @@ Inside a Claude session:
 /bus:identity
 ```
 
-Each session also gets an `=== METHODICAL-CC BUS ===` block at session start showing identity, active threads, and any unread messages.
+Each session also gets a `=== METHODICAL-CC BUS ===` block at session start showing team identity and membership.
 
 ## File layout (per repo)
 
 ```
 {repo}/
 ├── .mcc/
+│   ├── sessions                 # Registered session identities
 │   └── bus/
 │       └── inbox/
-│           └── {identity}/
-│               ├── {timestamp}_{sender}_{thread_id}_{nonce}.json   # pending
-│               └── .consumed/
-│                   └── ...                                         # archived
+│           └── {identity}/      # Per-session staging (legacy/diagnostic)
 └── docs/
     └── crossover/
         └── {thread_id}/
             ├── 001-arch-request.md
             ├── 002-pdt-response.md
-            └── .bus-state.json
+            └── ...
 ```
 
-`.mcc/` is internal coordination state (gitignored). `docs/crossover/` is durable record (commit it).
+The team mailbox itself lives outside the repo at `~/.claude/teams/<team>/inboxes/<name>.json`. `.mcc/` is internal coordination state (gitignored). `docs/crossover/` is durable record (commit it).
 
 ## Troubleshooting
 
-**`server.bundle.js` missing.** The marketplace clone is incomplete or out of date. Run `mcc update` to refresh.
+**Identity shows `anonymous` or no team block at SessionStart.** The launch flags weren't set. Resume sessions via `mcc <name>` rather than plain `claude -r <id>`.
 
-**Node not found / version too old.** Install Node ≥ 20 from https://nodejs.org/.
+**`SendMessage` says recipient not in team.** The target session hasn't registered with this team. Have the recipient run `mcc create <name>` (or register via `/pdt:session set <name>` etc.) so they join the team.
 
-**Channel notifications not appearing.** Check that you launched with `--dangerously-load-development-channels plugin:bus@methodical-cc`. Until the bus is on the approved allowlist, this flag is required.
-
-**`peer_send` says "unknown recipient".** The target identity isn't registered in this repo's sessions files. Have the recipient run `/pdt:session set <name>` (or `/mam:session set <name>`, `/mama:session set <name>`) in their session, or run `mcc bus status` to see who is registered.
-
-**Anonymous identity at session start.** Your session ID isn't matched in any `sessions` file. Register with `/pdt:session set <name>` etc.
+**Messages not arriving.** Verify the recipient's session is actually open and on the same team — `mcc team status` lists active members.
 
 ## See Also
 

@@ -1,17 +1,17 @@
 ---
 description: Send a design question to PDT via the bus. Use when the Architect encounters a design flaw, ambiguity, or trade-off that needs the Design Partner's input.
-allowed-tools: Read, Write, Edit, Glob, Grep
+allowed-tools: Read, Write, Edit, Glob, Grep, SendMessage
 ---
 
 # Ask PDT
 
-You are the **Architect Agent**. You have encountered something that requires design input from the Design Partner (PDT). Compose a structured consult and send it via the bus.
+You are the **Architect Agent**. You have encountered something that requires design input from the Design Partner (PDT). Compose a structured consult artifact and send it via the bus.
 
 ## Prerequisites
 
-- The bus plugin must be installed and enabled (`mcc bus setup` if unsure)
-- A PDT session must be registered as `pdt` (or some identity name) on the bus — verify with `peer_list`
-- If PDT isn't registered or its session isn't running, the message still queues — they'll see it when their session next starts
+- The bus plugin must be enabled and the project's team set up (`mcc team setup` or any `mcc <name>` does this)
+- A PDT session must be registered as `pdt` (or whatever name you established) — check the SessionStart bus block for current members
+- If PDT isn't running right now, the message still queues in their inbox — they'll see it when their session next starts
 
 ## When to Use This
 
@@ -43,7 +43,7 @@ Ground yourself in the relevant materials:
 Before sending a consult:
 - Check whether the answer is already in the design documents
 - Check whether a relevant decision already exists in the decisions log
-- Check whether a previous consult already addressed this — `peer_list` and the SessionStart digest show your active threads
+- Check whether a previous consult already addressed this
 - If the answer is there, use it. Do not burden PDT with answered questions.
 
 ### 3. Clarify the Question
@@ -59,79 +59,76 @@ Work with the user to sharpen the question:
 
 Pick a kebab-case thread ID describing the topic, e.g. `consult-013-pref-storage-shape`. If continuing a previous thread, reuse its ID.
 
-### 5. Compose the Consult and Send via Bus
+### 5. Write the Artifact
 
-Compose the **artifact body** (what PDT will read) using this structure:
+Use the `Write` tool to create `docs/crossover/{thread_id}/{NNN}-arch-request.md` (where `{NNN}` is the next zero-padded turn number — start with `001` for a new thread).
+
+The artifact body uses this structure:
 
 ```markdown
+---
+thread_id: {thread_id}
+turn: {NNN}
+type: request
+from: arch
+to: pdt
+sent_at: {ISO timestamp}
+status: open
+---
+
 # Consult: [Title]
 
 ## The Question
-
-[State the question clearly and specifically. PDT should understand exactly what you need.]
+[State the question clearly and specifically.]
 
 ## Context
-
-[What prompted this question. What were you working on when you encountered it. What implementation reality surfaced this.]
+[What prompted this question. What were you working on when you encountered it.]
 
 ## What the Design Says
-
-[Summarize what the current design documents say about this topic. Cite specific documents and sections. Note any ambiguity or silence.]
+[Summarize what the design documents say. Cite specific documents and sections.]
 
 ## Options We See
-
-[If you have identified possible answers or approaches, lay them out. Include your assessment of trade-offs.]
+[Possible answers or approaches with trade-offs.]
 
 ## What Is Blocked
-
-[What cannot proceed until this is answered. Be specific about the impact.]
+[What cannot proceed until this is answered.]
 
 ## Architect's Instinct
-
-[Your best guess or recommendation, if you have one. PDT may agree, disagree, or offer a third option.]
+[Your best guess or recommendation, if you have one.]
 
 ## Response Format
-
-[Optional: how you'd like the answer shaped — direct decision, decision matrix, prose, etc.]
+[Optional: how you'd like the answer shaped.]
 ```
 
-Compose a short **body** (what shows in the channel notification — framing/intro, ~2-4 sentences):
+### 6. Send the Bus Message
+
+Compose a short framing message (~2-4 sentences) and use the `SendMessage` tool to send to `pdt`:
 
 ```
-PDT — sending consult-013-pref-storage-shape. Quick framing: design names a User.preferences field but doesn't specify shape. Implementation forces the question — affects migration strategy. See artifact for options and my instinct. Blocking phase 2 of sprint 14.
-```
-
-Then call `peer_send`:
-
-```
-peer_send(
+SendMessage(
   to="pdt",
-  body="<the framing above>",
-  mode="consult",
-  thread_id="consult-013-pref-storage-shape",
-  artifact_body="<the structured artifact above>",
-  artifact_type="request"
+  message="[CONSULT] consult-013-pref-storage-shape\n\nQuick framing: design names a User.preferences field but doesn't specify shape. Implementation forces the question — affects migration strategy. See the artifact at docs/crossover/consult-013-pref-storage-shape/001-arch-request.md for options and my instinct. Blocking phase 2 of sprint 14."
 )
 ```
 
-The bus writes the artifact to `docs/crossover/consult-013-pref-storage-shape/001-arch-request.md` and queues the channel notification for PDT.
+The leading `[CONSULT]` tag and explicit thread_id make the recipient's context clear about the mode and which artifact to read.
 
-### 6. Confirm
+### 7. Confirm
 
 Tell the user:
 - The thread ID and what was asked
-- Where the artifact landed (`docs/crossover/{thread_id}/001-arch-request.md`)
-- Note that PDT will see the message when their session is active; nothing more to do until they respond
+- Where the artifact landed
+- That PDT will see the message when their session is active; nothing more to do until they respond
 
 ## Quality Notes
 
 - Be specific. "The data model is unclear" is not a consult. "The design shows User having a `preferences` field but does not specify whether this is a JSON blob or a normalized table — we need to know because it affects the migration strategy" is a consult.
-- Include your perspective. You are the Architect, not a messenger. PDT wants to know what you think, not just what you are confused about.
-- Check your work. If the answer is in the docs, do not ask. PDT will lose trust in consults if they are answering questions that were already documented.
-- The artifact is the substance; the body is the framing. Don't duplicate. Use the body to orient PDT to why this matters and what to look at; let the artifact carry the structured request.
+- Include your perspective. You are the Architect, not a messenger.
+- Check your work. If the answer is in the docs, do not ask.
+- The artifact is the substance; the SendMessage body is the framing. Don't duplicate.
 
 ## Begin
 
-Discuss the design question with the user, then compose and send the consult via the bus.
+Discuss the design question with the user, then write the artifact and send the consult message.
 
 $ARGUMENTS

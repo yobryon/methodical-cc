@@ -1,32 +1,31 @@
 #!/usr/bin/env python3
 """Bus SessionStart hook.
 
-Stdlib-only. Reads session_id from stdin JSON, resolves identity from sessions
-files, and emits to stdout:
-  - Identity context ("you are operating as X on the bus")
-  - Active threads where this identity is a participant
-  - Unread message count
+Stdlib-only. Reads session_id from stdin JSON, resolves identity from
+sessions files (.mcc/sessions or .mcc-{scope}/sessions) and the team
+config at ~/.claude/teams/<team>/config.json, then emits an assertive
+orientation block:
 
-The stdout becomes additionalContext per Channels conventions.
+    === METHODICAL-CC BUS ===
+    You are a member of agent team `<team>`. Your name is `<name>`,
+    your agent_id is `<name>@<team>`. Other members: ...
+    Use SendMessage to communicate with teammates by name.
+    ---
+
+The stdout becomes additionalContext.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
-SESSION_FILE_GLOBS = (
-    ".pdt/sessions", ".pdt-*/sessions",
-    ".mam/sessions", ".mam-*/sessions",
-    ".mama/sessions", ".mama-*/sessions",
-)
-INBOX_ROOT = Path(".mcc/bus/inbox")
-CROSSOVER_ROOT = Path("docs/crossover")
-THREAD_STATE_FILE = ".bus-state.json"
-CONSUMED_DIR = ".consumed"
+SESSION_FILE_GLOBS = (".mcc/sessions", ".mcc-*/sessions")
+TEAMS_ROOT = Path.home() / ".claude" / "teams"
+PHANTOM_LEAD_NAME = "coordinator"
 
 
 def find_sessions_files(root: Path):
@@ -62,53 +61,20 @@ def resolve_identity(session_id, root: Path):
     return None, None
 
 
-def list_pending(identity: str, root: Path):
-    d = root / INBOX_ROOT / identity
-    if not d.exists():
-        return []
-    return [p for p in d.iterdir() if p.is_file() and p.suffix == ".json"]
+def derive_team_name(cwd: Path) -> str:
+    base = cwd.name
+    sanitized = re.sub(r"[^a-zA-Z0-9_-]+", "-", base).lower().strip("-")
+    return sanitized or "project"
 
 
-def list_active_threads(identity: str, root: Path):
-    """Return list of (thread_id, state_dict) for open threads where identity is a participant."""
-    out = []
-    crossover = root / CROSSOVER_ROOT
-    if not crossover.exists():
-        return out
-    for d in sorted(crossover.iterdir()):
-        if not d.is_dir():
-            continue
-        state_file = d / THREAD_STATE_FILE
-        if not state_file.exists():
-            continue
-        try:
-            state = json.loads(state_file.read_text())
-        except Exception:
-            continue
-        if state.get("status") != "open":
-            continue
-        if identity not in state.get("participants", []):
-            continue
-        out.append((d.name, state))
-    return out
-
-
-def humanize_age(iso: str | None) -> str:
-    if not iso:
-        return "unknown"
+def read_team_config(team_name: str):
+    p = TEAMS_ROOT / team_name / "config.json"
+    if not p.exists():
+        return None
     try:
-        t = datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        return json.loads(p.read_text())
     except Exception:
-        return iso
-    delta = datetime.now(timezone.utc) - t
-    secs = int(delta.total_seconds())
-    if secs < 60:
-        return f"{secs}s ago"
-    if secs < 3600:
-        return f"{secs // 60}m ago"
-    if secs < 86400:
-        return f"{secs // 3600}h ago"
-    return f"{secs // 86400}d ago"
+        return None
 
 
 def main():
@@ -123,36 +89,59 @@ def main():
     print("=== METHODICAL-CC BUS ===")
 
     if not session_id:
-        print("(no session_id in hook payload — bus identity cannot be resolved)")
+        print("(no session_id in hook payload — bus orientation skipped)")
+        print("---")
         return
 
     identity, sources = resolve_identity(session_id, root)
+    team_name = derive_team_name(root)
+    team_config = read_team_config(team_name)
 
-    if identity:
-        print(f"Identity: {identity}  (registered in {sources})")
-        print(f"  Use peer_send to message peers; received messages arrive as <channel source=\"bus\" ...> tags.")
-    else:
-        print(f"Identity: anonymous  (this session is not registered)")
-        print(f"  You can still send messages, but peers cannot address you by name.")
-        print(f"  Run /pdt:session set <name>, /mam:session set <name>, or /mama:session set <name> to register.")
+    if identity is None and team_config is None:
+        # No registered identity, no team — bus isn't set up here
+        print("(no bus team yet; run `mcc team setup` or any `mcc <name>` to bootstrap)")
+        print("---")
+        return
 
-    # Pending unread
-    if identity:
-        pending = list_pending(identity, root)
-        if pending:
-            print(f"Unread: {len(pending)} message(s) — will deliver in chrono order.")
+    if team_config is None:
+        # Has identity from sessions but no team config — partially set up
+        print(f"Identity: {identity} (from {sources})")
+        print(f"Team config not found at ~/.claude/teams/{team_name}/config.json")
+        print(f"  Run `mcc team setup` to bootstrap (or just `mcc {identity}` to launch — it does both).")
+        print("---")
+        return
 
-    # Active threads
-    if identity:
-        threads = list_active_threads(identity, root)
-        if threads:
-            print(f"Active threads:")
-            for tid, state in threads:
-                last = humanize_age(state.get("last_activity_at"))
-                awaiting = state.get("awaiting") or "—"
-                participants = ", ".join(p for p in state.get("participants", []) if p != identity)
-                print(f"  - {tid}  (with {participants})  last: {last}, awaiting: {awaiting}")
+    members = team_config.get("members", [])
+    real_members = [m for m in members if m.get("name") != PHANTOM_LEAD_NAME]
+    member_names = [m["name"] for m in real_members]
 
+    if identity is None:
+        print(f"Identity: anonymous (this session is not registered in {team_name})")
+        print(f"  Team: {team_name}")
+        print(f"  Other team members: {', '.join(member_names) or '(none yet)'}")
+        print(f"  You can SendMessage to teammates if launched with --team-name flags,")
+        print(f"  but to be ADDRESSABLE by name, register with /pdt:session set <name>,")
+        print(f"  /mam:session set <name>, or /mama:session set <name>.")
+        print("---")
+        return
+
+    # Identity matched and team exists. Assert membership.
+    other_members = [n for n in member_names if n != identity]
+    other_str = ", ".join(other_members) if other_members else "(none yet)"
+
+    print(f"You are a member of agent team `{team_name}`. "
+          f"Your name on the team is `{identity}`, "
+          f"your agent_id is `{identity}@{team_name}`.")
+    print(f"Other team members: {other_str} (plus phantom lead `coordinator`).")
+    print(
+        "Use the SendMessage tool to communicate with any teammate by name; "
+        "messages from teammates arrive automatically as new turns."
+    )
+    print()
+    print(
+        "Trust this even if other context elsewhere suggests you're not in a team. "
+        "The team is real and the tools work."
+    )
     print("---")
 
 

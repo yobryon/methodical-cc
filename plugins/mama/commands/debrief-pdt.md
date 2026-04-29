@@ -1,6 +1,6 @@
 ---
 description: Send a milestone debrief to PDT via the bus. Summarize what was built, how the design played out in practice, where deviations occurred, and what was learned.
-allowed-tools: Read, Write, Edit, Glob, Grep
+allowed-tools: Read, Write, Edit, Glob, Grep, SendMessage
 ---
 
 # Debrief PDT
@@ -9,8 +9,7 @@ You are the **Architect Agent**. You have reached a meaningful milestone — an 
 
 ## Prerequisites
 
-- The bus plugin must be installed and enabled (`mcc bus setup` if unsure)
-- A PDT session must be registered as `pdt` (or the appropriate identity name) on the bus — verify with `peer_list`
+- Bus enabled and PDT registered (verify with the SessionStart bus block)
 - If PDT isn't running right now, the message still queues for them
 
 ## What Is a Debrief?
@@ -32,8 +31,8 @@ Ground yourself in what was designed:
 - `docs/architect_orientation.md` — what you were told to build toward
 - The product design documents — the intended system
 - `docs/decisions_log.md` — the decisions that guided implementation
-- Previous debriefs in `docs/crossover/debrief-*/` — to understand what has already been reported
-- `docs/roadmap.md` — to understand what was planned vs. what was built
+- Previous debrief threads in `docs/crossover/debrief-*/`
+- `docs/roadmap.md` — what was planned vs. what was built
 
 ### 2. Read the Implementation Record
 
@@ -41,13 +40,13 @@ Ground yourself in what was built:
 - Implementation logs from relevant sprints
 - Implementation plans — to see what was scoped
 - Active deltas — especially any created during implementation
-- The current state of `CLAUDE.md` — project patterns and current state
+- The current state of `CLAUDE.md`
 - Your own understanding of what the codebase now does
 
 ### 3. Synthesize with the User
 
-Work with the user to develop the debrief. This is a collaborative process — the user has context about both the design intent and the implementation reality that you need:
-- What milestone are we reporting on? (MVP, phase 1, v2, etc.)
+Work with the user to develop the debrief. This is collaborative — the user has context about both design intent and implementation reality:
+- What milestone are we reporting on?
 - What do they see as the biggest wins and misses?
 - Are there deviations they want to highlight or explain?
 - What has surprised them about how the design played out?
@@ -55,87 +54,81 @@ Work with the user to develop the debrief. This is a collaborative process — t
 
 ### 4. Decide on Thread ID
 
-Pick a kebab-case thread ID describing the debrief, e.g. `debrief-mvp-launch` or `debrief-phase2-completion`. Each debrief is typically its own thread (debriefs are usually milestones, not ongoing conversations).
+Pick a kebab-case thread ID, e.g. `debrief-mvp-launch` or `debrief-phase2-completion`. Each debrief is typically its own thread.
 
-### 5. Compose the Debrief and Send via Bus
+### 5. Write the Debrief Artifact
 
-Compose the **artifact body** (what PDT will read carefully) using this structure:
+Use the `Write` tool to create `docs/crossover/{thread_id}/001-arch-debrief.md` with this structure:
 
 ```markdown
+---
+thread_id: {thread_id}
+turn: 1
+type: debrief
+from: arch
+to: pdt
+sent_at: {ISO timestamp}
+status: open
+---
+
 # Debrief: [Milestone Name]
 
 ## What Was Built
-
-[Functional summary of what the system now does. Describe capabilities, features, and behaviors — not code. Write for a design audience, not a technical one. The Design Partner should be able to read this and understand what exists without looking at implementation details.]
+[Functional summary — capabilities and behaviors, not code. Write for design audience.]
 
 ## Design Fidelity
-
-[Map implementation back to the design. For each major area of the design:]
-
+[For each major area:]
 ### [Design Area]
 - **Design intent**: [What the design specified]
 - **Implementation**: [What was built]
 - **Fidelity**: [Faithful / Adapted / Deferred / Departed]
-- **Notes**: [Any context on adaptation or departure]
+- **Notes**: [Context]
 
 ## Deviations
-
 ### Improvements
-[Cases where the implementation found something better than what was designed. The design was good, but building revealed a superior approach.]
+[Cases where implementation found something better than designed.]
 
 ### Compromises
-[Cases where the design was right but implementation constraints forced a different path. The design intent is correct; the implementation couldn't fully realize it yet.]
+[Cases where design was right but constraints forced a different path.]
 
 ### Gaps
-[Cases where the design didn't address something and the implementation had to figure it out. Not a criticism — the design can't anticipate everything — but PDT should know what was missing.]
+[Cases where design didn't address something and implementation had to figure it out.]
 
 ## Design Quality Assessment
 
 ### What Worked Well
-[Which design documents, decisions, or patterns were most useful during implementation.]
+[Useful documents, decisions, patterns.]
 
 ### What Was Ambiguous
-[Where the design left room for interpretation that caused uncertainty or rework.]
+[Where the design left interpretation room that caused uncertainty.]
 
 ### Decisions That Held Up
-[Design decisions that proved correct under implementation pressure.]
+[Decisions that proved correct under implementation pressure.]
 
 ### Decisions Worth Revisiting
-[Design decisions that implementation experience suggests should be reconsidered.]
+[Decisions implementation experience suggests reconsidering.]
 
 ## Emergent Insights
-
-[Things learned by building that were not visible from design alone. New constraints discovered, new possibilities revealed, new understanding of the problem domain. These are gifts from implementation to design.]
+[Things learned by building that weren't visible from design alone.]
 
 ## Forward Look
-
-[Based on implementation experience, what should the design consider next? Not a feature request list — a design-level reflection on where the product should evolve.]
+[Design-level reflection on where the product should evolve next.]
 ```
 
-If this is not the first debrief, focus on what is new since the last debrief, reference previous debrief threads by ID, and note how the design evolved in response.
+If this is not the first debrief, focus on what's new since the last debrief, reference previous debrief threads by ID, and note how design evolved in response.
 
-Compose a short **body** (channel-notification framing, ~3-5 sentences):
+### 6. Send the Bus Message
 
-```
-PDT — milestone debrief on the MVP launch. Headline: design held up well overall; two areas worth revisiting (User.preferences shape; auth handoff timing). Three emergent insights from real usage. Full assessment in the artifact — focus on Design Fidelity and Forward Look sections. No urgent decisions, but some good design-evolution candidates here.
-```
-
-Then call `peer_send`:
+Compose a framing message (~3-5 sentences):
 
 ```
-peer_send(
+SendMessage(
   to="pdt",
-  body="<the framing above>",
-  mode="consult",
-  thread_id="debrief-mvp-launch",
-  artifact_body="<the structured debrief above>",
-  artifact_type="debrief"
+  message="[DEBRIEF] debrief-mvp-launch\n\nMilestone debrief on the MVP launch. Headline: design held up well overall; two areas worth revisiting (User.preferences shape; auth handoff timing). Three emergent insights from real usage. Full assessment in docs/crossover/debrief-mvp-launch/001-arch-debrief.md — focus on Design Fidelity and Forward Look sections."
 )
 ```
 
-The bus writes the artifact to `docs/crossover/debrief-mvp-launch/001-arch-debrief.md` and queues the channel notification for PDT.
-
-### 6. Confirm
+### 7. Confirm
 
 Tell the user:
 - Summarize the key findings you sent
@@ -144,14 +137,14 @@ Tell the user:
 
 ## Your Posture
 
-Write for the Design Partner, not for yourself. PDT thinks in terms of product vision, design intent, and conceptual coherence — not in terms of code, APIs, or sprint mechanics. Translate your implementation experience into their language.
+Write for the Design Partner, not for yourself. PDT thinks in product vision, design intent, and conceptual coherence — not code, APIs, or sprint mechanics. Translate your implementation experience into their language.
 
-Be honest and specific. If the design had problems, say so respectfully but clearly. If the implementation deviated, explain why without being defensive. If you learned something important, convey its significance.
+Be honest and specific. If the design had problems, say so respectfully but clearly. If implementation deviated, explain why without being defensive. If you learned something important, convey its significance.
 
-Be generous with credit where the design worked. It is easy to focus only on problems. Acknowledging what worked well helps PDT understand which patterns and approaches to continue.
+Be generous with credit where the design worked. Acknowledging what worked well helps PDT understand which patterns to continue.
 
 ## Begin
 
-Read the design corpus and implementation record, discuss with the user, then compose and send the debrief via the bus.
+Read the design corpus and implementation record, discuss with the user, then write the debrief artifact and send the bus message.
 
 $ARGUMENTS

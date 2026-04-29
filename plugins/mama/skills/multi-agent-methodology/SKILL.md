@@ -19,52 +19,54 @@ This skill provides the foundational methodology for managing complex software p
 
 ## Agent Team Architecture
 
-MAMA uses **agent teams** for orchestration. The Architect is the team lead; the Implementor and UX Designer are teammates.
+MAMA uses Claude Code's **agent-team mailbox protocol** for cross-session orchestration. The team is created and maintained by `mcc` (the methodical-cc helper) — each project has its own team with a non-running phantom "coordinator" lead and a flat roster of real participants. The Architect, the Implementor, and PDT (when present) are **symmetric peers**, each running as its own user-launched Claude Code session.
 
-### Critical: Teammate vs One-Shot Subagent
+### Critical: Sessions Are User-Launched, Not Architect-Spawned
 
-Every time MAMA mentions "spawn," "bring on," or "teammate," the mechanic underneath is:
+Claude Code's flat-roster team protocol prevents teammates from spawning teammates. The Architect therefore does **not** call `TeamCreate` and does **not** call the `Agent` tool to spawn the Implementor. Instead:
 
-> Call the **Agent tool** with `subagent_type` set to the agent definition (e.g. `implementor`), `team_name` set to your team, and `name` set to a human-readable label.
+> The user launches each session in its own terminal via `mcc create <name> --persona <plugin>:<persona>`, then enters it via `mcc <name>`. Once the Implementor session is running and registered in the team, the Architect addresses it by name with the standard `SendMessage` tool.
 
-The `team_name` parameter is what makes this a **teammate**: it joins your team, persists across turns, the user can see and talk to it, and you can `SendMessage` to it.
+**Concrete flow at sprint start:**
+1. Architect writes the sprint artifacts (`implementation_plan.md`, kickoff section in `implementation_log.md`)
+2. Architect prompts the user to launch the Implementor session: `mcc create impl --persona mama:implementor`
+3. User opens a separate terminal, runs the create command, then `mcc impl` to enter the session
+4. Architect confirms the Implementor is online (e.g. via `mcc team status` or by sending a ping)
+5. Architect sends the kickoff via `SendMessage(to='impl', message='...')` — the Implementor receives it as a turn and starts work
 
-If you call `Agent` *without* `team_name`, you get a **one-shot subagent**: it runs for a single turn, returns one response, and is gone. The user can't interact with it. This is the wrong model for MAMA — but it's also the default if you forget to specify a team.
+**The UX Designer is a one-shot subagent.** For ad-hoc UX consultation, the Architect calls the `Agent` tool with `subagent_type='ux-designer'` and *no* `team_name`. The result is a single response, not a persistent teammate. If the user wants long-running UX work, they launch a separate `design-ux` session the same way they launch the Implementor.
 
-**Symptoms of the wrong path:**
-- The Implementor produces a single big response and then there's nothing to talk to
-- The user can't switch panes to interact with the Implementor
-- You can't `SendMessage` to it later because it doesn't exist
+### Why Sessions Instead of Spawned Teammates
 
-**The fix:** before any Agent call, ensure you have a team (`TeamCreate` if not), and always pass `team_name` on the Agent call.
-
-### Why Teams
-
-- The **user can interact directly** with any teammate -- give the Implementor test feedback, nudge direction, answer questions -- without proxying through the Architect
-- Teammates can **message each other directly** -- the Implementor can ask the Architect for clarification mid-sprint instead of just logging the question
-- A **shared task list** provides live visibility into sprint progress
-- Each teammate has its own **full context window**, enabling deep focused work
+- The **user owns each session's lifecycle** — they can switch terminals, resume independently, and shut down cleanly without orchestration from the Architect
+- Each session has its own **full context window** and can be paused/resumed across days
+- Sessions communicate via the standard `SendMessage` tool — Claude Code's harness polls each mailbox once a second and delivers messages as turns automatically
+- A **shared task list** still provides live visibility into sprint progress
+- The user can interact with the Implementor directly in its own terminal — no proxying through the Architect
 
 ### Team Lifecycle
 
 ```
-Team created ─────────────────────────────────────────── Team cleaned up
-     │                                                         │
-     │  Sprint 1                Sprint 2              Sprint N │
-     │  ┌─────────────────┐     ┌─────────────────┐           │
-     │  │ Impl spawned    │     │ Impl spawned    │    ...     │
-     │  │ (reads state)   │     │ (reads state)   │           │
-     │  │ works phases    │     │ works phases    │           │
-     │  │ writes state    │     │ writes state    │           │
-     │  │ shuts down      │     │ shuts down      │           │
-     │  └─────────────────┘     └─────────────────┘           │
-     │                                                         │
-     │  UX Designer may be active at any point ────────────── │
+Team set up by mcc (idempotent) ─────────────────────────── Team persists indefinitely
+     │                                                                │
+     │  Sprint 1                  Sprint 2                Sprint N    │
+     │  ┌─────────────────┐       ┌─────────────────┐                 │
+     │  │ User launches   │       │ User relaunches │                 │
+     │  │ impl session    │       │ impl session    │     ...         │
+     │  │ Arch sends      │       │ Arch sends      │                 │
+     │  │   kickoff via   │       │   kickoff via   │                 │
+     │  │   SendMessage   │       │   SendMessage   │                 │
+     │  │ Impl works,     │       │ Impl works,     │                 │
+     │  │   writes state  │       │   writes state  │                 │
+     │  │ User exits impl │       │ User exits impl │                 │
+     │  └─────────────────┘       └─────────────────┘                 │
+     │                                                                 │
+     │  UX subagent calls happen on demand from the Architect ──────── │
 ```
 
-- **Team**: Created when first needed, persists across sprints for the session
-- **Implementor**: Sprint-scoped -- spawned at sprint start, shut down at sprint end
-- **UX Designer**: On-demand -- spawned when needed, may persist across sprints
+- **Team**: Set up once (by `mcc team setup` or implicitly on first `mcc create`/`mcc <name>`); persists across sprints and across days
+- **Implementor session**: Sprint-scoped — user launches at sprint start, exits at sprint end (state is written to `.mcc/implementor_state.md` first)
+- **UX Designer**: One-shot subagent for routine consults; user-launched `design-ux` session for sustained design work
 
 ### Inter-Agent Communication
 
@@ -92,19 +94,19 @@ The Architect is the design partner and team lead. Maintains comprehensive under
 - Create delta documents for design exploration and capturing new ideas
 - Create implementation plans for each sprint
 - Write briefs for the Implementor
-- Manage the agent team -- spawn teammates, assign work, respond to questions
+- Coordinate the team -- prompt the user to launch teammate sessions, send kickoffs and clarifications via `SendMessage`, respond to incoming questions
 - Review implementation logs
 - Reconcile deltas and discoveries back into product documentation
 - Facilitate alignment discussions with the User
-- Maintain the Architect state and sprint log in `.mama/`
+- Maintain the Architect state and sprint log in `.mcc/`
 
 **Key Artifacts the Architect Produces:**
 - Product documentation (structure appropriate to the project)
 - `delta_XX_topic.md` - Incremental design explorations and captured ideas
 - `docs/sprint/X/implementation_plan.md` - Phase breakdowns for implementors
 - The spawn prompt (recorded as the `## Sprint Kickoff` section at the top of `implementation_log.md`) - orientation, rationale, sprint-specific constraints
-- `.mama/architect_state.md` - Running project knowledge and sprint history
-- `.mama/sprint_log.md` - Chronological sprint record
+- `.mcc/architect_state.md` - Running project knowledge and sprint history
+- `.mcc/sprint_log.md` - Chronological sprint record
 
 ### The Implementor Agent (Teammate)
 
@@ -122,7 +124,7 @@ The Implementor executes. Focused on code, not design decisions.
 **Key Artifacts the Implementor Produces:**
 - Working code
 - `docs/sprint/X/implementation_log.md` - Running journal of work done
-- `.mama/implementor_state.md` - Compacted working knowledge (updated at sprint end)
+- `.mcc/implementor_state.md` - Compacted working knowledge (updated at sprint end)
 
 **Key Constraint:** The Implementor should NOT make design decisions. When facing ambiguity, message the Architect for clarification, document the question in the log, proceed with a reasonable default, or pause for input.
 
@@ -138,12 +140,12 @@ The UX Designer collaborates with the Architect on user experience aspects.
 
 ## MAMA State Directory
 
-MAMA maintains its internal state in a `.mama/` directory at the project root (alongside `.claude/`). This keeps MAMA's operational state separate from project documentation.
+MAMA maintains its internal state in a `.mcc/` directory at the project root (alongside `.claude/`). This keeps MAMA's operational state separate from project documentation.
 
 ### Structure
 
 ```
-.mama/
+.mcc/
 ├── architect_state.md      # Architect's running project knowledge
 ├── implementor_state.md    # Implementor's compacted working memory
 └── sprint_log.md           # Chronological sprint record
@@ -154,22 +156,22 @@ MAMA maintains its internal state in a `.mama/` directory at the project root (a
 When multiple MAMA instances operate in the same directory (e.g., a multi-product project with separate architects for backend, app, and admin), each instance scopes itself:
 
 ```
-.mama-backend/
+.mcc-backend/
 ├── architect_state.md
 ├── implementor_state.md
 └── sprint_log.md
 
-.mama-app/
+.mcc-app/
 ├── architect_state.md
 ├── implementor_state.md
 └── sprint_log.md
 ```
 
-Scoping is established during `arch-init` when the Architect identifies itself as responsible for a specific component. An unscoped MAMA uses `.mama/` (the default for single-product projects).
+Scoping is established during `arch-init` when the Architect identifies itself as responsible for a specific component. An unscoped MAMA uses `.mcc/` (the default for single-product projects).
 
 ### Architect State
 
-The `architect_state.md` file is the Architect's running project knowledge -- similar to the Vesper `.mam/project_state.md` pattern. It contains:
+The `architect_state.md` file is the Architect's running project knowledge -- similar to the Vesper `.mcc/project_state.md` pattern. It contains:
 - Project identity and description
 - Sprint history with outcomes, key learnings, and tech debt carried
 - Current status (phase, stack, design state)
@@ -197,7 +199,7 @@ The `implementor_state.md` file captures the Implementor's **tacit knowledge** -
 
 **Lifecycle:**
 1. **Sprint 1 (impl-end)**: Implementor reviews its full context and writes `implementor_state.md` from scratch -- the tacit knowledge it accumulated that has no other home
-2. **Sprint 2 (arch-sprint-start)**: A fresh Implementor spawns, SessionStart hook loads the state document, priming it with accumulated knowledge before reading the brief
+2. **Sprint 2 (arch-sprint-start)**: User relaunches the Implementor session; SessionStart hook loads `implementor_state.md`, priming it with accumulated knowledge before the Architect's kickoff `SendMessage` arrives
 3. **Sprint 2 (impl-end)**: Implementor re-reads its state doc if needed, then **rewrites** it -- a fresh compaction of previous knowledge + new knowledge. Prune superseded empirical data (calibration numbers, performance characteristics have half-lives); carry forward history and rationale (these age well).
 4. **Sprint N**: The state doc stays bounded in size because it's been compacted N-1 times. It contains the distilled essence of all prior implementation experience.
 
@@ -266,7 +268,7 @@ This hierarchical organization keeps sprint artifacts grouped and prevents `docs
 
 **Sprint Kickoff (the spawn prompt, recorded in the log):**
 - Identity and sprint context ("You are the Implementor for Sprint X")
-- State directory path (e.g., `.mama/` or `.mama-backend/`)
+- State directory path (e.g., `.mcc/` or `.mcc-backend/`)
 - Reading order: state doc → plan → log
 - Why this sprint matters (1–2 sentences of rationale)
 - Sprint-specific patterns or constraints (curated from CLAUDE.md, plus decisions from the discussion)
@@ -320,8 +322,8 @@ A sprint is a coherent chunk of work with a clear outcome:
 - Write implementation plan with phases
 - Compose the spawn prompt and record it as the `## Sprint Kickoff` section at the top of the implementation log
 - Create phase tasks in the shared task list
-- Spawn the Implementor and hand off the sprint in one continuous flow (`arch-sprint-start`)
-- Output: Sprint artifacts in `docs/sprint/X/`, Implementor running
+- Prompt the user to launch the Implementor session; once it's online, send the kickoff via `SendMessage(to='impl', ...)` (`arch-sprint-start`)
+- Output: Sprint artifacts in `docs/sprint/X/`, Implementor running in its own session
 
 **4. Implementation (Implementor Teammate)**
 - Implementor reads state + plan + log (kickoff section)
@@ -342,7 +344,7 @@ A sprint is a coherent chunk of work with a clear outcome:
 - Update product docs with validated changes
 - Apply deltas that were implemented
 - Capture discoveries worth preserving
-- Update `.mama/architect_state.md` and `.mama/sprint_log.md`
+- Update `.mcc/architect_state.md` and `.mcc/sprint_log.md`
 - Propose scope for next sprint
 - Output: Updated product docs, updated state, next sprint proposal
 
@@ -381,17 +383,17 @@ If `docs/architect_orientation.md` exists, the project was designed with PDT. Th
 
 ### Crossover via the Bus
 
-PDT and MAMA communicate over the **bus** plugin — a Channels-based MCP server that lets sessions message each other directly. The bus must be installed and enabled in the project (`mcc bus setup`) and both sessions must have registered identities (via `/{plugin}:session set <name>`).
+PDT and MAMA communicate over the **bus** plugin — built on Claude Code's agent-team protocol. Each project has its own team (managed by `mcc`); each session joins as a teammate addressable by name; messages flow via the standard `SendMessage` tool. The bus must be enabled in the project (`mcc team setup`, or any `mcc <name>` does it implicitly) and both sessions must have registered identities (via `/{plugin}:session set <name>` or `mcc create <name>`).
 
-Three categories of crossover, all going through `peer_send` with `mode='consult'`:
+Three categories of crossover, all using `SendMessage` for the channel and the `Write` tool for durable artifacts:
 
-- **Commissions** (PDT→Architect): PDT sends a commission via `peer_send(to='arch', mode='consult', artifact_type='commission', ...)`. The Architect receives it as a `<channel mode='consult' from='pdt'>` notification and acts on it. The artifact lives at `docs/crossover/{thread_id}/`. Check for active commission threads during sprint prep.
-- **Consultations** (Architect→PDT): Use `/mama:consult-pdt` when you hit a design flaw, ambiguity, or trade-off that needs PDT's input. The command composes a structured artifact and sends via `peer_send`. PDT responds on the same thread.
+- **Commissions** (PDT→Architect): PDT writes a commission artifact at `docs/crossover/{thread_id}/001-pdt-commission.md` and sends a framing `SendMessage(to='arch', message='[CONSULT] {thread_id}\\n\\n...')`. The Architect receives it as a turn and acts on it. Check for active commission threads during sprint prep.
+- **Consultations** (Architect→PDT): Use `/mama:consult-pdt` when you hit a design flaw, ambiguity, or trade-off that needs PDT's input. The command composes a structured artifact and sends a framing message. PDT responds on the same thread.
 - **Debriefs** (Architect→PDT): Use `/mama:debrief-pdt` when you reach a milestone (MVP, phase completion, version release). Same mechanism.
 
-All consult-mode messages produce **durable artifacts** in `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` — citable forever, separate from the ephemeral channel notification body. Threading is sender-declared kebab-case (e.g. `consult-013-pref-storage-shape`).
+All consult-mode crossover produces **durable artifacts** in `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` — citable forever, separate from the bus message body. Threading is sender-declared kebab-case (e.g. `consult-013-pref-storage-shape`).
 
-Inbound `<channel>` notifications arrive automatically; no polling needed. The `bus-protocol` skill (in the bus plugin) covers full protocol details. If the bus isn't installed, fall back to discussing with the user about manual courier — but install the bus to remove that friction.
+Inbound bus messages arrive automatically as new turns (the harness polls each session's inbox at `~/.claude/teams/<team>/inboxes/<your-name>.json`); no polling needed on your part. The `bus-protocol` skill (in the bus plugin) covers full protocol details, including the chat-vs-consult discipline distinction.
 
 ### Phase Transitions
 
@@ -405,9 +407,9 @@ PDT may update `docs/architect_orientation.md` with new priorities and reading g
 3. Write briefs that save time -- good context reduces back-and-forth
 4. Read implementation logs carefully -- reality often differs from plan
 5. Reconcile promptly -- don't let sprints pile up
-6. Check the SessionStart bus digest and `peer_list` for active threads -- PDT may have sent commissions or there may be open consults awaiting your response
+6. Check the SessionStart bus block and `mcc team status` for active threads -- PDT may have sent commissions or there may be open consults awaiting your response
 7. Run architectural reviews periodically (every 5-10 sprints) -- codebases fragment faster than you expect
-8. Maintain `.mama/architect_state.md` -- your future self needs this context
+8. Maintain `.mcc/architect_state.md` -- your future self needs this context
 9. Respond to Implementor messages efficiently -- they're blocked until you answer
 
 ### For Implementors

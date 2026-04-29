@@ -20,7 +20,7 @@ This command kicks off the sprint planning cycle:
 
 ### 1. Determine Sprint Number and Paths
 
-- Read your `.mama*/architect_state.md` for sprint history
+- Read your `.mcc*/architect_state.md` for sprint history
 - Determine the next sprint number
 - Determine artifact paths: `docs/sprint/X/` (or `docs/{scope}/sprint/X/` for scoped instances)
 
@@ -28,7 +28,7 @@ This command kicks off the sprint planning cycle:
 
 - Review the roadmap
 - Review product documentation
-- Check what was accomplished in previous sprints (read `.mama*/sprint_log.md`)
+- Check what was accomplished in previous sprints (read `.mcc*/sprint_log.md`)
 - Understand where we are
 
 ### 3. Identify What's Next
@@ -78,9 +78,9 @@ Present your proposal conversationally, covering:
 ## Before You Begin
 
 Read these files to establish context:
-1. `.mama*/architect_state.md` - Project state and sprint history
+1. `.mcc*/architect_state.md` - Project state and sprint history
 2. `docs/roadmap.md` - Roadmap status
-3. Recent sprint logs (`.mama*/sprint_log.md`)
+3. Recent sprint logs (`.mcc*/sprint_log.md`)
 4. Active deltas (use Glob for `docs/delta_*.md`)
 5. PDT crossover (use Glob for `docs/crossover/commission_*_request.md`) - check for open commissions
 

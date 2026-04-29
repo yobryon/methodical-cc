@@ -13,7 +13,7 @@ Commit the current work with a well-crafted message.
 
 Check for sprint context that explains the *intent* behind the changes:
 - Look for an active implementation log in `docs/sprint/*/` or `docs/*/sprint/*/` (most recent)
-- Glance at `.mama*/architect_state.md` for current sprint goal if available
+- Glance at `.mcc*/architect_state.md` for current sprint goal if available
 - If the user provided arguments describing what this commit is about, use that
 
 This context helps you write a message about *why*, not just *what*.

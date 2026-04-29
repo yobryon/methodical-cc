@@ -25,8 +25,8 @@ claude --plugin-dir /path/to/plugins/mam
 ### Architect Commands
 | Command | Purpose |
 |---------|---------|
-| `/mam:arch-init` | Initialize project, establish scope, create `.mam/` state |
-| `/mam:arch-resume` | Resume in-flight project from `.mam/` state |
+| `/mam:arch-init` | Initialize project, establish scope, create `.mcc/` state |
+| `/mam:arch-resume` | Resume in-flight project from `.mcc/` state |
 | `/mam:arch-discuss` | Discuss ideas, process feedback, explore architecture |
 | `/mam:arch-create-docs` | Create product documentation |
 | `/mam:arch-roadmap` | Create implementation roadmap |
@@ -55,10 +55,10 @@ claude --plugin-dir /path/to/plugins/mam
 
 ## MAM State Directory
 
-MAM keeps its internal state in `.mam/` (or `.mam-{scope}/` for multi-product projects):
+MAM keeps its internal state in `.mcc/` (or `.mcc-{scope}/` for multi-product projects):
 
 ```
-.mam/
+.mcc/
 ├── architect_state.md      # Architect's running project knowledge
 └── sprint_log.md           # Chronological sprint record
 ```
@@ -70,9 +70,9 @@ This separates MAM's bookkeeping from the project's `docs/` directory.
 For multi-product projects sharing a directory, each MAM instance scopes itself:
 
 ```
-.mam-backend/     # Backend architect's state
-.mam-app/         # App architect's state
-.mam-admin/       # Admin architect's state
+.mcc-backend/     # Backend architect's state
+.mcc-app/         # App architect's state
+.mcc-admin/       # Admin architect's state
 ```
 
 Sprint artifacts follow the same pattern:
@@ -123,7 +123,7 @@ The `mcc` script is in `tools/mcc` (with `mcc.cmd` for Windows). Add it to your 
 
 ```
 Architect Session:
-1. /mam:arch-init              Initialize project, create .mam/ state
+1. /mam:arch-init              Initialize project, create .mcc/ state
 2. /mam:arch-create-docs       Create product documentation
 3. /mam:arch-roadmap           Plan the roadmap
 4. /mam:arch-sprint-prep       Propose sprint scope

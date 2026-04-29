@@ -14,9 +14,9 @@ Upgrades are **cumulative** — if a project is several versions behind, all int
 ### 1. Detect Current Version
 
 Look for the project's state directory:
-- Check for `.mam/` or `.mam-{scope}/` directories
+- Check for `.mam/` or `.mam-{scope}/` directories (legacy v2.x location)
+- Check for `.mcc/` or `.mcc-{scope}/` directories (current v3+ location)
 - If found, read `architect_state.md` and look for a `MAM Version:` line
-- Also check for `.mama/` or `.mama-{scope}/` directories (MAMA → MAM migration)
 - If no state directory exists, the project is **pre-2.0.0**
 
 Record the detected version. If no version is found, treat it as `0.0.0` (pre-versioning).
@@ -26,19 +26,6 @@ Also check: does the user want to establish a scope? If they're in a multi-produ
 ### 2. Apply Transitions
 
 Apply each transition in order, skipping any that are already complete:
-
----
-
-#### Transition: MAMA → MAM
-
-**Conditions**: `.mama/` or `.mama-{scope}/` exists but `.mam/` or `.mam-{scope}/` does not. The user is migrating from team-based to session-based workflow.
-
-**Steps:**
-- Rename `.mama/` → `.mam/` (or `.mama-{scope}/` → `.mam-{scope}/`)
-- Use `git mv` if the project is a git repository
-- Update the version reference in `architect_state.md` from `MAMA Version` to `MAM Version`
-- **Keep `implementor_state.md`** — in MAM, the user runs the Implementor session directly, but this document is still valuable as a knowledge reference. The updated `/mam:impl-begin` checks for it and reads it at sprint start.
-- Proceed to the 2.0.0 transition for any remaining steps
 
 ---
 
@@ -81,37 +68,51 @@ Apply each transition in order, skipping any that are already complete:
 
 ---
 
-#### Transition: pre-3.0.0 → 3.0.0 — Crossover via the Bus
+#### Transition: pre-3.0.0 → 3.0.0 — `.mcc/` unification + team-based bus
 
-**Conditions**: Apply this transition for any project whose `architect_state.md` shows version < 3.0.0 (or whose mental model predates the bus). This is a **methodology shift, not a state migration** — there are no on-disk changes required, but the agent's behavior should re-orient.
+**Conditions**: Apply this transition if any of the legacy state directories exist (`.mam/`, `.mama/`, `.pdt/`, or scoped equivalents like `.mam-backend/`), OR `architect_state.md` shows version < 3.0.0.
 
-**What changed.** PDT and MAM used to communicate through discrete files in `docs/crossover/` (`commission_NNN_request.md`, `consult_NNN_request.md`, `debrief_NNN.md`), with the user as the manual courier between sessions. Starting in v3.0.0, that crossover happens over the **bus** plugin — a Channels-based MCP server that lets sessions message each other directly.
+**What changed in v3.0.0.**
+
+1. **State directories unified to `.mcc/`.** All operational state — sessions registry, architect_state.md, sprint_log.md, implementor_state.md — now lives in a single `.mcc/` directory (or `.mcc-{scope}/` for scoped projects). Previously this was split across `.mam/`, `.mama/`, `.pdt/`. The unified layout is cleaner and matches `.mcc/bus/` (which has been there from the start).
+
+2. **Crossover via the bus.** PDT and MAM used to communicate through discrete files in `docs/crossover/` (`commission_NNN_request.md`, etc.) with the user as manual courier. Starting in v3.0.0, that crossover happens via the bus plugin — built on Claude Code's agent-team protocol. Sessions in a project join a shared team and message each other via `SendMessage`. The framing message goes through the team mailbox; consult artifacts still live in `docs/crossover/{thread_id}/` (now organized into thread directories).
 
 **What still works.**
-- Existing flat crossover files remain valid history — readable, citable, part of the project's record. Don't delete or migrate them unless the user explicitly asks.
+- Existing flat crossover files (`commission_NNN_request.md`, etc.) remain valid history — readable, citable, part of the project's record. Don't delete unless the user explicitly asks.
 - The conceptual structure — commissions, consults, debriefs — is unchanged.
 
-**What's different now.**
-- Sending: `/mam:consult-pdt`, `/mam:debrief-pdt`, and `/mam:commission-complete` now call `peer_send(to='pdt', mode='consult', ...)` instead of writing files
-- Receiving: when PDT sends a commission, you receive a `<channel from='pdt' mode='consult'>` notification automatically — no polling for files in `docs/crossover/`
-- Storage: new crossover lives in **thread directories** at `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` (one directory per ongoing thread, sequentially numbered turns)
-- Threading: each conversation has a sender-declared kebab-case `thread_id` (e.g. `consult-013-pref-storage-shape`); responses go on the same thread
-- Identity: you're addressable on the bus by your registered session name — set via `/mam:session set <name>` (typically `arch` or similar)
+**Step A — Migrate state directory** (if not already done):
+- Detect the existing state directory: `.mam/`, `.mama/`, `.pdt/`, or scoped variants like `.mam-backend/`
+- Determine target name:
+  - `.mam/` or `.mama/` or `.pdt/` → `.mcc/`
+  - `.mam-{scope}/` or `.mama-{scope}/` or `.pdt-{scope}/` → `.mcc-{scope}/`
+- Move all files inside the legacy dir into the new `.mcc[-scope]/` dir using `git mv` (preserves history if it's a git repo)
+- After moving, the legacy directory should be empty — remove it (the user can verify with `git status` before committing)
+- If multiple legacy directories exist (e.g., both `.mam/` and `.mama/`), ask the user which is current — this is unusual but possible if the project changed methodologies. Migrate the active one; let the user decide what to do with the other.
+
+**Step B — Update version stamp**:
+- Update `architect_state.md` (now in `.mcc/`) to reflect `MAM Version: 3.0.0`
+
+**Step C — Bus methodology brief** (no on-disk migration; the agent re-orients its mental model):
+
+The methodology now uses the bus for cross-session communication:
+- Sending: `/mam:consult-pdt`, `/mam:debrief-pdt`, and `/mam:commission-complete` now compose a structured artifact in `docs/crossover/{thread_id}/` and send a framing `SendMessage(to='pdt', ...)` instead of writing courier files
+- Receiving: when PDT sends a commission, you receive it as a turn (the harness polls your team mailbox automatically)
+- Storage: new crossover lives in **thread directories** at `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md`
+- Threading: each conversation has a sender-declared kebab-case `thread_id`
+- Identity: you're addressable on the bus by your registered session name — set via `/mam:session set <name>` or `mcc create <name>`
 
 **Action items for the user.**
-1. Install and enable the bus plugin if not already: `mcc bus setup` in this project's directory
-2. Register the Architect session's identity: `/mam:session set arch`
+1. The bus plugin should be enabled: `mcc team setup` (or any `mcc <name>` does it implicitly)
+2. Register the Architect session's identity: `/mam:session set arch` (if not already done)
 3. The Implementor session, when running, should also register: `/mam:session set impl`
-4. Verify PDT's session has registered an identity too (typically `design`) — `peer_list` will show registered identities
-5. Note: Channels are in research preview — Claude Code must be launched with `--dangerously-load-development-channels plugin:bus@methodical-cc` for the bus to function
+4. Verify PDT's session has registered (typically `design`) — `mcc team status` from the shell shows registered members
 
 **Reorientation cue for you (the agent).**
-- If your `architect_state.md` or `sprint_log.md` references the file-based pattern (e.g., notes about awaiting `consult_NNN_response.md`), that's legacy context. Your current behavior follows the bus protocol. When you next need to consult PDT, use `peer_send` rather than writing a crossover file directly.
-- If you find yourself about to write a `consult_NNN_request.md` file: stop. Use the bus. Old files stay where they are; new ones go through `peer_send`.
+- If your `architect_state.md` or `sprint_log.md` references the file-based courier pattern (e.g., notes about awaiting `consult_NNN_response.md`), that's legacy context. Your current behavior follows the bus protocol. When you next need to consult PDT, use `SendMessage` plus a Write to `docs/crossover/{thread_id}/...` rather than writing a flat crossover file.
+- If you find yourself about to write a `consult_NNN_request.md` file: stop. Use the bus. Old files stay where they are; new ones go through `SendMessage` + thread-organized artifacts.
 - The `bus-protocol` skill (in the bus plugin) covers the full protocol. Read it if you need the full reference.
-
-**Step — Update version stamp**:
-- Update `architect_state.md` to reflect `MAM Version: 3.0.0`
 
 ---
 

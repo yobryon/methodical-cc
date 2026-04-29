@@ -19,11 +19,11 @@ This command helps establish context when:
 ### 1. Find Your MAM State
 
 Look for the MAM state directory:
-- `.mam/` (unscoped) or `.mam-{scope}/` (scoped)
+- `.mcc/` (unscoped) or `.mcc-{scope}/` (scoped)
 - Read `architect_state.md` — this is your primary context document, containing project identity, sprint history, current status, and accumulated knowledge
 - Read `sprint_log.md` for the chronological sprint record
 
-If no `.mam*/` directory exists, this project may need initialization via `/mam:arch-init`.
+If no `.mcc*/` directory exists, this project may need initialization via `/mam:arch-init`.
 
 ### 2. Read Supporting Context
 

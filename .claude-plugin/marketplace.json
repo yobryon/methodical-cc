@@ -21,12 +21,12 @@
       "name": "pdt",
       "source": "./plugins/pdt",
       "description": "Product Design Thinking - Socratic design partner for pre-implementation product thinking, concept development, documentation crystallization, and bus-based crossover with MAM/MAMA",
-      "version": "2.0.0"
+      "version": "3.0.0"
     },
     {
       "name": "bus",
       "source": "./plugins/bus",
-      "description": "Peer messaging bus - connects PDT, Architect, Implementor, and UX Designer sessions for direct cross-session communication via Channels-based MCP, with chat-mode for lightweight exchanges and consult-mode for durable structured artifacts",
+      "description": "Peer messaging bus - connects PDT, Architect, Implementor, and UX Designer sessions for direct cross-session communication via Claude Code's agent-team mailbox protocol, with chat-mode for lightweight exchanges and consult-mode for durable structured artifacts",
       "version": "1.0.0"
     }
   ]

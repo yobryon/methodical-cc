@@ -1,24 +1,21 @@
 ---
-description: Collaborate with the UX Designer on user experience design. The UX Designer is brought on as a teammate, allowing direct interaction from both the Architect and the user.
-allowed-tools: Read, Glob, Grep, Agent, TeamCreate, SendMessage
+description: Consult the UX Designer on user experience design. Spawned as a one-shot subagent for a focused consultation, returns design recommendations to the Architect.
+allowed-tools: Read, Glob, Grep, Agent
 ---
 
 # UX Designer Consultation
 
-You are the **Architect Agent** (team lead). You're bringing in the UX Designer as a teammate to collaborate on user experience aspects of the project.
+You are the **Architect Agent**. You're consulting the UX Designer for user experience input on a specific question or area.
 
-## Critical: Teammate vs One-Shot Subagent
+## How UX Consultation Works in MAMA v3
 
-The Agent tool can spawn agents in two modes, and getting this wrong silently breaks MAMA:
+The UX Designer is spawned as a **one-shot subagent** via the Agent tool — focused consultation, returns recommendations, exits. UX is not currently a persistent teammate (Claude Code's flat-roster team protocol prevents the Architect from spawning teammates; UX is low-volume enough that subagent semantics are acceptable).
 
-- **Teammate mode** (what MAMA needs): Agent tool called with **both `team_name` AND `name`**. The new agent joins the team, persists, the user can interact with it directly, and you can `SendMessage` to it later.
-- **One-shot subagent mode** (wrong for MAMA): Agent tool called *without* `team_name`. The agent runs once, returns, and is gone. The user can't see or talk to it. This breaks MAMA's whole model.
-
-If you don't already have a team, call `TeamCreate` first. Every Agent call must include `team_name`. If you find yourself about to call `Agent` without `team_name`, stop — that's the trap.
+If you want UX to be a long-running teammate that the user can interact with directly, the user can launch a separate UX session with `mcc create design-ux --persona mama:ux-designer` — but for most consultations, the subagent pattern works.
 
 ## About the UX Designer
 
-The UX Designer is a teammate that:
+The UX Designer:
 - Contemplates product documentation and extracts UX implications
 - Analyzes existing design artifacts, mockups, or UX research
 - Proposes design patterns, interaction flows, and visual systems
@@ -27,15 +24,7 @@ The UX Designer is a teammate that:
 
 ## Your Task
 
-### 1. Ensure the Agent Team Exists
-
-If you haven't created a team this session, call `TeamCreate` now with a sensible team name. Remember it — every Agent and SendMessage call references it.
-
-### 2. Check If UX Designer Is Already Active
-
-If the UX Designer is already a member of your team (e.g., from an earlier consultation this session), don't bring them on again. Use `SendMessage` to send the new consultation topic.
-
-### 3. Prepare Context
+### 1. Prepare Context
 
 Gather relevant materials:
 - Product documentation
@@ -43,35 +32,22 @@ Gather relevant materials:
 - UX-related deltas
 - Specific questions or areas needing UX input
 
-### 4. Bring on the UX Designer (or message the existing one)
+### 2. Spawn the UX Designer Subagent
 
-**If bringing on a new teammate:**
+Call the `Agent` tool with `subagent_type: "ux-designer"` (no `team_name` — this is a subagent, not a teammate). Provide full context in the spawn prompt:
 
-Call the `Agent` tool with **all three** parameters:
-- `subagent_type: "ux-designer"` — selects the UX Designer agent definition
-- `team_name: "<your team name>"` — **required** to make this a teammate, not a one-shot subagent
-- `name: "ux-designer"` (or similar) — for SendMessage and task ownership
+> You are the UX Designer for [project]. Review the product documentation in docs/ and help design [specific aspect]. Consider [specific constraints or inputs]. Return your design recommendations as a structured response — the Architect will incorporate them.
 
-Pass full context as the prompt. Example:
+The subagent will produce a single response, then exit. You take that response and proceed.
 
-> You are the UX Designer for [project]. Review the product documentation in docs/ and help design [specific aspect]. Consider [specific constraints or inputs].
-
-**If already active:**
-
-Use `SendMessage` with `to: "<their name>"`:
-
-> Let's shift focus to [new topic]. Here's the context: [relevant details].
-
-### 5. Collaborate
-
-The UX Designer will analyze and propose. Engage in back-and-forth via SendMessage as needed. The user can also interact directly with the UX Designer for design discussions.
-
-### 6. Capture Outcomes
+### 3. Capture Outcomes
 
 Ensure design decisions and artifacts are properly documented:
 - Design documents in `docs/design/` or similar
 - Delta documents for design decisions
 - UX-related backlog items
+
+If the UX response warrants an extended back-and-forth, run another `/mama:ux-consult` with refined scope. If multiple back-and-forths are needed, consider asking the user to launch UX as a long-running session via `mcc create design-ux --persona mama:ux-designer` — that gives you SendMessage access and the user can interact directly.
 
 ## What to Discuss with the UX Designer
 
@@ -85,7 +61,7 @@ Ensure design decisions and artifacts are properly documented:
 
 ## Begin
 
-Process the user's input about what UX consultation is needed, then bring on (or message) the UX Designer as a teammate — always with `team_name` set on the Agent call.
+Process the user's input about what UX consultation is needed, then spawn the UX Designer subagent with full context.
 
 ---
 

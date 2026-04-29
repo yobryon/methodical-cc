@@ -9,32 +9,38 @@ The current session ID is: **${CLAUDE_SESSION_ID}**
 
 ## Your Task
 
-Parse the user's arguments and perform the requested action.
+Parse the user's arguments and perform the requested action. All session registry data lives at `.mcc/sessions` in the project root (or `.mcc-{scope}/sessions` for scoped projects).
 
 ### `set <name>`
 
-Register the current session under the given name (e.g., `design`, `pdt`).
+Register the current session under the given name (e.g., `arch`, `impl`, `design`).
 
-1. Create `.pdt/` if it doesn't exist
-2. Read `.pdt/sessions` if it exists (simple `name=id` format, one per line)
+1. Find the project's state directory:
+   - Check for `.mcc/` (unscoped) or `.mcc-{scope}/` (scoped) directories
+   - If no state directory exists, create `.mcc/` (default unscoped)
+2. Read `{state_dir}/sessions` if it exists (simple `name=id` format, one per line)
 3. Add or update the line for the given name with the session ID shown above
 4. Write the file back
+
+After registering, also report the result so a calling shell command (e.g. `mcc create`) can verify success. Print: `Registered <name>=<id>. Resume with: mcc <name>`.
 
 ### `list`
 
 Show all registered sessions for this project.
 
-1. Read `.pdt/sessions`
-2. Display each name and its session ID
-3. Note which ones can be resumed with: `mcc <name>` (the methodical-cc helper, found in `tools/mcc`)
+1. Find the state directory (`.mcc/` or `.mcc-{scope}/`)
+2. Read `{state_dir}/sessions`
+3. Display each name and its session ID
+4. Note which ones can be resumed with: `mcc <name>` (the methodical-cc helper, found in `tools/mcc`)
 
 ### `clear <name>`
 
 Remove a registered session.
 
-1. Read `.pdt/sessions`
-2. Remove the line matching the given name
-3. Write the file back
+1. Find the state directory
+2. Read `{state_dir}/sessions`
+3. Remove the line matching the given name
+4. Write the file back
 
 ### No arguments
 
@@ -43,7 +49,8 @@ Show usage: `set <name>`, `list`, `clear <name>`
 ## Sessions File Format
 
 ```
-design=c4b062d8-dd97-4ef8-a99c-19cb6416f991
+arch=c4b062d8-dd97-4ef8-a99c-19cb6416f991
+impl=f1904c21-8490-49ab-88ed-d4fc6295f80f
 ```
 
 Simple, one per line, no quoting needed. Names are freeform — the user picks whatever makes sense to them.
