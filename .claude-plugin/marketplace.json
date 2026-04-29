@@ -8,20 +8,26 @@
     {
       "name": "mam",
       "source": "./plugins/mam",
-      "description": "Multi-Agent Methodology - session-based Architect/Implementor workflow with persistent state and structured sprint artifacts",
-      "version": "2.1.5"
+      "description": "Multi-Agent Methodology - session-based Architect/Implementor workflow with persistent state, structured sprint artifacts, and bus-based crossover with PDT",
+      "version": "3.0.0"
     },
     {
       "name": "mama",
       "source": "./plugins/mama",
-      "description": "Multi-Agent Methodology with Agents - team-based workflow with direct user interaction and persistent working knowledge",
-      "version": "2.3.5"
+      "description": "Multi-Agent Methodology with Agents - team-based workflow with direct user interaction, persistent working knowledge, and bus-based crossover with PDT",
+      "version": "3.0.0"
     },
     {
       "name": "pdt",
       "source": "./plugins/pdt",
-      "description": "Product Design Thinking - Socratic design partner for pre-implementation product thinking, concept development, and documentation crystallization",
-      "version": "1.2.2"
+      "description": "Product Design Thinking - Socratic design partner for pre-implementation product thinking, concept development, documentation crystallization, and bus-based crossover with MAM/MAMA",
+      "version": "2.0.0"
+    },
+    {
+      "name": "bus",
+      "source": "./plugins/bus",
+      "description": "Peer messaging bus - connects PDT, Architect, Implementor, and UX Designer sessions for direct cross-session communication via Channels-based MCP, with chat-mode for lightweight exchanges and consult-mode for durable structured artifacts",
+      "version": "1.0.0"
     }
   ]
 }

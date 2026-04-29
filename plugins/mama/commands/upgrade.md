@@ -1,11 +1,11 @@
 ---
-description: Upgrade a project's MAMA artifacts to the current plugin version. Migrates state directories, sprint artifact layout, agent configurations, and organizational patterns. Safe to run multiple times — skips already-completed transitions.
+description: Upgrade a project's MAMA artifacts to the current plugin version. Migrates state directories, sprint artifact layout, agent configurations, organizational patterns, and methodology shifts. Safe to run multiple times — skips already-completed transitions.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
 # MAMA Upgrade
 
-You are the **Architect Agent**. This command upgrades a project's MAMA artifacts to match the current plugin version (2.0.0).
+You are the **Architect Agent**. This command upgrades a project's MAMA artifacts to match the current plugin version (3.0.0).
 
 Upgrades are **cumulative** — if a project is several versions behind, all intermediate transitions are applied in order. Each transition is **idempotent** — already-completed steps are skipped.
 
@@ -84,7 +84,40 @@ Apply each transition in order, skipping any that are already complete:
 
 ---
 
-*Future transitions (2.0.0 → 2.1.0, etc.) will be added here as the methodology evolves.*
+#### Transition: pre-3.0.0 → 3.0.0 — Crossover via the Bus
+
+**Conditions**: Apply this transition for any project whose `architect_state.md` shows version < 3.0.0 (or whose mental model predates the bus). This is a **methodology shift, not a state migration** — there are no on-disk changes required, but the agent's behavior should re-orient.
+
+**What changed.** PDT and MAMA used to communicate through discrete files in `docs/crossover/` (`commission_NNN_request.md`, `consult_NNN_request.md`, `debrief_NNN.md`), with the user as the manual courier between sessions. Starting in v3.0.0, that crossover happens over the **bus** plugin — a Channels-based MCP server that lets sessions message each other directly.
+
+**What still works.**
+- Existing flat crossover files remain valid history — readable, citable, part of the project's record. Don't delete or migrate them unless the user explicitly asks.
+- The conceptual structure — commissions, consults, debriefs — is unchanged.
+
+**What's different now.**
+- Sending: `/mama:consult-pdt`, `/mama:debrief-pdt`, and `/mama:commission-complete` now call `peer_send(to='pdt', mode='consult', ...)` instead of writing files
+- Receiving: when PDT sends a commission, you receive a `<channel from='pdt' mode='consult'>` notification automatically — no polling for files in `docs/crossover/`
+- Storage: new crossover lives in **thread directories** at `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` (one directory per ongoing thread, sequentially numbered turns)
+- Threading: each conversation has a sender-declared kebab-case `thread_id` (e.g. `consult-013-pref-storage-shape`); responses go on the same thread
+- Identity: you're addressable on the bus by your registered session name — set via `/mama:session set <name>` (typically `arch` or similar)
+
+**Action items for the user.**
+1. Install and enable the bus plugin if not already: `mcc bus setup` in this project's directory
+2. Register the Architect session's identity: `/mama:session set arch`
+3. Verify PDT's session has registered an identity too (typically `design`) — `peer_list` will show registered identities
+4. Note: Channels are in research preview — Claude Code must be launched with `--dangerously-load-development-channels plugin:bus@methodical-cc` for the bus to function
+
+**Reorientation cue for you (the agent).**
+- If your `architect_state.md` or `sprint_log.md` references the file-based pattern (e.g., notes about awaiting `consult_NNN_response.md`), that's legacy context. Your current behavior follows the bus protocol. When you next need to consult PDT, use `peer_send` rather than writing a crossover file directly.
+- If you find yourself about to write a `consult_NNN_request.md` file: stop. Use the bus. Old files stay where they are; new ones go through `peer_send`.
+- The `bus-protocol` skill (in the bus plugin) covers the full protocol. Read it if you need the full reference.
+
+**Step — Update version stamp**:
+- Update `architect_state.md` to reflect `MAMA Version: 3.0.0`
+
+---
+
+*Future transitions will be added here as the methodology evolves.*
 
 ---
 

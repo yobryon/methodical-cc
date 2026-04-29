@@ -271,12 +271,19 @@ When a project was designed using PDT (Product Design Thinking), the Architect w
 
 If `docs/architect_orientation.md` exists, the project was designed with PDT. The orientation is your guided entry point — it provides reading order, priorities, confidence assessments, and active commissions. Read it first during `arch-init`.
 
-### Crossover Channel
+### Crossover via the Bus
 
-PDT and MAM communicate through discrete files in `docs/crossover/`:
-- **Commissions** (PDT→MAM): `commission_NNN_request.md` / `commission_NNN_response.md` — PDT requests execution work (validation, prototyping, investigation). Check for open commissions during sprint prep.
-- **Consultations** (MAM→PDT): `consult_NNN_request.md` / `consult_NNN_response.md` — When you encounter a design flaw, ambiguity, or trade-off that needs the Design Partner's input, formalize the question via `consult-pdt`.
-- **Debriefs** (MAM→PDT): `debrief_NNN.md` — When you reach a milestone (MVP, phase completion, version release), report back to PDT via `debrief-pdt` with an assessment of how the design played out in practice.
+PDT and MAM communicate over the **bus** plugin — a Channels-based MCP server that lets sessions message each other directly. The bus must be installed and enabled in the project (`mcc bus setup`) and both sessions must have registered identities (via `/{plugin}:session set <name>`).
+
+Three categories of crossover, all going through `peer_send` with `mode='consult'`:
+
+- **Commissions** (PDT→Architect): PDT sends a commission via `peer_send(to='arch', mode='consult', artifact_type='commission', ...)`. The Architect receives it as a `<channel mode='consult' from='pdt'>` notification and acts on it. The artifact lives at `docs/crossover/{thread_id}/`. Check for active commission threads during sprint prep.
+- **Consultations** (Architect→PDT): Use `/mam:consult-pdt` when you hit a design flaw, ambiguity, or trade-off that needs PDT's input. The command composes a structured artifact and sends via `peer_send`. PDT responds on the same thread.
+- **Debriefs** (Architect→PDT): Use `/mam:debrief-pdt` when you reach a milestone (MVP, phase completion, version release). Same mechanism.
+
+All consult-mode messages produce **durable artifacts** in `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` — citable forever, separate from the ephemeral channel notification body. Threading is sender-declared kebab-case (e.g. `consult-013-pref-storage-shape`).
+
+Inbound `<channel>` notifications arrive automatically; no polling needed. The `bus-protocol` skill (in the bus plugin) covers full protocol details. If the bus isn't installed, fall back to discussing with the user about manual courier — but install the bus to remove that friction.
 
 ### Phase Transitions
 
@@ -290,7 +297,7 @@ PDT may update `docs/architect_orientation.md` with new priorities and reading g
 3. Write briefs that save time - good context reduces back-and-forth
 4. Read implementation logs carefully - reality often differs from plan
 5. Reconcile promptly - don't let sprints pile up
-6. Check the crossover folder during resume and sprint prep - PDT may have new commissions or orientation updates
+6. Check the SessionStart bus digest and `peer_list` for active threads - PDT may have sent commissions or there may be open consults awaiting your response
 7. Run architectural reviews periodically (every 5-10 sprints) - codebases fragment faster than you expect, and sprint-level reconciliation doesn't catch systemic drift
 8. Keep `.mam*/architect_state.md` current - it is your running memory across sessions
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains Claude Code plugins for structured product design and implementation workflows. Three plugins: PDT for pre-implementation product design thinking, MAM and MAMA for sprint-based implementation with distinct Architect and Implementor roles.
+This repository contains Claude Code plugins for structured product design and implementation workflows. Four plugins: PDT for pre-implementation product design thinking, MAM and MAMA for sprint-based implementation with distinct Architect and Implementor roles, and Bus for peer messaging across Claude Code sessions (eliminates user-as-courier between PDT and MAM/MAMA).
 
 ## Plugin Structure
 
@@ -13,7 +13,7 @@ This plugin follows the Claude Code plugin specification:
 ```
 methodical-cc/
 ├── .claude-plugin/
-│   └── marketplace.json         # Marketplace advertising all three plugins
+│   └── marketplace.json         # Marketplace advertising all four plugins
 ├── plugins/
 │   ├── pdt/                     # Product Design Thinking
 │   │   ├── .claude-plugin/
@@ -29,23 +29,30 @@ methodical-cc/
 │   │   ├── agents/
 │   │   │   └── ux-designer/
 │   │   └── hooks/
-│   └── mama/                    # Team-based implementation
+│   ├── mama/                    # Team-based implementation
+│   │   ├── .claude-plugin/
+│   │   │   └── plugin.json
+│   │   ├── skills/
+│   │   ├── commands/
+│   │   ├── agents/
+│   │   │   ├── ux-designer/     # UX Designer teammate definition
+│   │   │   └── implementor/     # Implementor teammate definition
+│   │   └── hooks/
+│   └── bus/                     # Peer messaging bus (Channels-based MCP)
 │       ├── .claude-plugin/
 │       │   └── plugin.json
+│       ├── server/              # FastMCP server + launcher
+│       ├── hooks/               # SessionStart hook for identity resolution
 │       ├── skills/
-│       ├── commands/
-│       ├── agents/
-│       │   ├── ux-designer/     # UX Designer teammate definition
-│       │   └── implementor/     # Implementor teammate definition
-│       └── hooks/
-├── tools/                       # Migration and utility scripts
+│       └── commands/
+├── tools/                       # Migration and utility scripts (mcc, etc.)
 ├── docs/                        # Design-time documentation (not part of plugins)
 └── README.md
 ```
 
 **Critical**: `commands/`, `skills/`, `hooks/`, and `agents/` must be at the **plugin root**, NOT inside `.claude-plugin/`.
 
-## Three Plugin Variants
+## Four Plugin Variants
 
 ### PDT (Product Design Thinking)
 Pre-implementation product design workflow with a Socratic Design Partner.
@@ -68,6 +75,16 @@ Team-based workflow where Architect orchestrates Implementor and UX Designer as 
 - MAMA internal state kept in `.mama/` (or `.mama-{scope}/` for multi-product)
 - Sprint artifacts organized hierarchically: `docs/sprint/X/`
 - Requires agent teams feature enabled
+
+### Bus (Peer Messaging)
+Channels-based MCP server that lets PDT, Architect, Implementor, and UX Designer sessions message each other directly across plugins.
+- Replaces user-as-courier between PDT and MAM/MAMA workflows
+- Two modes: `chat` (lightweight, ephemeral) and `consult` (durable, produces artifact in `docs/crossover/`)
+- Identity comes from existing session-name registry (`/{plugin}:session set <name>`)
+- Tools: `peer_send`, `peer_list`
+- Set up via `mcc bus setup`; launch Claude Code with `--dangerously-load-development-channels plugin:bus@methodical-cc` during channels research preview
+- Implemented in Python (FastMCP 2) with hybrid uv/venv dependency management
+- Full design at `docs/bus-design.md`
 
 ## Commands
 
@@ -208,5 +225,23 @@ Key commands prompt Claude to read relevant files before proceeding:
 ## Development Notes
 
 - The `docs/` directory contains the original design documents from the design session (kept for reference)
-- Plugin names are `pdt`, `mam`, and `mama` for brevity, so commands are invoked as `/pdt:init`, `/mam:arch-init`, `/mama:arch-init` etc.
+- Plugin names are `pdt`, `mam`, `mama`, and `bus` for brevity, so commands are invoked as `/pdt:init`, `/mam:arch-init`, `/mama:arch-init`, `/bus:status`, etc.
 - To test changes, restart Claude Code with `claude --plugin-dir ./`
+
+## Contributing — One-Time Setup
+
+The bus plugin includes a Node MCP server that's shipped as a pre-built bundle (`plugins/bus/server/server.bundle.js`) so users don't need to run `npm install`. To work on the bus server source, do this once per clone:
+
+```bash
+# Enable the committed git hooks (so the bundle stays in sync with source)
+git config core.hooksPath tools/git-hooks
+
+# Install dev dependencies for the bus server (needed for the pre-commit hook)
+cd plugins/bus/server
+npm install
+cd -
+```
+
+After that, the `pre-commit` hook detects when you've changed bus server source and rebuilds the bundle automatically before each commit (skipping commits that don't touch that area). To bypass in an emergency: `git commit --no-verify`. To rebuild manually: `cd plugins/bus/server && npm run build`.
+
+This setup is for **repo contributors only** — end users who just install the plugin from the marketplace get the pre-built bundle and never see Node tooling.

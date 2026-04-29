@@ -1,21 +1,24 @@
 ---
-description: Report results of a PDT commission. Read the original commission request, write a response with findings, and update the commission status.
+description: Send results of a PDT commission via the bus. Read the original commission, compose findings, and reply on the same thread.
 allowed-tools: Read, Write, Edit, Glob, Grep
 ---
 
 # Complete a PDT Commission
 
-You are the **Architect Agent**. You have completed work that PDT commissioned — validation, prototyping, investigation, or other execution work requested by the Design Partner. Your job is to report the results so PDT can incorporate them into the design.
+You are the **Architect Agent**. You have completed work that PDT commissioned — validation, prototyping, investigation, or other execution work requested by the Design Partner. Send the results back via the bus on the same thread.
+
+## Prerequisites
+
+- Bus enabled and PDT registered (verify with `peer_list` if unsure)
+- The original commission was received as a `<channel mode='consult'>` message earlier; its artifact lives at `docs/crossover/{thread_id}/`
 
 ## Your Task
 
-### 1. Read the Commission
+### 1. Locate the Commission
 
-If the user specifies a commission number, read `docs/crossover/commission_NNN_request.md`.
+If the user specifies a thread ID, look at `docs/crossover/{thread_id}/`. If not, scan `docs/crossover/` for thread directories with `commission` in the name and a `.bus-state.json` showing `status: open` and you in `participants`. Present them to the user; let them choose.
 
-If not specified, check `docs/crossover/` for commissions with status `open` or `in-progress` and present them to the user. Let them choose which to complete.
-
-Review the commission carefully:
+Read the original commission artifact (the highest-numbered turn from PDT, typically `001-pdt-commission.md`):
 - What was requested?
 - What were the success criteria?
 - What constraints were specified?
@@ -29,22 +32,14 @@ Work with the user to compile the results:
 - What surprised you?
 - What are the implications for the design?
 
-If the work was done during a sprint, review the relevant implementation log for details.
+If the work was done during a sprint, review the relevant implementation log.
 
-### 3. Write the Commission Response
+### 3. Compose the Response and Send via Bus
 
-Create `docs/crossover/commission_NNN_response.md` with this structure:
+Compose the **artifact body** using this structure:
 
 ```markdown
----
-id: commission-NNN
-date: YYYY-MM-DD
-status: resolved
-references: [commission_NNN_request.md]
-summary: One-line summary of the findings
----
-
-# Commission NNN Response: [Title]
+# Commission Response: [Title]
 
 ## What Was Requested
 
@@ -52,7 +47,7 @@ summary: One-line summary of the findings
 
 ## What We Did
 
-[Description of the approach taken. What was built, tested, or investigated. Enough detail for PDT to understand the methodology.]
+[Description of the approach taken. What was built, tested, or investigated.]
 
 ## Findings
 
@@ -60,7 +55,7 @@ summary: One-line summary of the findings
 
 ## Design Implications
 
-[What these findings mean for the design. Does the design hold up? Does it need adjustment? Are there new constraints or possibilities the Design Partner should know about?]
+[What these findings mean for the design. Does it hold up? Does it need adjustment? Are there new constraints or possibilities?]
 
 ## Recommendations
 
@@ -71,25 +66,41 @@ summary: One-line summary of the findings
 [If the commission produced code, prototypes, or other artifacts, note where they are and their status (keep/discard/iterate).]
 ```
 
-### 4. Update the Commission Request Status
+Compose a short **body** (channel-notification framing):
 
-Edit `docs/crossover/commission_NNN_request.md` to change the status from `open` (or `in-progress`) to `resolved`.
+```
+PDT — commission-013-validation results. Headline: prototype validated approach A; approach B fails at expected scale. See artifact for findings, design implications, and my recommendation. Closing the thread with this response unless you want to dig further.
+```
 
-### 5. Confirm
+Then call `peer_send` on the **same thread**, with `close=true` if this is the final response and no further back-and-forth is expected:
 
-Present the response to the user:
-- Summarize the findings
-- Note design implications
-- Remind them to take this to the PDT session if the findings affect the design
+```
+peer_send(
+  to="pdt",
+  body="<the framing above>",
+  mode="consult",
+  thread_id="commission-013-validation",  # SAME thread as the original commission
+  artifact_body="<the structured response above>",
+  artifact_type="response",
+  close=True  # set to false if you expect follow-up
+)
+```
+
+### 4. Confirm
+
+Tell the user:
+- Summarize what you sent
+- Note the thread is closed (or not, if you left it open for follow-up)
+- The artifact landed at `docs/crossover/{thread_id}/{NNN}-arch-response.md`
 
 ## Your Posture
 
 Be thorough and honest. PDT is waiting on these results to make design decisions. If the prototype failed, that is valuable information — do not soften it. If the investigation raised more questions than it answered, say so and suggest what would help. PDT needs truth, not optimism.
 
-Include your recommendations. You have implementation context that PDT does not. Your perspective on what the findings mean for buildability, performance, maintenance, and architecture is exactly what PDT needs to make good design decisions.
+Include your recommendations. You have implementation context PDT does not. Your perspective on buildability, performance, maintenance, and architecture is exactly what PDT needs to make good design decisions.
 
 ## Begin
 
-Read the commission request, gather results with the user, then write the response. Be thorough — this crosses a session boundary.
+Locate the commission, gather results with the user, then compose and send the response on the same thread.
 
 $ARGUMENTS
