@@ -15,9 +15,12 @@ Usage:
   mcc enable <plugin>              Enable plugin (pdt|mam|mama|bus) in current project
   mcc disable <plugin>             Disable plugin (pdt|mam|mama|bus) in current project
   mcc switch <target>              Swap impl plugin: mam | mama | off (leaves pdt alone)
-  mcc team setup                   Explicitly create/update the bus team config
-                                   for the current project (also runs implicitly
-                                   on every `mcc <name>` and `mcc create <name>`)
+  mcc team setup [--name <name>]   Explicitly create/update the bus team config
+                                   for the current project (interactive prompt
+                                   for the team name, default = dirname; pass
+                                   --name to skip the prompt). Also runs
+                                   implicitly on every `mcc <name>` and
+                                   `mcc create <name>`.
   mcc team status                  Show the project's bus team state
   mcc migrate                      Consolidate legacy .mam/.mama/.pdt[-scope]/
                                    state directories into .mcc[-scope]/
@@ -41,7 +44,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.2.0"
+MCC_VERSION = "1.3.0"
 
 import json
 import time
@@ -230,13 +233,58 @@ def warn_if_target_not_on_path(target_dir):
 
 # ----------------------------- Team management -----------------------------
 
-def derive_team_name(cwd=None):
-    """Team name = sanitized repo basename. Lowercase, replace dots/spaces with dashes."""
-    cwd = cwd or Path.cwd()
+def _compute_default_team_name(cwd):
+    """Default team name = sanitized repo basename. Lowercase, replace non-alnum with dashes."""
     base = cwd.name
-    # Sanitize: lowercase, replace non-alphanumeric (except - and _) with -
     sanitized = re.sub(r"[^a-zA-Z0-9_-]+", "-", base).lower().strip("-")
     return sanitized or "project"
+
+
+def _team_name_file(cwd=None):
+    """Persisted team-name lives at <project>/.mcc/team-name regardless of scoping.
+    A project's team is a single thing even if state is split across .mcc-{scope}/ dirs."""
+    cwd = cwd or Path.cwd()
+    return cwd / ".mcc" / "team-name"
+
+
+def _load_persisted_team_name(cwd=None):
+    """Read the team name from .mcc/team-name. Returns None if not set."""
+    f = _team_name_file(cwd)
+    if not f.exists():
+        return None
+    name = f.read_text().strip()
+    return name or None
+
+
+def _persist_team_name(name, cwd=None):
+    """Write team name to .mcc/team-name, creating .mcc/ if needed."""
+    f = _team_name_file(cwd)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(name + "\n")
+
+
+def _passive_upgrade_team_name(cwd=None):
+    """If no persisted team name yet but a team config exists at the dirname-derived
+    name, silently persist that default so future renames are explicit. Idempotent."""
+    cwd = cwd or Path.cwd()
+    if _load_persisted_team_name(cwd) is not None:
+        return  # already persisted
+    default = _compute_default_team_name(cwd)
+    if (TEAMS_ROOT / default / "config.json").exists():
+        _persist_team_name(default, cwd)
+
+
+def derive_team_name(cwd=None):
+    """Resolve the team name for the current project.
+
+    Order: persisted (.mcc/team-name) → dirname-derived default. The persisted
+    file is the source of truth once set; before that, the dirname is used.
+    """
+    cwd = cwd or Path.cwd()
+    persisted = _load_persisted_team_name(cwd)
+    if persisted:
+        return persisted
+    return _compute_default_team_name(cwd)
 
 
 def team_dir(team_name):
@@ -307,6 +355,10 @@ def ensure_team_setup(verbose=False):
     Returns the team_name. Safe to call repeatedly. Logs only when changes happen
     (or always, when verbose=True).
     """
+    # Passive upgrade: if a team was set up before the persisted-name feature,
+    # snapshot its dirname-derived name into .mcc/team-name so subsequent runs
+    # are stable even if the user later renames the directory.
+    _passive_upgrade_team_name()
     team_name = derive_team_name()
     config = read_team_config(team_name)
     cwd = Path.cwd().resolve()
@@ -389,9 +441,62 @@ def cmd_team(argv):
 
 
 def cmd_team_setup(argv):
+    """Interactive: prompt for team name (default = persisted or dirname).
+    Non-interactive: `mcc team setup --name <name>` skips the prompt."""
     print("Bus team setup")
     print("==============")
     print()
+
+    # Parse --name flag for non-interactive use
+    explicit_name = None
+    rest = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--name" and i + 1 < len(argv):
+            explicit_name = argv[i + 1]
+            i += 2
+        else:
+            rest.append(argv[i])
+            i += 1
+    if rest:
+        die(f"unknown args to `team setup`: {' '.join(rest)}")
+
+    # Run passive upgrade first so a pre-existing team gets its name persisted
+    # before we ask the user about it
+    _passive_upgrade_team_name()
+    current = _load_persisted_team_name()
+    default = current or _compute_default_team_name(Path.cwd())
+
+    if explicit_name:
+        chosen = explicit_name.strip()
+    else:
+        chosen = prompt("Team name", default=default).strip()
+    chosen = re.sub(r"[^a-zA-Z0-9_-]+", "-", chosen).lower().strip("-")
+    if not chosen:
+        die("team name cannot be empty")
+
+    if current and chosen != current:
+        # User wants to rename. Offer to move the existing team dir if it
+        # exists at the old name.
+        old_dir = TEAMS_ROOT / current
+        new_dir = TEAMS_ROOT / chosen
+        if old_dir.exists():
+            print()
+            print(f"Renaming team '{current}' → '{chosen}'.")
+            print(f"  Existing team dir: {old_dir}")
+            if new_dir.exists():
+                die(f"target {new_dir} already exists; refusing to overwrite")
+            if not confirm(f"Move team dir to {new_dir}?", default=True):
+                die("rename aborted")
+            shutil.move(str(old_dir), str(new_dir))
+            print(f"  ✓ moved to {new_dir}")
+            print(f"  (Open sessions still hold the old --team-name flag in memory; "
+                  f"`mcc <name>` to relaunch them under the new name.)")
+
+    _persist_team_name(chosen)
+    print(f"Persisted team name: {chosen} (in {_team_name_file()})")
+    print()
+
     team_name = ensure_team_setup(verbose=True)
     config = read_team_config(team_name)
     print()

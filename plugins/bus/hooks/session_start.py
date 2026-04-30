@@ -62,6 +62,12 @@ def resolve_identity(session_id, root: Path):
 
 
 def derive_team_name(cwd: Path) -> str:
+    """Resolve the team name. Order: persisted .mcc/team-name → dirname-derived default."""
+    persisted = cwd / ".mcc" / "team-name"
+    if persisted.exists():
+        name = persisted.read_text().strip()
+        if name:
+            return name
     base = cwd.name
     sanitized = re.sub(r"[^a-zA-Z0-9_-]+", "-", base).lower().strip("-")
     return sanitized or "project"
