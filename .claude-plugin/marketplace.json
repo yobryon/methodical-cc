@@ -27,7 +27,7 @@
       "name": "bus",
       "source": "./plugins/bus",
       "description": "Peer messaging bus - connects PDT, Architect, Implementor, and UX Designer sessions for direct cross-session communication via Claude Code's agent-team mailbox protocol, with chat-mode for lightweight exchanges and consult-mode for durable structured artifacts",
-      "version": "1.0.0"
+      "version": "1.0.1"
     }
   ]
 }

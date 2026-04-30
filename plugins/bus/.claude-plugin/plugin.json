@@ -1,7 +1,7 @@
 {
   "name": "bus",
   "description": "Peer messaging bus for methodical-cc sessions. Coordinates cross-session communication between PDT, Architect, Implementor, and UX Designer using Claude Code's agent-team mailbox protocol — sessions in a project join the same team and message each other via SendMessage. Chat-mode for lightweight exchanges, consult-mode for durable structured artifacts.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "Bryon Williams"
   }
