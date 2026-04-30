@@ -21,6 +21,9 @@ Usage:
   mcc team status                  Show the project's bus team state
   mcc migrate                      Consolidate legacy .mam/.mama/.pdt[-scope]/
                                    state directories into .mcc[-scope]/
+  mcc vscode [<name>...] [--no-folder-open]
+                                   Bootstrap/update .vscode/tasks.json with
+                                   mcc session tasks (interactive if no names)
   mcc version                      Show mcc version
   mcc help                         Show this help
 
@@ -38,7 +41,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.1.2"
+MCC_VERSION = "1.2.0"
 
 import json
 import time
@@ -551,6 +554,158 @@ def cmd_migrate(argv):
     print("Next: in each session, run `/<plugin>:upgrade` to refresh the agent's mental model.")
 
 
+# ----------------------------- VS Code integration -----------------------------
+
+def collect_all_registered_sessions():
+    """Return ordered list of unique session names across all .mcc[-scope]/sessions files."""
+    names = []
+    seen = set()
+    for d in find_state_dirs():
+        sf = d / "sessions"
+        if not sf.exists():
+            continue
+        for line in sf.read_text().splitlines():
+            line = line.strip()
+            if not line or "=" not in line:
+                continue
+            n = line.split("=", 1)[0].strip()
+            if n and n not in seen:
+                seen.add(n)
+                names.append(n)
+    return names
+
+
+def _strip_jsonc_comments(text):
+    """Strip // line comments and /* */ block comments so plain json.loads can parse JSONC.
+    Conservative — respects string literals when scanning for //."""
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    out_lines = []
+    for line in text.splitlines():
+        in_str = False
+        cut_at = None
+        i = 0
+        while i < len(line):
+            c = line[i]
+            if c == '"' and (i == 0 or line[i - 1] != "\\"):
+                in_str = not in_str
+            elif not in_str and c == "/" and i + 1 < len(line) and line[i + 1] == "/":
+                cut_at = i
+                break
+            i += 1
+        out_lines.append(line if cut_at is None else line[:cut_at])
+    return "\n".join(out_lines)
+
+
+def _make_session_task(name):
+    return {
+        "label": f"mcc:{name}",
+        "type": "shell",
+        "command": f"mcc {name}",
+        "isBackground": True,
+        "presentation": {
+            "reveal": "always",
+            "panel": "dedicated",
+            "group": "personas",
+            "echo": False,
+            "showReuseMessage": False,
+        },
+        "problemMatcher": [],
+    }
+
+
+def _make_aggregator_task(names):
+    return {
+        "label": "mcc:all",
+        "dependsOn": [f"mcc:{n}" for n in names],
+        "dependsOrder": "parallel",
+        "runOptions": {"runOn": "folderOpen"},
+        "problemMatcher": [],
+    }
+
+
+def cmd_vscode(argv):
+    """Bootstrap or update .vscode/tasks.json with mcc session tasks."""
+    no_folder_open = False
+    names = []
+    for a in argv:
+        if a == "--no-folder-open":
+            no_folder_open = True
+        elif a.startswith("--"):
+            die(f"unknown flag: {a}")
+        else:
+            names.append(a)
+
+    registered = collect_all_registered_sessions()
+    if not registered:
+        die("no sessions registered in this project. Run `mcc create <name> ...` first.")
+
+    if not names:
+        # Interactive selection
+        print("Registered sessions in this project:")
+        for i, n in enumerate(registered, 1):
+            print(f"  {i}. {n}")
+        print()
+        raw = prompt("Which to include? (e.g. 1,2,3 or 'all')", default="all").strip().lower()
+        if raw == "all":
+            names = list(registered)
+        else:
+            try:
+                idxs = [int(x.strip()) for x in raw.split(",") if x.strip()]
+                names = [registered[i - 1] for i in idxs]
+            except (ValueError, IndexError):
+                die(f"invalid selection: {raw}")
+    else:
+        unknown = [n for n in names if n not in registered]
+        if unknown:
+            die(f"not registered: {', '.join(unknown)}. Run `mcc create <name>` first.")
+
+    if not names:
+        die("no sessions selected; nothing to do.")
+
+    new_mcc_tasks = [_make_session_task(n) for n in names]
+    if not no_folder_open:
+        new_mcc_tasks.append(_make_aggregator_task(names))
+
+    vscode_dir = Path(".vscode")
+    tasks_file = vscode_dir / "tasks.json"
+    config = {"version": "2.0.0", "tasks": []}
+    had_comments = False
+    if tasks_file.exists():
+        text = tasks_file.read_text()
+        if "//" in text or "/*" in text:
+            had_comments = True
+        try:
+            config = json.loads(_strip_jsonc_comments(text))
+        except json.JSONDecodeError as e:
+            die(f"could not parse {tasks_file}: {e}")
+        if not isinstance(config, dict):
+            die(f"{tasks_file} is not a JSON object; refusing to overwrite.")
+        if "tasks" not in config or not isinstance(config["tasks"], list):
+            config["tasks"] = []
+        if "version" not in config:
+            config["version"] = "2.0.0"
+
+    # Replace existing mcc:* tasks; preserve everything else
+    other_tasks = [
+        t for t in config["tasks"]
+        if not (isinstance(t, dict)
+                and isinstance(t.get("label"), str)
+                and t["label"].startswith("mcc:"))
+    ]
+    config["tasks"] = other_tasks + new_mcc_tasks
+
+    vscode_dir.mkdir(exist_ok=True)
+    tasks_file.write_text(json.dumps(config, indent=2) + "\n")
+
+    print(f"Wrote {tasks_file} with mcc tasks for: {', '.join(names)}")
+    if not no_folder_open:
+        print(f"  mcc:all will run automatically on folder open")
+    if had_comments:
+        print(f"  ! existing JSONC comments were dropped on write")
+    print()
+    print("In VS Code: Cmd/Ctrl+Shift+P → 'Tasks: Run Task' → mcc:all (or any individual mcc:<name>)")
+
+
 # ----------------------------- Commands -----------------------------
 
 def _team_launch_args(name, sid, team_name):
@@ -956,6 +1111,7 @@ HANDLERS = {
     "team": cmd_team,
     "create": cmd_create,
     "migrate": cmd_migrate,
+    "vscode": cmd_vscode,
     "version": cmd_version,
 }
 
