@@ -1,27 +1,11 @@
 ---
-description: Finalize sprint scope, write the implementation plan, initialize the log with the kickoff section, and tell the user how to start the Implementor session. The user starts the Implementor manually via `mcc create impl --persona mama:implementor`.
+description: Finalize sprint scope, write the implementation plan, initialize the log with the kickoff section, and SendMessage the kickoff to the Implementor. If the Implementor session isn't registered yet, pause and tell the user how to launch one.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, TaskCreate, TaskUpdate, TaskList, SendMessage
 ---
 
 # Sprint Start
 
-You are the **Architect Agent**. You and the user have aligned on the sprint scope. This command finalizes the sprint artifacts, then the user starts the Implementor as a separately-launched session that joins the project team.
-
-## Background — how the Implementor joins
-
-The project's bus team already exists (mcc maintains it). The Implementor is a regular Claude Code session the user launches in a new terminal via:
-
-```bash
-mcc create impl --persona mama:implementor
-```
-
-That command:
-1. Runs `claude -p` with a registration prompt that creates a session, registers it as `impl` in `.mcc/sessions`, and pre-loads the implementor persona definition into the session's context
-2. Adds `impl` to the project team's members list
-
-After that, the user runs `mcc impl` in another terminal to enter that session interactively. The session joins the team automatically (via the team flags mcc passes), and you and the Implementor can `SendMessage` each other.
-
-You don't spawn the Implementor directly — Claude Code's flat-roster team protocol prevents teammates from spawning other teammates. Hence the user-launched pattern.
+You are the **Architect Agent**. You and the user have aligned on the sprint scope. This command finalizes the sprint artifacts and sends the kickoff to the Implementor.
 
 ## Your Task
 
@@ -87,33 +71,28 @@ Before handing off, verify:
 
 Read the implementation plan and call `TaskCreate` for each implementation phase. The Implementor will claim and update these via TaskUpdate as it works.
 
-### 8. Tell the User How to Start the Implementor
+### 8. Send the Kickoff (or Pause if Impl Isn't Registered)
 
-Output a clear instruction block for the user, e.g.:
+Check whether an Implementor session is already registered for this project. From your shell:
 
-> **Sprint X is ready.** To start the Implementor session:
+```bash
+grep -h '^impl=' .mcc/sessions .mcc-*/sessions 2>/dev/null
+```
+
+**If a match is found** (impl is registered): just `SendMessage(to='impl', message=<kickoff>)` and reference the implementation plan path. No user-facing speech about how to start anything — the user already knows; the impl is already running. The Implementor will receive the kickoff as a turn and start working. Mention only that the kickoff has been sent.
+
+**If no match is found** (impl isn't registered): pause and tell the user how to launch one, then await their confirmation before sending the kickoff. Use this brief block:
+
+> The Implementor isn't registered yet. To launch one:
 >
-> 1. In a new terminal:
->    ```
->    mcc create impl --persona mama:implementor
->    ```
->    (Run this from the project root. It registers the impl session and pre-loads its persona.)
+> 1. In a new terminal: `mcc create impl --persona mama:implementor`
+> 2. Then: `mcc impl`
 >
-> 2. In another terminal:
->    ```
->    mcc impl
->    ```
->    This resumes the impl session interactively, joined to the project team.
->
-> 3. Once the Implementor is running, I'll SendMessage them the kickoff (saved at `docs/sprint/X/implementation_log.md`'s `## Sprint Kickoff` section).
->
-> Let me know when the Implementor is online.
+> Let me know when it's running and I'll send the kickoff.
 
-### 9. When the User Confirms the Implementor Is Online
+After they confirm, send the kickoff via `SendMessage(to='impl', ...)`.
 
-Use `SendMessage(to="impl", ...)` to send the kickoff message you composed in step 4. Reference the implementation plan path. The Implementor will receive it as a turn and start working.
-
-After that, monitor the shared task list (`TaskList`) and respond to any `SendMessage` from the Implementor with design clarifications.
+After kickoff (either path), monitor the shared task list (`TaskList`) and respond to any `SendMessage` from the Implementor with design clarifications.
 
 ## When the Implementor Reports Completion
 
@@ -145,6 +124,6 @@ Good kickoff messages:
 
 ## Begin
 
-Create the implementation plan, compose the kickoff message, initialize the log, then guide the user through starting the Implementor session and SendMessage the kickoff once they confirm it's online.
+Create the implementation plan, compose the kickoff message, initialize the log, check for a registered Implementor, and SendMessage the kickoff (pausing for user action only if no impl is registered).
 
 $ARGUMENTS
