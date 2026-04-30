@@ -38,7 +38,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.1.1"
+MCC_VERSION = "1.1.2"
 
 import json
 import time
@@ -554,12 +554,20 @@ def cmd_migrate(argv):
 # ----------------------------- Commands -----------------------------
 
 def _team_launch_args(name, sid, team_name):
-    """Build claude argv with team flags."""
+    """Build claude argv with team flags.
+
+    Note: --agent-id is stamped as "team-lead" for every session. This is a
+    workaround for Claude Code's current permission-gating logic, which routes
+    permission prompts to whichever agent matches the team-lead agentId. Our
+    real lead is a phantom (never running), so without this stamp permission
+    requests would have nowhere to land. The team config file itself is
+    untouched — only the launch flag is overridden.
+    """
     return [
         "claude", "-r", sid,
         "--team-name", team_name,
         "--agent-name", name,
-        "--agent-id", f"{name}@{team_name}",
+        "--agent-id", "team-lead",
     ]
 
 
