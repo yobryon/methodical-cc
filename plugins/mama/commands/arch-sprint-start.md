@@ -1,6 +1,6 @@
 ---
 description: Finalize sprint scope, write the implementation plan, initialize the log with the kickoff section, and SendMessage the kickoff to the Implementor. If the Implementor session isn't registered yet, pause and tell the user how to launch one.
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, TaskCreate, TaskUpdate, TaskList, SendMessage
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, SendMessage
 ---
 
 # Sprint Start
@@ -38,18 +38,26 @@ Write `docs/sprint/X/implementation_plan.md` (or scoped equivalent):
 
 ### 4. Compose the Kickoff Message
 
-Write the kickoff message you'll send to the Implementor once they're running. This is the orientation artifact.
+Write a **tight** kickoff. The plan is the source of truth; the persona is already loaded; the kickoff is a nudge, not a duplicate. Target: ~100–150 words plus the standing protocol pulse.
 
-A good kickoff message covers:
-- **Identity and sprint number**: "You are the Implementor for Sprint X."
-- **State directory path**: where `implementor_state.md` lives (e.g., `.mcc/` or `.mcc-backend/`)
-- **Reading order**: state doc first (if exists), then plan, then log
-- **Why this sprint matters**: 1–2 sentences of framing
-- **Sprint-specific patterns or constraints**: curated subset of CLAUDE.md patterns plus user-aligned decisions
-- **Communication norms**: when to message you back vs proceed independently
-- **Exit conditions**: what "done" looks like
+**Sprint-specific content (the part that varies per sprint):**
+- Identity and sprint number ("You're impl for Sprint X.")
+- Plan path: `docs/sprint/X/implementation_plan.md` (or scoped equivalent)
+- State doc path: `.mcc/implementor_state.md` (or scoped) — read it first if it exists
+- 2–3 sprint-specific things to know — gotchas, conventions for *this* sprint, decisions from the discussion that aren't yet in the plan
+- 1 sentence of "why this sprint matters" if it's non-obvious
 
-Aim for substantive but tight — a few hundred words.
+**Standing protocol pulse (paste verbatim every sprint — survives compaction drift):**
+
+```
+Protocol reminders:
+- Bus is the channel. Use SendMessage; never write courier files.
+- Tag substantive messages: [HANDOFF] when you finish, [CONSULT] for design questions.
+- Default to proceeding. Message arch on real ambiguity or scope-changing discovery.
+- Exit conditions live in the plan; finalize via /mama:impl-end at the end.
+```
+
+That's the whole kickoff. Don't restate the persona, don't summarize the plan, don't list every pattern from CLAUDE.md — they're already loaded.
 
 ### 5. Initialize Implementation Log with Kickoff Section
 
@@ -62,16 +70,12 @@ The kickoff section is the durable record of how this sprint was framed.
 Before handing off, verify:
 - [ ] Implementation plan covers all agreed scope
 - [ ] Phases are logical and appropriately sized
-- [ ] Kickoff message provides sufficient orientation (rationale, patterns, constraints, exit conditions)
+- [ ] Kickoff message is tight (sprint-specific content + standing protocol pulse) — no plan/persona restatement
 - [ ] Log initialized with kickoff section containing the kickoff message
 - [ ] All relevant deltas are referenced in the plan
 - [ ] Sprint directory created at the correct path
 
-### 7. Create Phase Tasks
-
-Read the implementation plan and call `TaskCreate` for each implementation phase. The Implementor will claim and update these via TaskUpdate as it works.
-
-### 8. Send the Kickoff (or Pause if Impl Isn't Registered)
+### 7. Send the Kickoff (or Pause if Impl Isn't Registered)
 
 Check whether an Implementor session is already registered for this project. From your shell:
 
@@ -92,7 +96,7 @@ grep -h '^impl=' .mcc/sessions .mcc-*/sessions 2>/dev/null
 
 After they confirm, send the kickoff via `SendMessage(to='impl', ...)`.
 
-After kickoff (either path), monitor the shared task list (`TaskList`) and respond to any `SendMessage` from the Implementor with design clarifications.
+After kickoff (either path), respond to any `SendMessage` from the Implementor with design clarifications. The Implementor maintains its own progress record in the implementation log's Phase Progress table; trust that as the source of truth.
 
 ## When the Implementor Reports Completion
 
@@ -114,16 +118,15 @@ Good implementation plans:
 ## Kickoff Message Guidelines
 
 Good kickoff messages:
-- Lead with identity and sprint context
-- Direct the Implementor's reading order explicitly (state doc → plan → log)
-- Carry the rationale ("why this sprint matters") in 1–2 sentences
-- List sprint-specific patterns or constraints — curated, not exhaustive
-- Set communication expectations (when to message back, when to proceed)
-- Define what "done" looks like
-- Are substantive but tight — a few hundred words
+- Are short. ~100–150 words of sprint-specific content plus the standing protocol pulse.
+- Trust the loaded context. Persona is loaded. CLAUDE.md is loaded. The plan exists. Don't restate.
+- Lead with identity, sprint number, and the two paths the Implementor needs (plan, state doc).
+- Highlight 2–3 sprint-specific gotchas or conventions — the things that aren't already covered.
+- Always include the protocol pulse verbatim. It survives compaction drift in long-running projects.
+- Skip everything else. If you're tempted to add more, ask: would the Implementor make a wrong call without this? If no, leave it out.
 
 ## Begin
 
-Create the implementation plan, compose the kickoff message, initialize the log, check for a registered Implementor, and SendMessage the kickoff (pausing for user action only if no impl is registered).
+Create the implementation plan, compose a tight kickoff (sprint-specific content + standing protocol pulse), initialize the log, check for a registered Implementor, and SendMessage the kickoff (pausing for user action only if no impl is registered).
 
 $ARGUMENTS

@@ -15,7 +15,7 @@
       "name": "mama",
       "source": "./plugins/mama",
       "description": "Multi-Agent Methodology with Agents - team-based workflow with direct user interaction, persistent working knowledge, and bus-based crossover with PDT",
-      "version": "3.0.2"
+      "version": "3.1.0"
     },
     {
       "name": "pdt",
@@ -27,7 +27,7 @@
       "name": "bus",
       "source": "./plugins/bus",
       "description": "Peer messaging bus - connects PDT, Architect, Implementor, and UX Designer sessions for direct cross-session communication via Claude Code's agent-team mailbox protocol, with chat-mode for lightweight exchanges and consult-mode for durable structured artifacts",
-      "version": "1.0.1"
+      "version": "1.0.2"
     }
   ]
 }

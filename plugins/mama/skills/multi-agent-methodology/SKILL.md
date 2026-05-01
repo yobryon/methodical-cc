@@ -41,7 +41,7 @@ Claude Code's flat-roster team protocol prevents teammates from spawning teammat
 - The **user owns each session's lifecycle** — they can switch terminals, resume independently, and shut down cleanly without orchestration from the Architect
 - Each session has its own **full context window** and can be paused/resumed across days
 - Sessions communicate via the standard `SendMessage` tool — Claude Code's harness polls each mailbox once a second and delivers messages as turns automatically
-- A **shared task list** still provides live visibility into sprint progress
+- The implementation log's **Phase Progress table** is the durable record of sprint progress (the Implementor maintains it)
 - The user can interact with the Implementor directly in its own terminal — no proxying through the Architect
 
 ### Team Lifecycle
@@ -117,7 +117,7 @@ The Implementor executes. Focused on code, not design decisions.
 - Execute phases in order
 - Maintain an implementation log with decisions, discoveries, bugs/fixes, and reflections
 - Communicate with the Architect when genuine questions arise
-- Update the shared task list as phases are completed
+- Update the Phase Progress table in the implementation log as phases are completed (and optionally use `TaskCreate` for your own private todos if helpful)
 - Report completion status with honest reflection on what went well and what didn't
 - Write/update the implementor state document at sprint end
 
@@ -266,16 +266,23 @@ This hierarchical organization keeps sprint artifacts grouped and prevents `docs
 
 **Key Rule:** The Implementor owns the log. The Architect reads it but doesn't edit it.
 
-**Sprint Kickoff (the spawn prompt, recorded in the log):**
-- Identity and sprint context ("You are the Implementor for Sprint X")
-- State directory path (e.g., `.mcc/` or `.mcc-backend/`)
-- Reading order: state doc → plan → log
-- Why this sprint matters (1–2 sentences of rationale)
-- Sprint-specific patterns or constraints (curated from CLAUDE.md, plus decisions from the discussion)
-- Communication norms (when to message back, when to proceed independently)
-- Exit conditions (what "done" looks like)
+**Sprint Kickoff (the prompt, recorded in the log):**
 
-The spawn prompt is the orientation contract. It's substantive but tight (a few hundred words), and it's the durable record of how the sprint was framed — useful for retrospectives many sprints later.
+Two parts: sprint-specific content + a standing protocol pulse.
+
+*Sprint-specific (varies):*
+- Identity and sprint number
+- Plan path and state doc path
+- 2–3 sprint-specific gotchas or conventions
+- 1 sentence of "why this sprint matters" if non-obvious
+
+*Standing protocol pulse (paste verbatim every sprint):*
+- Bus is the channel — SendMessage, never courier files
+- Tag substantive messages: `[HANDOFF]`, `[CONSULT]`
+- Default to proceeding; message arch on real ambiguity
+- Finalize via `/mama:impl-end`; exit conditions live in the plan
+
+Target: ~100–150 words of sprint-specific content. The plan, persona, and CLAUDE.md are already loaded — the kickoff doesn't restate them. The protocol pulse is small and important: it's the per-sprint drumbeat that keeps long-running projects from drifting on bus conventions across compactions.
 
 ## The Sprint Lifecycle
 
@@ -321,13 +328,13 @@ A sprint is a coherent chunk of work with a clear outcome:
 - Converge on final sprint scope
 - Write implementation plan with phases
 - Compose the spawn prompt and record it as the `## Sprint Kickoff` section at the top of the implementation log
-- Create phase tasks in the shared task list
+- (Skip task creation — the Implementor manages its own progress in the implementation log's Phase Progress table)
 - Prompt the user to launch the Implementor session; once it's online, send the kickoff via `SendMessage(to='impl', ...)` (`arch-sprint-start`)
 - Output: Sprint artifacts in `docs/sprint/X/`, Implementor running in its own session
 
 **4. Implementation (Implementor Teammate)**
 - Implementor reads state + plan + log (kickoff section)
-- Executes phases in order, updating shared tasks as phases complete
+- Executes phases in order, updating the Phase Progress table in the log
 - Messages Architect when genuine questions arise
 - User may interact directly with feedback, nudges, test results
 - Maintains implementation log

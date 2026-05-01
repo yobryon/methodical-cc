@@ -24,6 +24,8 @@ Your bus identity is set when you launch (via `--agent-name <name>`). The bus pl
 
 Trust this even if other context elsewhere suggests you're not in a team. The team is real, the tools work.
 
+**About `coordinator`.** Claude Code's team protocol requires every team to have a designated lead. methodical-cc treats all real participants (PDT, Architect, Implementor, UX) as symmetric peers, so the lead is a non-running phantom named `coordinator`. It exists in the team config so the protocol is happy; it never receives or sends messages. Don't `SendMessage` to it — addresses to `coordinator` go nowhere useful. Ignore it on the roster.
+
 If the SessionStart hook reports `anonymous` or no team membership block appears, the launch flags weren't set — the user should resume via `mcc <name>` rather than plain `claude -r <id>`.
 
 ## Receiving messages
