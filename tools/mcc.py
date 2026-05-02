@@ -93,7 +93,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.6.0"
+MCC_VERSION = "1.6.1"
 
 import json
 import time
@@ -882,9 +882,20 @@ def cmd_vscode(argv):
 # Defensive throughout: malformed lines are skipped with a warning, missing
 # fields are treated as absent rather than crashing.
 
-CLAUDE_PROJECTS_ROOT = Path.home() / ".claude" / "projects"
+def _claude_config_dir():
+    """Honor CLAUDE_CONFIG_DIR env var (CC's `getClaudeConfigHomeDir`,
+    src/utils/envUtils.ts:7-14), falling back to ~/.claude. NFC-normalized
+    so non-ASCII paths match what CC actually wrote."""
+    import unicodedata
+    raw = os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
+    return Path(unicodedata.normalize("NFC", raw))
+
+
+CLAUDE_PROJECTS_ROOT = _claude_config_dir() / "projects"
 TRANSCRIPT_TYPES = {"user", "assistant", "attachment", "system"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+_SLUG_NON_ALNUM = re.compile(r"[^a-zA-Z0-9]")
+_MAX_SLUG_LEN = 200
 
 
 def _looks_like_uuid(s):
@@ -892,9 +903,23 @@ def _looks_like_uuid(s):
 
 
 def _project_slug_for_cwd(cwd=None):
-    """Mirror Claude Code's slug derivation: full absolute path with / replaced by -."""
+    """Mirror Claude Code's slug derivation (sessionStoragePortable.ts:311-319):
+    every non-alphanumeric character becomes '-'; if the result exceeds 200
+    chars, append a stable djb2-style hash of the original path. NFC-normalize
+    the cwd first so macOS decomposed-form paths match what CC wrote."""
+    import unicodedata
     cwd = (cwd or Path.cwd()).resolve()
-    return str(cwd).replace("/", "-")
+    name = unicodedata.normalize("NFC", str(cwd))
+    sanitized = _SLUG_NON_ALNUM.sub("-", name)
+    if len(sanitized) <= _MAX_SLUG_LEN:
+        return sanitized
+    # CC uses Bun.hash (wyhash) when available, else simpleHash. djb2 is good
+    # enough for our purposes — only used to disambiguate truncated long paths.
+    h = 5381
+    for ch in name:
+        h = ((h * 33) + ord(ch)) & 0xFFFFFFFF
+    suffix = format(h, "x")
+    return f"{sanitized[:_MAX_SLUG_LEN]}-{suffix}"
 
 
 def _find_jsonl(sid, cwd=None):
@@ -1470,14 +1495,36 @@ def _render_attachment(entry):
     return f"`[Attachment: {name}]`"
 
 
+def _detect_fork_origin(entries):
+    """If this session was created via `--fork-session`, every entry carries a
+    `forkedFrom: {sessionId, messageUuid}` back-pointer to the parent file
+    (src/commands/branch/branch.ts:122-146). Return (parent_sid, fork_msg_uuid)
+    if found, else (None, None). This is the only cross-file linkage in the
+    JSONL contract."""
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        ff = e.get("forkedFrom")
+        if isinstance(ff, dict) and ff.get("sessionId"):
+            return ff.get("sessionId"), ff.get("messageUuid")
+    return None, None
+
+
 def _render_compact_boundary(entry):
     cm = entry.get("compactMetadata") or {}
     trigger = cm.get("trigger", "?")
     pre = cm.get("preTokens", "?")
     n = cm.get("messagesSummarized", "?")
-    return (f"---\n\n"
-            f"*[Compaction — `{trigger}`, {pre} tokens, {n} messages summarized]*\n\n"
-            f"---")
+    user_ctx = (cm.get("userContext") or "").strip()
+    line = f"*[Compaction — `{trigger}`, {pre} tokens, {n} messages summarized"
+    if user_ctx:
+        # Inline user context (the `/compact <text>` text the user provided).
+        # Useful for reflection: "this is where I told it to focus on the
+        # auth-flow refactor going forward."
+        snippet = user_ctx if len(user_ctx) <= 200 else user_ctx[:197] + "..."
+        line += f"; user context: \"{snippet}\""
+    line += "]*"
+    return f"---\n\n{line}\n\n---"
 
 
 def _render_chain(chain, opts):
@@ -1560,7 +1607,8 @@ def _through_line_title(tl, max_len=80):
     return "(no preview)"
 
 
-def _render_through_line_files(through_lines, sid, label, jsonl_path, opts, out_dir):
+def _render_through_line_files(through_lines, sid, label, jsonl_path, opts, out_dir,
+                                fork_origin=None):
     """Render an index.md plus one through-line-NN.md per through-line.
     Returns list of (filename, num_entries_rendered) tuples."""
     total = len(through_lines)
@@ -1579,12 +1627,22 @@ def _render_through_line_files(through_lines, sid, label, jsonl_path, opts, out_
         f"- Through-lines: **{total}**",
         f"- Min divergence threshold: {opts.get('min_divergence')}",
         f"- Mode: per-through-line (one file per significant branch)",
+    ]
+    if fork_origin and fork_origin[0]:
+        parent_sid, fork_msg = fork_origin
+        if fork_msg:
+            idx_lines.append(
+                f"- **Forked from**: session `{parent_sid}` at message `{fork_msg}`"
+            )
+        else:
+            idx_lines.append(f"- **Forked from**: session `{parent_sid}`")
+    idx_lines.extend([
         "",
         "## Through-lines",
         "",
         "| # | File | Leaf time | Chain length | Unique entries | Forks | Title / preview |",
         "|---|------|-----------|--------------|----------------|-------|-----------------|",
-    ]
+    ])
     for i, tl in enumerate(through_lines):
         leaf = tl["leaf"]
         ts = leaf.get("timestamp", "")[:16].replace("T", " ")
@@ -1632,6 +1690,14 @@ def _render_through_line_files(through_lines, sid, label, jsonl_path, opts, out_
             f"- Fork points on this path: {len(tl.get('fork_points', []))}",
             f"- Index: [index.md](./index.md)",
         ]
+        if fork_origin and fork_origin[0]:
+            parent_sid, fork_msg = fork_origin
+            if fork_msg:
+                header_lines.append(
+                    f"- Forked from: session `{parent_sid}` at message `{fork_msg}`"
+                )
+            else:
+                header_lines.append(f"- Forked from: session `{parent_sid}`")
         if tl.get("fork_points"):
             related = sorted({fi for _, ois in tl["fork_points"] for fi in ois})
             related_files = [f"[{filenames[ri]}](./{filenames[ri]})"
@@ -2083,6 +2149,11 @@ def cmd_session_transcript(argv):
     # didn't go to Claude — /exit, /terminal-setup, /model, etc.).
     harness_uuids = _identify_harness_command_uuids(entries)
 
+    # Detect --fork-session origin (the only cross-file linkage in CC's JSONL
+    # contract). Surfaced in transcript headers so a fork file doesn't read
+    # like a standalone session.
+    fork_origin = _detect_fork_origin(entries)
+
     base_opts = {
         "include_thinking": include_thinking,
         "include_compact_summaries": include_compact_summaries,
@@ -2108,6 +2179,16 @@ def cmd_session_transcript(argv):
 
         body = _render_chain(chain, base_opts)
         now = time.strftime("%Y-%m-%d %H:%M:%S")
+        fork_line = ""
+        if fork_origin and fork_origin[0]:
+            parent_sid, fork_msg = fork_origin
+            if fork_msg:
+                fork_line = (
+                    f"- **Forked from**: session `{parent_sid}` "
+                    f"at message `{fork_msg}`\n"
+                )
+            else:
+                fork_line = f"- **Forked from**: session `{parent_sid}`\n"
         header = (
             f"# Transcript: {label}\n\n"
             f"- Session ID: `{sid}`\n"
@@ -2115,6 +2196,7 @@ def cmd_session_transcript(argv):
             f"- Generated: {now}\n"
             f"- Mode: {mode}\n"
             f"- Entries selected: {len(chain)}\n"
+            f"{fork_line}"
             f"- Options: thinking={include_thinking} "
             f"compact_summaries={include_compact_summaries} "
             f"meta={include_meta} "
@@ -2153,6 +2235,7 @@ def cmd_session_transcript(argv):
     base_opts["min_divergence"] = min_divergence
     results = _render_through_line_files(
         through_lines, sid, label, jsonl_path, base_opts, out_dir,
+        fork_origin=fork_origin,
     )
 
     print(f"Wrote {len(results)} through-line file(s) to {out_dir}/")
