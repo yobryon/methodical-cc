@@ -28,10 +28,14 @@ Usage:
                                    Bootstrap/update .vscode/tasks.json with
                                    mcc session tasks (interactive if no names)
   mcc session transcript <name|session-id> [--output <path>]
-                                  [--include-thinking] [--post-compact-only]
+                                  [--include-thinking] [--live-branch-only]
+                                  [--post-compact-only]
                                    Dump a session transcript to markdown.
-                                   Walks parentUuid through compactions to
-                                   produce the unbroken original conversation.
+                                   Default: chronological (all entries by
+                                   timestamp — captures full content even
+                                   when the file has disjoint subtrees).
+                                   --live-branch-only walks the parent chain
+                                   from the deepest leaf instead.
                                    Default output: tmp/transcript_*.md
   mcc version                      Show mcc version
   mcc help                         Show this help
@@ -877,9 +881,45 @@ def _parse_jsonl(path):
     return entries
 
 
-def _build_through_line(entries):
-    """Walk parentUuid from the most-recent live leaf back to root.
-    Returns ordered list (root first) or [] if no chain found."""
+def _select_chronological(entries):
+    """Return all transcript-type entries in timestamp order. Default mode.
+
+    Picks up everything the file knows about — including content from
+    disjoint subtrees that don't share a connected parentUuid chain (which
+    happens in long-running sessions resumed across breaks). The cost: when
+    a rewind has occurred, the abandoned branch appears inline alongside
+    the live continuation in time order. For research/reflection use that's
+    a feature — you can see the evolution of thought including roads not
+    taken — but `--live-branch-only` exposes the strict tree-walk view for
+    when only the resumable conversation matters."""
+    out = []
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        if e.get("type") not in TRANSCRIPT_TYPES:
+            continue
+        if e.get("isSidechain"):
+            continue
+        out.append(e)
+    out.sort(key=lambda e: e.get("timestamp", ""))
+    return out
+
+
+def _select_live_branch(entries):
+    """Walk back from the leaf of the longest live chain to its earliest root.
+    Returns ordered list (root first) or [] if no chain found.
+
+    Why longest chain instead of "most recent leaf by timestamp" (what claude
+    -r would do): a long-running session with rewinds and forks may contain
+    multiple disjoint subtrees. The most recent leaf can live on a stub fork
+    that doesn't reach the original conversation. Picking the leaf with the
+    longest chain gravitates to the main conversation thread, breaking ties
+    by timestamp so live work still wins among equal-length branches.
+
+    Caveat: when the file contains genuinely disjoint subtrees (sessions
+    resumed across breaks where parent chains don't reconnect), this only
+    returns ONE subtree — you'll miss content that lives in others. Default
+    mode (`_select_chronological`) covers that case."""
     msgs = {}
     for e in entries:
         if not isinstance(e, dict):
@@ -891,12 +931,15 @@ def _build_through_line(entries):
             continue
         msgs[u] = e
 
-    # Children set: any uuid that appears as another entry's parentUuid
+    # Children set: any uuid that's referenced as a parent (parentUuid OR
+    # logicalParentUuid — the latter carries the chain across compaction
+    # and other session-break boundaries)
     children = set()
     for e in msgs.values():
-        pid = e.get("parentUuid")
-        if pid:
-            children.add(pid)
+        for k in ("parentUuid", "logicalParentUuid"):
+            pid = e.get(k)
+            if pid:
+                children.add(pid)
 
     # Leaves: terminal user/assistant entries on the main thread
     leaves = [
@@ -908,8 +951,32 @@ def _build_through_line(entries):
     if not leaves:
         return []
 
-    # Most-recent live leaf — what `claude -r` would resume to
-    leaf = max(leaves, key=lambda m: m.get("timestamp", ""))
+    # Compute chain length for every msg (memoized DFS).
+    # Iterative form to avoid Python recursion limits on deep chains.
+    depth = {}
+    for start_uuid in msgs:
+        if start_uuid in depth:
+            continue
+        # Walk back collecting the path until we hit a known node or root
+        path = []
+        cur_uuid = start_uuid
+        guard = set()  # local cycle guard
+        while cur_uuid and cur_uuid not in depth and cur_uuid not in guard:
+            guard.add(cur_uuid)
+            msg = msgs.get(cur_uuid)
+            if not msg:
+                break
+            path.append(cur_uuid)
+            pid = msg.get("parentUuid") or msg.get("logicalParentUuid")
+            cur_uuid = pid if (pid and pid in msgs) else None
+        # Backfill depths along the path
+        base = depth.get(cur_uuid, 0) if cur_uuid else 0
+        for i, u in enumerate(reversed(path)):
+            depth[u] = base + i + 1
+
+    # Pick the leaf whose chain is deepest (most recent timestamp tiebreak)
+    leaf = max(leaves, key=lambda m: (depth.get(m["uuid"], 0),
+                                      m.get("timestamp", "")))
 
     # Walk parentUuid back (falling back to logicalParentUuid when parentUuid
     # is null — Claude Code nullifies parentUuid on session-break boundaries
@@ -1087,6 +1154,7 @@ def cmd_session_transcript(argv):
     output = None
     include_thinking = False
     post_compact_only = False
+    live_branch_only = False
     target = None
 
     i = 0
@@ -1101,6 +1169,9 @@ def cmd_session_transcript(argv):
         elif a == "--post-compact-only":
             post_compact_only = True
             i += 1
+        elif a == "--live-branch-only":
+            live_branch_only = True
+            i += 1
         elif a.startswith("--"):
             die(f"unknown flag: {a}")
         else:
@@ -1111,7 +1182,8 @@ def cmd_session_transcript(argv):
 
     if target is None:
         die("usage: mcc session transcript <name|session-id> "
-            "[--output <path>] [--include-thinking] [--post-compact-only]")
+            "[--output <path>] [--include-thinking] "
+            "[--live-branch-only] [--post-compact-only]")
 
     # Resolve session id
     if _looks_like_uuid(target):
@@ -1133,9 +1205,14 @@ def cmd_session_transcript(argv):
     if not entries:
         die(f"{jsonl_path} contained no parseable entries")
 
-    chain = _build_through_line(entries)
+    if live_branch_only:
+        chain = _select_live_branch(entries)
+        mode = "live-branch (depth-first tree walk)"
+    else:
+        chain = _select_chronological(entries)
+        mode = "chronological (all entries by timestamp)"
     if not chain:
-        die(f"no transcript chain found in {jsonl_path} (no live leaf?)")
+        die(f"no transcript entries found in {jsonl_path}")
 
     body = _render_chain(chain, {
         "include_thinking": include_thinking,
@@ -1150,8 +1227,10 @@ def cmd_session_transcript(argv):
         f"- Session ID: `{sid}`\n"
         f"- Source: `{jsonl_path}`\n"
         f"- Generated: {now}\n"
-        f"- Entries in chain: {len(chain)}\n"
-        f"- Options: thinking={include_thinking} post_compact_only={post_compact_only}\n\n"
+        f"- Mode: {mode}\n"
+        f"- Entries selected: {len(chain)}\n"
+        f"- Options: thinking={include_thinking} "
+        f"post_compact_only={post_compact_only}\n\n"
         f"---\n\n"
     )
 
