@@ -28,14 +28,20 @@ Usage:
                                    Bootstrap/update .vscode/tasks.json with
                                    mcc session tasks (interactive if no names)
   mcc session transcript <name|session-id> [--output <path>]
-                                  [--include-thinking] [--live-branch-only]
-                                  [--post-compact-only]
+                                  [--include-thinking]
+                                  [--include-compact-summaries]
+                                  [--include-meta]
+                                  [--live-branch-only] [--post-compact-only]
                                    Dump a session transcript to markdown.
                                    Default: chronological (all entries by
-                                   timestamp — captures full content even
-                                   when the file has disjoint subtrees).
+                                   timestamp). Suppresses post-compact
+                                   summary blocks and system-injected meta
+                                   content (slash command bodies, command
+                                   caveats); use the --include-* flags to
+                                   opt those back in for diagnostics.
                                    --live-branch-only walks the parent chain
-                                   from the deepest leaf instead.
+                                   from the deepest leaf instead of
+                                   chronological selection.
                                    Default output: tmp/transcript_*.md
   mcc version                      Show mcc version
   mcc help                         Show this help
@@ -1044,25 +1050,71 @@ def _tool_slug(block):
     return f"`[{name}]`"
 
 
-def _render_user(entry):
+_COMMAND_NAME_RE = re.compile(r"<command-name>([^<]*)</command-name>")
+_COMMAND_ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.DOTALL)
+# Older Claude Code versions emitted post-compact summary user messages
+# without the isCompactSummary flag. Content-based fallback uses the
+# canonical opening phrase, which is specific enough to not collide with
+# legitimate user content in practice.
+_COMPACT_SUMMARY_OPENING = (
+    "This session is being continued from a previous conversation "
+    "that ran out of context"
+)
+
+
+def _render_user(entry, opts):
+    # System-injected meta content — slash command bodies, local-command
+    # caveats, system reminders. The user didn't write any of these.
+    # Default skip; --include-meta opts in.
+    if entry.get("isMeta") and not opts.get("include_meta"):
+        return None
+
     msg = entry.get("message") or {}
     content = msg.get("content")
+
+    # Collapse content to a single text string (we still need to spot
+    # pure-tool_result plumbing messages and the slash-command markup)
+    text = None
     if isinstance(content, str):
-        s = content.strip()
-        return f"## User\n\n{s}" if s else None
-    if isinstance(content, list):
-        # Pure tool_result messages are plumbing — suppress
+        text = content
+    elif isinstance(content, list):
         if all(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
-            return None
-        text_parts = []
+            return None  # plumbing
+        parts = []
         for b in content:
             if isinstance(b, dict) and b.get("type") == "text":
                 t = (b.get("text") or "").strip()
                 if t:
-                    text_parts.append(t)
-        if text_parts:
-            return "## User\n\n" + "\n\n".join(text_parts)
-    return None
+                    parts.append(t)
+        text = "\n\n".join(parts) if parts else None
+    if not text or not text.strip():
+        return None
+
+    # Compaction summary — suppressed by default. The summary is the
+    # post-compact context the model needs but it isn't conversation; the
+    # boundary marker alone is enough. Detection uses the explicit flag
+    # OR the canonical opening phrase (older Claude Code versions didn't
+    # emit the flag).
+    if not opts.get("include_compact_summaries"):
+        if entry.get("isCompactSummary"):
+            return None
+        if _COMPACT_SUMMARY_OPENING in text:
+            return None
+
+    # Slash-command meta entries: <command-name>/foo</command-name> +
+    # <command-args>...</command-args>. Render cleanly so the verbose
+    # markup doesn't bury the actual user intent.
+    if "<command-name>" in text:
+        name_m = _COMMAND_NAME_RE.search(text)
+        args_m = _COMMAND_ARGS_RE.search(text)
+        cmd = name_m.group(1).strip() if name_m else "?"
+        cmd = cmd if cmd.startswith("/") else f"/{cmd}"
+        args = args_m.group(1).strip() if args_m else ""
+        if args:
+            return f"## User (slash command)\n\n`{cmd}` {args}"
+        return f"## User (slash command)\n\n`{cmd}`"
+
+    return f"## User\n\n{text.strip()}"
 
 
 def _render_assistant(entry, include_thinking):
@@ -1130,7 +1182,7 @@ def _render_chain(chain, opts):
                 rendered = _render_compact_boundary(e)
             # other system subtypes: skip
         elif t == "user":
-            rendered = _render_user(e)
+            rendered = _render_user(e, opts)
         elif t == "assistant":
             rendered = _render_assistant(e, opts.get("include_thinking", False))
         elif t == "attachment":
@@ -1153,6 +1205,8 @@ def cmd_session_transcript(argv):
     """Dump a session's transcript to markdown."""
     output = None
     include_thinking = False
+    include_compact_summaries = False
+    include_meta = False
     post_compact_only = False
     live_branch_only = False
     target = None
@@ -1165,6 +1219,12 @@ def cmd_session_transcript(argv):
             i += 2
         elif a == "--include-thinking":
             include_thinking = True
+            i += 1
+        elif a == "--include-compact-summaries":
+            include_compact_summaries = True
+            i += 1
+        elif a == "--include-meta":
+            include_meta = True
             i += 1
         elif a == "--post-compact-only":
             post_compact_only = True
@@ -1183,6 +1243,7 @@ def cmd_session_transcript(argv):
     if target is None:
         die("usage: mcc session transcript <name|session-id> "
             "[--output <path>] [--include-thinking] "
+            "[--include-compact-summaries] [--include-meta] "
             "[--live-branch-only] [--post-compact-only]")
 
     # Resolve session id
@@ -1216,6 +1277,8 @@ def cmd_session_transcript(argv):
 
     body = _render_chain(chain, {
         "include_thinking": include_thinking,
+        "include_compact_summaries": include_compact_summaries,
+        "include_meta": include_meta,
         "post_compact_only": post_compact_only,
     })
 
@@ -1230,6 +1293,8 @@ def cmd_session_transcript(argv):
         f"- Mode: {mode}\n"
         f"- Entries selected: {len(chain)}\n"
         f"- Options: thinking={include_thinking} "
+        f"compact_summaries={include_compact_summaries} "
+        f"meta={include_meta} "
         f"post_compact_only={post_compact_only}\n\n"
         f"---\n\n"
     )
