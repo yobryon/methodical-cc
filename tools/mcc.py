@@ -27,6 +27,12 @@ Usage:
   mcc vscode [<name>...] [--no-folder-open]
                                    Bootstrap/update .vscode/tasks.json with
                                    mcc session tasks (interactive if no names)
+  mcc session transcript <name|session-id> [--output <path>]
+                                  [--include-thinking] [--post-compact-only]
+                                   Dump a session transcript to markdown.
+                                   Walks parentUuid through compactions to
+                                   produce the unbroken original conversation.
+                                   Default output: tmp/transcript_*.md
   mcc version                      Show mcc version
   mcc help                         Show this help
 
@@ -44,7 +50,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.3.0"
+MCC_VERSION = "1.4.0"
 
 import json
 import time
@@ -811,6 +817,358 @@ def cmd_vscode(argv):
     print("In VS Code: Cmd/Ctrl+Shift+P → 'Tasks: Run Task' → mcc:all (or any individual mcc:<name>)")
 
 
+# ----------------------------- Session transcript -----------------------------
+#
+# Reads ~/.claude/projects/<slug>/<sid>.jsonl and renders a clean markdown
+# transcript by walking parentUuid from the most recent live leaf back to the
+# root, traversing through compaction boundaries (which leave pre-compact history
+# intact in the file). Tool calls render as compact slugs.
+#
+# Defensive throughout: malformed lines are skipped with a warning, missing
+# fields are treated as absent rather than crashing.
+
+CLAUDE_PROJECTS_ROOT = Path.home() / ".claude" / "projects"
+TRANSCRIPT_TYPES = {"user", "assistant", "attachment", "system"}
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+
+
+def _looks_like_uuid(s):
+    return bool(UUID_RE.match(s or ""))
+
+
+def _project_slug_for_cwd(cwd=None):
+    """Mirror Claude Code's slug derivation: full absolute path with / replaced by -."""
+    cwd = (cwd or Path.cwd()).resolve()
+    return str(cwd).replace("/", "-")
+
+
+def _find_jsonl(sid, cwd=None):
+    """Find the JSONL file for a session id. Try cwd-derived slug first, then glob."""
+    if not CLAUDE_PROJECTS_ROOT.exists():
+        return None
+    slug = _project_slug_for_cwd(cwd)
+    direct = CLAUDE_PROJECTS_ROOT / slug / f"{sid}.jsonl"
+    if direct.exists():
+        return direct
+    # Fallback: glob across all project dirs
+    for p in CLAUDE_PROJECTS_ROOT.glob(f"*/{sid}.jsonl"):
+        return p
+    return None
+
+
+def _parse_jsonl(path):
+    """Read JSONL, returning a list of parsed entries. Skips malformed lines."""
+    entries = []
+    skipped = 0
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    skipped += 1
+    except OSError as e:
+        die(f"could not read {path}: {e}")
+    if skipped:
+        print(f"  ! skipped {skipped} malformed line(s) in {path}", file=sys.stderr)
+    return entries
+
+
+def _build_through_line(entries):
+    """Walk parentUuid from the most-recent live leaf back to root.
+    Returns ordered list (root first) or [] if no chain found."""
+    msgs = {}
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        if e.get("type") not in TRANSCRIPT_TYPES:
+            continue
+        u = e.get("uuid")
+        if not u:
+            continue
+        msgs[u] = e
+
+    # Children set: any uuid that appears as another entry's parentUuid
+    children = set()
+    for e in msgs.values():
+        pid = e.get("parentUuid")
+        if pid:
+            children.add(pid)
+
+    # Leaves: terminal user/assistant entries on the main thread
+    leaves = [
+        m for m in msgs.values()
+        if m["uuid"] not in children
+        and m.get("type") in ("user", "assistant")
+        and not m.get("isSidechain", False)
+    ]
+    if not leaves:
+        return []
+
+    # Most-recent live leaf — what `claude -r` would resume to
+    leaf = max(leaves, key=lambda m: m.get("timestamp", ""))
+
+    # Walk parentUuid back (falling back to logicalParentUuid when parentUuid
+    # is null — Claude Code nullifies parentUuid on session-break boundaries
+    # like compact_boundary, but logicalParentUuid still points at the
+    # pre-boundary tail). Cycle protection is mandatory; otherwise a corrupt
+    # file could spin us forever.
+    chain = []
+    seen = set()
+    cur = leaf
+    while cur is not None:
+        u = cur.get("uuid")
+        if not u or u in seen:
+            if u in seen:
+                print(f"  ! cycle detected at {u}; truncating chain", file=sys.stderr)
+            break
+        seen.add(u)
+        chain.append(cur)
+        pid = cur.get("parentUuid") or cur.get("logicalParentUuid")
+        cur = msgs.get(pid) if pid else None
+
+    chain.reverse()
+    return chain
+
+
+def _tool_slug(block):
+    """Render a tool_use content block as a compact slug."""
+    name = block.get("name", "Tool")
+    inp = block.get("input") or {}
+    if not isinstance(inp, dict):
+        inp = {}
+
+    if name == "Bash":
+        cmd = (inp.get("command") or "").strip()
+        if len(cmd) > 80:
+            cmd = cmd[:77] + "..."
+        return f"`[Bash: {cmd}]`"
+    if name in ("Read", "Edit", "Write", "NotebookEdit"):
+        path = inp.get("file_path") or inp.get("notebook_path") or ""
+        base = path.rsplit("/", 1)[-1] if path else ""
+        return f"`[{name}: {base}]`"
+    if name in ("Glob", "Grep"):
+        pat = inp.get("pattern") or inp.get("query") or ""
+        return f"`[{name}: {pat}]`"
+    if name == "TodoWrite":
+        todos = inp.get("todos")
+        n = len(todos) if isinstance(todos, list) else "?"
+        return f"`[TodoWrite: {n} items]`"
+    if name in ("Task", "Agent"):
+        sub = inp.get("subagent_type") or inp.get("description") or ""
+        return f"`[Agent: {sub}]`"
+    if name == "SendMessage":
+        to = inp.get("to") or ""
+        return f"`[SendMessage → {to}]`"
+    if name == "WebFetch":
+        url = inp.get("url") or ""
+        return f"`[WebFetch: {url}]`"
+    if name == "WebSearch":
+        q = inp.get("query") or ""
+        return f"`[WebSearch: {q}]`"
+    if name.startswith("mcp__"):
+        parts = name.split("__", 2)
+        srv = parts[1] if len(parts) > 1 else ""
+        tool = parts[2] if len(parts) > 2 else ""
+        return f"`[mcp:{srv}/{tool}]`"
+    return f"`[{name}]`"
+
+
+def _render_user(entry):
+    msg = entry.get("message") or {}
+    content = msg.get("content")
+    if isinstance(content, str):
+        s = content.strip()
+        return f"## User\n\n{s}" if s else None
+    if isinstance(content, list):
+        # Pure tool_result messages are plumbing — suppress
+        if all(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+            return None
+        text_parts = []
+        for b in content:
+            if isinstance(b, dict) and b.get("type") == "text":
+                t = (b.get("text") or "").strip()
+                if t:
+                    text_parts.append(t)
+        if text_parts:
+            return "## User\n\n" + "\n\n".join(text_parts)
+    return None
+
+
+def _render_assistant(entry, include_thinking):
+    msg = entry.get("message") or {}
+    blocks = msg.get("content") or []
+    if not isinstance(blocks, list):
+        return None
+    parts = []
+    for b in blocks:
+        if not isinstance(b, dict):
+            continue
+        bt = b.get("type")
+        if bt == "text":
+            t = (b.get("text") or "").strip()
+            if t:
+                parts.append(t)
+        elif bt == "thinking" and include_thinking:
+            tk = (b.get("thinking") or "").strip()
+            if tk:
+                parts.append(f"*[thinking]*\n\n{tk}")
+        elif bt in ("tool_use", "server_tool_use", "mcp_tool_use"):
+            parts.append(_tool_slug(b))
+        # tool_result, redacted_thinking, web_search_tool_result, etc. — skip
+    if not parts:
+        return None
+    return "## Assistant\n\n" + "\n\n".join(parts)
+
+
+def _render_attachment(entry):
+    msg = entry.get("message") or {}
+    name = (msg.get("filename") or msg.get("name")
+            or msg.get("path") or "attachment")
+    return f"`[Attachment: {name}]`"
+
+
+def _render_compact_boundary(entry):
+    cm = entry.get("compactMetadata") or {}
+    trigger = cm.get("trigger", "?")
+    pre = cm.get("preTokens", "?")
+    n = cm.get("messagesSummarized", "?")
+    return (f"---\n\n"
+            f"*[Compaction — `{trigger}`, {pre} tokens, {n} messages summarized]*\n\n"
+            f"---")
+
+
+def _render_chain(chain, opts):
+    # Optional slice to post-most-recent-compact-boundary
+    if opts.get("post_compact_only"):
+        last_boundary = -1
+        for i, e in enumerate(chain):
+            if (e.get("type") == "system"
+                    and e.get("subtype") == "compact_boundary"):
+                last_boundary = i
+        if last_boundary >= 0:
+            chain = chain[last_boundary:]
+
+    out_parts = []
+    for e in chain:
+        if e.get("isSidechain"):
+            continue  # belt + suspenders; main JSONLs don't have these in current mode
+        t = e.get("type")
+        rendered = None
+        if t == "system":
+            if e.get("subtype") == "compact_boundary":
+                rendered = _render_compact_boundary(e)
+            # other system subtypes: skip
+        elif t == "user":
+            rendered = _render_user(e)
+        elif t == "assistant":
+            rendered = _render_assistant(e, opts.get("include_thinking", False))
+        elif t == "attachment":
+            rendered = _render_attachment(e)
+        if rendered:
+            out_parts.append(rendered)
+    return "\n\n".join(out_parts) + "\n"
+
+
+def cmd_session(argv):
+    if not argv:
+        die("usage: mcc session <transcript> ...")
+    sub = argv[0]
+    if sub == "transcript":
+        return cmd_session_transcript(argv[1:])
+    die(f"unknown session subcommand '{sub}' (expected: transcript)")
+
+
+def cmd_session_transcript(argv):
+    """Dump a session's transcript to markdown."""
+    output = None
+    include_thinking = False
+    post_compact_only = False
+    target = None
+
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--output" and i + 1 < len(argv):
+            output = argv[i + 1]
+            i += 2
+        elif a == "--include-thinking":
+            include_thinking = True
+            i += 1
+        elif a == "--post-compact-only":
+            post_compact_only = True
+            i += 1
+        elif a.startswith("--"):
+            die(f"unknown flag: {a}")
+        else:
+            if target is not None:
+                die(f"unexpected positional arg: {a}")
+            target = a
+            i += 1
+
+    if target is None:
+        die("usage: mcc session transcript <name|session-id> "
+            "[--output <path>] [--include-thinking] [--post-compact-only]")
+
+    # Resolve session id
+    if _looks_like_uuid(target):
+        sid = target
+        label = target
+    else:
+        sid, _src = find_session(target)
+        if not sid:
+            die(f"no session registered as '{target}' (and not a session-id UUID)")
+        label = target
+
+    # Locate JSONL
+    jsonl_path = _find_jsonl(sid)
+    if jsonl_path is None:
+        die(f"could not find JSONL for session {sid} under {CLAUDE_PROJECTS_ROOT}")
+
+    # Parse + walk
+    entries = _parse_jsonl(jsonl_path)
+    if not entries:
+        die(f"{jsonl_path} contained no parseable entries")
+
+    chain = _build_through_line(entries)
+    if not chain:
+        die(f"no transcript chain found in {jsonl_path} (no live leaf?)")
+
+    body = _render_chain(chain, {
+        "include_thinking": include_thinking,
+        "post_compact_only": post_compact_only,
+    })
+
+    # Header
+    short_sid = sid[:8]
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    header = (
+        f"# Transcript: {label}\n\n"
+        f"- Session ID: `{sid}`\n"
+        f"- Source: `{jsonl_path}`\n"
+        f"- Generated: {now}\n"
+        f"- Entries in chain: {len(chain)}\n"
+        f"- Options: thinking={include_thinking} post_compact_only={post_compact_only}\n\n"
+        f"---\n\n"
+    )
+
+    # Output path
+    if output:
+        out_path = Path(output)
+    else:
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        out_path = Path("tmp") / f"transcript_{label}_{short_sid}_{ts}.md"
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(header + body)
+
+    print(f"Wrote {out_path}")
+    print(f"  {len(chain)} entries from {jsonl_path}")
+
+
 # ----------------------------- Commands -----------------------------
 
 def _team_launch_args(name, sid, team_name):
@@ -1217,6 +1575,7 @@ HANDLERS = {
     "create": cmd_create,
     "migrate": cmd_migrate,
     "vscode": cmd_vscode,
+    "session": cmd_session,
     "version": cmd_version,
 }
 
