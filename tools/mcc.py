@@ -31,14 +31,18 @@ Usage:
                                   [--include-thinking]
                                   [--include-compact-summaries]
                                   [--include-meta]
+                                  [--include-harness-commands]
                                   [--live-branch-only] [--post-compact-only]
                                    Dump a session transcript to markdown.
                                    Default: chronological (all entries by
-                                   timestamp). Suppresses post-compact
-                                   summary blocks and system-injected meta
-                                   content (slash command bodies, command
-                                   caveats); use the --include-* flags to
-                                   opt those back in for diagnostics.
+                                   timestamp). Suppresses things that
+                                   weren't part of the agent conversation:
+                                   post-compact summary blocks, system-
+                                   injected meta content (skill bodies,
+                                   command caveats), and harness-only
+                                   slash commands (/exit, /terminal-setup,
+                                   /model, etc.). Use the --include-* flags
+                                   to opt them back in for diagnostics.
                                    --live-branch-only walks the parent chain
                                    from the deepest leaf instead of
                                    chronological selection.
@@ -887,6 +891,70 @@ def _parse_jsonl(path):
     return entries
 
 
+def _entry_text(entry):
+    """Extract a flat text string from an entry's message content (best-effort)."""
+    if not isinstance(entry, dict):
+        return ""
+    msg = entry.get("message") or {}
+    c = msg.get("content")
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):
+        parts = []
+        for b in c:
+            if isinstance(b, dict) and b.get("type") == "text":
+                parts.append(b.get("text") or "")
+        return "\n".join(parts)
+    return ""
+
+
+def _identify_harness_command_uuids(entries):
+    """Find slash-command entries that didn't go to Claude — display/harness
+    events like /exit, /terminal-setup, /model, /compact, /plugin. Discriminator:
+    a real plugin command produces a paired `isMeta: true` child carrying the
+    expanded skill body; a harness command has no such body (and may have a
+    local-command-stdout/stderr/caveat sibling instead).
+
+    Whitelist-free — we use the empirical structural marker rather than
+    enumerating which commands belong to which class."""
+    by_uuid = {}
+    children_of = {}
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        u = e.get("uuid")
+        if not u:
+            continue
+        by_uuid[u] = e
+        pid = e.get("parentUuid")
+        if pid:
+            children_of.setdefault(pid, []).append(u)
+
+    harness = set()
+    for u, e in by_uuid.items():
+        if e.get("type") != "user":
+            continue
+        text = _entry_text(e)
+        if "<command-name>" not in text:
+            continue
+        # Look for an isMeta:true child whose content isn't local-command markup
+        has_skill_body = False
+        for cu in children_of.get(u, ()):
+            child = by_uuid.get(cu)
+            if not child or child.get("type") != "user":
+                continue
+            if not child.get("isMeta"):
+                continue
+            ctext = _entry_text(child)
+            if _LOCAL_COMMAND_MARKUP_RE.search(ctext):
+                continue  # this is local-command output, not a skill body
+            has_skill_body = True
+            break
+        if not has_skill_body:
+            harness.add(u)
+    return harness
+
+
 def _select_chronological(entries):
     """Return all transcript-type entries in timestamp order. Default mode.
 
@@ -1052,6 +1120,7 @@ def _tool_slug(block):
 
 _COMMAND_NAME_RE = re.compile(r"<command-name>([^<]*)</command-name>")
 _COMMAND_ARGS_RE = re.compile(r"<command-args>(.*?)</command-args>", re.DOTALL)
+_LOCAL_COMMAND_MARKUP_RE = re.compile(r"<local-command-(stdout|stderr|caveat)")
 # Older Claude Code versions emitted post-compact summary user messages
 # without the isCompactSummary flag. Content-based fallback uses the
 # canonical opening phrase, which is specific enough to not collide with
@@ -1105,6 +1174,13 @@ def _render_user(entry, opts):
     # <command-args>...</command-args>. Render cleanly so the verbose
     # markup doesn't bury the actual user intent.
     if "<command-name>" in text:
+        # Harness/display-only commands (e.g. /exit, /terminal-setup, /model,
+        # /compact) never went to Claude — they're session-management events,
+        # not part of the conversation. Suppressed by default; opt back in
+        # via --include-harness-commands.
+        if (entry.get("uuid") in opts.get("harness_uuids", ())
+                and not opts.get("include_harness_commands")):
+            return None
         name_m = _COMMAND_NAME_RE.search(text)
         args_m = _COMMAND_ARGS_RE.search(text)
         cmd = name_m.group(1).strip() if name_m else "?"
@@ -1207,6 +1283,7 @@ def cmd_session_transcript(argv):
     include_thinking = False
     include_compact_summaries = False
     include_meta = False
+    include_harness_commands = False
     post_compact_only = False
     live_branch_only = False
     target = None
@@ -1226,6 +1303,9 @@ def cmd_session_transcript(argv):
         elif a == "--include-meta":
             include_meta = True
             i += 1
+        elif a == "--include-harness-commands":
+            include_harness_commands = True
+            i += 1
         elif a == "--post-compact-only":
             post_compact_only = True
             i += 1
@@ -1244,6 +1324,7 @@ def cmd_session_transcript(argv):
         die("usage: mcc session transcript <name|session-id> "
             "[--output <path>] [--include-thinking] "
             "[--include-compact-summaries] [--include-meta] "
+            "[--include-harness-commands] "
             "[--live-branch-only] [--post-compact-only]")
 
     # Resolve session id
@@ -1275,10 +1356,18 @@ def cmd_session_transcript(argv):
     if not chain:
         die(f"no transcript entries found in {jsonl_path}")
 
+    # Pre-compute harness-only command uuids (slash-command entries that
+    # didn't go to Claude — /exit, /terminal-setup, /model, etc.). Discriminator
+    # is structural: real plugin commands produce a paired isMeta:true skill
+    # body child; harness commands don't.
+    harness_uuids = _identify_harness_command_uuids(entries)
+
     body = _render_chain(chain, {
         "include_thinking": include_thinking,
         "include_compact_summaries": include_compact_summaries,
         "include_meta": include_meta,
+        "include_harness_commands": include_harness_commands,
+        "harness_uuids": harness_uuids,
         "post_compact_only": post_compact_only,
     })
 
@@ -1295,6 +1384,7 @@ def cmd_session_transcript(argv):
         f"- Options: thinking={include_thinking} "
         f"compact_summaries={include_compact_summaries} "
         f"meta={include_meta} "
+        f"harness_commands={include_harness_commands} "
         f"post_compact_only={post_compact_only}\n\n"
         f"---\n\n"
     )
