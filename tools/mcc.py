@@ -88,7 +88,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.5.0"
+MCC_VERSION = "1.5.1"
 
 import json
 import time
@@ -1809,25 +1809,25 @@ def _gather_session_summaries(cwd=None, all_projects=False):
 
 
 def _print_session_table(summaries, show_path=False):
-    """Render a list of session summaries as a columnar readout."""
+    """Render a list of session summaries as a columnar readout. Full SIDs
+    are shown so they can be copy-pasted into `mcc session set <name> <sid>`."""
     if not summaries:
         print("  (none)")
         return
-    # Compute column widths
     title_max = max(len(s["title"]) for s in summaries)
     title_w = min(title_max, 80)
-    print(f"  {'SID':<8}  {'Last activity':<16}  {'Reg.':<10}  {'Title / preview'}")
-    print(f"  {'-'*8}  {'-'*16}  {'-'*10}  {'-'*title_w}")
+    sid_w = 36  # full UUID
+    print(f"  {'Session ID':<{sid_w}}  {'Last activity':<16}  {'Reg.':<10}  {'Title / preview'}")
+    print(f"  {'-'*sid_w}  {'-'*16}  {'-'*10}  {'-'*title_w}")
     for s in summaries:
-        sid_short = s["sid"][:8]
         ts = _format_ts(s["last_ts"])
         reg = s["registered_as"] or ""
         title = s["title"]
         if len(title) > title_w:
             title = title[:title_w - 1] + "…"
-        print(f"  {sid_short}  {ts:<16}  {reg:<10}  {title}")
+        print(f"  {s['sid']:<{sid_w}}  {ts:<16}  {reg:<10}  {title}")
         if show_path:
-            print(f"  {' '*8}  {' '*16}  {' '*10}  {s['path']}")
+            print(f"  {' '*sid_w}  {' '*16}  {' '*10}  {s['path']}")
 
 
 def cmd_session_list(argv):
@@ -1927,16 +1927,16 @@ def cmd_session_set(argv):
             "`claude` here yet?")
     print(f"Sessions in {Path.cwd()}:")
     print()
-    print(f"  {'#':<3}  {'SID':<8}  {'Last activity':<16}  {'Reg.':<10}  {'Title / preview'}")
-    print(f"  {'-'*3}  {'-'*8}  {'-'*16}  {'-'*10}  {'-'*60}")
+    sid_w = 36
+    print(f"  {'#':<3}  {'Session ID':<{sid_w}}  {'Last activity':<16}  {'Reg.':<10}  {'Title / preview'}")
+    print(f"  {'-'*3}  {'-'*sid_w}  {'-'*16}  {'-'*10}  {'-'*60}")
     for i, s in enumerate(summaries, 1):
-        sid_short = s["sid"][:8]
         ts = _format_ts(s["last_ts"])
         reg = s["registered_as"] or ""
         title = s["title"]
         if len(title) > 60:
             title = title[:59] + "…"
-        print(f"  {i:<3}  {sid_short}  {ts:<16}  {reg:<10}  {title}")
+        print(f"  {i:<3}  {s['sid']:<{sid_w}}  {ts:<16}  {reg:<10}  {title}")
     print()
     raw = prompt(f"Pick a session (1-{len(summaries)})", default="").strip()
     if not raw:
