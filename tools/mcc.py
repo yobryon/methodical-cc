@@ -27,26 +27,50 @@ Usage:
   mcc vscode [<name>...] [--no-folder-open]
                                    Bootstrap/update .vscode/tasks.json with
                                    mcc session tasks (interactive if no names)
+  mcc session list [--all] [--paths]
+                                   List Claude Code sessions for the current
+                                   project (default) or all projects (--all).
+                                   Works without .mcc/ setup. Shows last
+                                   activity, registered name, and a title
+                                   (best-effort: /rename → /title → ai-title
+                                   → first user message preview).
+  mcc session set <name> <session-id>
+                                   Register a session id under <name> in
+                                   .mcc/sessions. Triggers team setup so
+                                   `mcc <name>` works afterward.
+  mcc session set                  Interactive picker — pick from sessions
+                                   in this project, then enter a name.
   mcc session transcript <name|session-id> [--output <path>]
+                                  [--min-divergence N]
                                   [--include-thinking]
                                   [--include-compact-summaries]
                                   [--include-meta]
                                   [--include-harness-commands]
-                                  [--live-branch-only] [--post-compact-only]
+                                  [--include-incomplete-branches]
+                                  [--single-file] [--live-branch-only]
+                                  [--post-compact-only]
                                    Dump a session transcript to markdown.
-                                   Default: chronological (all entries by
-                                   timestamp). Suppresses things that
-                                   weren't part of the agent conversation:
-                                   post-compact summary blocks, system-
-                                   injected meta content (skill bodies,
-                                   command caveats), and harness-only
-                                   slash commands (/exit, /terminal-setup,
-                                   /model, etc.). Use the --include-* flags
-                                   to opt them back in for diagnostics.
-                                   --live-branch-only walks the parent chain
-                                   from the deepest leaf instead of
-                                   chronological selection.
-                                   Default output: tmp/transcript_*.md
+                                   Default: per-through-line — emits a
+                                   subdirectory with one file per significant
+                                   branch (chain root → real conversational
+                                   leaf), plus an index.md. --min-divergence
+                                   N (default 10) sets how many entries a
+                                   branch must have unique-to-itself to be
+                                   considered significant.
+                                   --single-file emits one combined markdown
+                                   file (chronological all-entries by
+                                   default; pair with --live-branch-only to
+                                   render only the deepest single chain).
+                                   --include-incomplete-branches restores
+                                   leaves that ended at tool-flow artifacts
+                                   (orphaned tool-results, interrupted
+                                   tool-uses) — forensic mode.
+                                   The other --include-* flags govern what
+                                   gets rendered within each chain (compact
+                                   summaries, system-injected meta, harness-
+                                   only slash commands like /exit).
+                                   Default output: tmp/transcript_*/ (dir)
+                                   or tmp/transcript_*.md (single-file).
   mcc version                      Show mcc version
   mcc help                         Show this help
 
@@ -64,7 +88,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.4.0"
+MCC_VERSION = "1.5.0"
 
 import json
 import time
@@ -1075,6 +1099,209 @@ def _select_live_branch(entries):
     return chain
 
 
+def _categorize_leaf(leaf):
+    """Classify a terminal main-thread entry as 'endpoint' (real conversational
+    end) or 'noise' (tool-flow artifact, harness-injected, slash command, etc.).
+
+    The default through-line selection only considers 'endpoint' leaves —
+    avoids producing transcript files that end mid-tool-call or on harness
+    plumbing. --include-incomplete-branches restores noise leaves for
+    forensic work."""
+    t = leaf.get("type")
+    msg = leaf.get("message") or {}
+    content = msg.get("content")
+
+    if t == "assistant":
+        if not isinstance(content, list):
+            return "noise"
+        block_types = [b.get("type") for b in content if isinstance(b, dict)]
+        # Last block being tool_use means Claude was about to call a tool but
+        # the tool_result never came back — interrupted mid-flight.
+        if block_types and block_types[-1] == "tool_use":
+            return "noise"
+        has_text = any(
+            isinstance(b, dict) and b.get("type") == "text"
+            and (b.get("text") or "").strip()
+            for b in content
+        )
+        return "endpoint" if has_text else "noise"
+
+    if t == "user":
+        if leaf.get("isMeta") or leaf.get("isCompactSummary"):
+            return "noise"
+        if isinstance(content, str):
+            return "endpoint" if content.strip() else "noise"
+        if not isinstance(content, list):
+            return "noise"
+        block_types = [b.get("type") for b in content if isinstance(b, dict)]
+        has_text = any(
+            isinstance(b, dict) and b.get("type") == "text"
+            and (b.get("text") or "").strip()
+            for b in content
+        )
+        # tool_result with no real text = orphaned tool_result, not a real msg
+        if "tool_result" in block_types and not has_text:
+            return "noise"
+        if has_text:
+            text = next(
+                (b["text"] for b in content
+                 if isinstance(b, dict) and b.get("type") == "text"),
+                "",
+            )
+            stripped = text.lstrip()
+            if stripped.startswith("<command-name>"):
+                return "noise"
+            if stripped.startswith(("<local-command-", "<ide_opened_file>",
+                                    "<system-reminder>")):
+                return "noise"
+            return "endpoint"
+        return "noise"
+
+    return "noise"
+
+
+def _walk_chain(leaf, msgs):
+    """Walk parentUuid+logicalParentUuid back from leaf. Returns ordered list
+    (root-first), with cycle protection."""
+    chain = []
+    cur = leaf
+    seen = set()
+    while cur is not None:
+        u = cur.get("uuid")
+        if not u or u in seen:
+            break
+        seen.add(u)
+        chain.append(cur)
+        pid = cur.get("parentUuid") or cur.get("logicalParentUuid")
+        cur = msgs.get(pid) if pid else None
+    chain.reverse()
+    return chain
+
+
+def _select_through_lines(entries, min_divergence=10, include_incomplete=False):
+    """Identify significant through-lines: each one is a complete chain from a
+    real-endpoint leaf back to the file's earliest reachable root, where the
+    chain has at least `min_divergence` entries that don't appear in any other
+    selected through-line.
+
+    Returns a list of dicts:
+      {leaf, chain (root-first), chain_set, unique_count, fork_points}
+
+    Sorted by leaf timestamp DESCENDING — most recent through-line is index 0
+    (and gets the smallest filename number).
+
+    Fork points are nodes along the chain whose parents have other children
+    leading to OTHER selected through-lines. Annotated as
+      [(uuid_of_first_child_after_fork, sorted_list_of_other_through_line_indices)]
+    in the order they appear when walking root-to-leaf.
+    """
+    msgs = {}
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        if e.get("type") not in TRANSCRIPT_TYPES:
+            continue
+        u = e.get("uuid")
+        if not u:
+            continue
+        msgs[u] = e
+
+    # Children-set check (parentUuid + logicalParentUuid) — same logic as
+    # _select_live_branch's leaf detection.
+    children_set = set()
+    for e in msgs.values():
+        for k in ("parentUuid", "logicalParentUuid"):
+            pid = e.get(k)
+            if pid:
+                children_set.add(pid)
+
+    candidates = [
+        m for m in msgs.values()
+        if m["uuid"] not in children_set
+        and m.get("type") in ("user", "assistant")
+        and not m.get("isSidechain", False)
+    ]
+    if not include_incomplete:
+        candidates = [c for c in candidates if _categorize_leaf(c) == "endpoint"]
+    if not candidates:
+        return []
+
+    # Walk each candidate back to root (uses + cycle protection)
+    chain_lists = {}
+    chain_sets = {}
+    for leaf in candidates:
+        chain_list = _walk_chain(leaf, msgs)
+        chain_lists[leaf["uuid"]] = chain_list
+        chain_sets[leaf["uuid"]] = {e["uuid"] for e in chain_list}
+
+    # Refcount: how many candidate chains include each uuid
+    import collections as _c
+    refcount = _c.Counter()
+    for s in chain_sets.values():
+        for u in s:
+            refcount[u] += 1
+
+    # Apply divergence filter
+    selected = []
+    for leaf in candidates:
+        chain_set = chain_sets[leaf["uuid"]]
+        unique = sum(1 for u in chain_set if refcount[u] == 1)
+        if unique < min_divergence:
+            continue
+        selected.append({
+            "leaf": leaf,
+            "chain": chain_lists[leaf["uuid"]],
+            "chain_set": chain_set,
+            "unique_count": unique,
+        })
+
+    # Sort by leaf timestamp DESCENDING (most recent through-line = index 0)
+    selected.sort(
+        key=lambda d: d["leaf"].get("timestamp", ""),
+        reverse=True,
+    )
+
+    # Refcount over SELECTED chains only (for fork-point cross-references)
+    refcount_selected = _c.Counter()
+    uuid_to_tl_idxs = _c.defaultdict(list)
+    for i, tl in enumerate(selected):
+        for u in tl["chain_set"]:
+            refcount_selected[u] += 1
+            uuid_to_tl_idxs[u].append(i)
+
+    # Full children map across all msgs (used for sibling lookup at fork points)
+    full_children = _c.defaultdict(list)
+    for u, e in msgs.items():
+        for k in ("parentUuid", "logicalParentUuid"):
+            pid = e.get(k)
+            if pid:
+                full_children[pid].append(u)
+
+    # Identify fork points per through-line
+    for i, tl in enumerate(selected):
+        forks = []
+        for entry in tl["chain"]:
+            pid = entry.get("parentUuid") or entry.get("logicalParentUuid")
+            if not pid:
+                continue
+            sibs = full_children.get(pid, ())
+            if len(sibs) <= 1:
+                continue  # no fork
+            # Find OTHER through-lines that pass through any sibling
+            others = set()
+            my_uuid = entry["uuid"]
+            for sib in sibs:
+                if sib == my_uuid:
+                    continue
+                others.update(uuid_to_tl_idxs.get(sib, ()))
+            others.discard(i)
+            if others:
+                forks.append((my_uuid, sorted(others)))
+        tl["fork_points"] = forks
+
+    return selected
+
+
 def _tool_slug(block):
     """Render a tool_use content block as a compact slug."""
     name = block.get("name", "Tool")
@@ -1247,10 +1474,22 @@ def _render_chain(chain, opts):
         if last_boundary >= 0:
             chain = chain[last_boundary:]
 
+    # Per-through-line: optional fork markers — uuid → list of file references
+    fork_markers = opts.get("fork_markers") or {}
+
     out_parts = []
     for e in chain:
         if e.get("isSidechain"):
             continue  # belt + suspenders; main JSONLs don't have these in current mode
+        u = e.get("uuid")
+        # Inline fork marker BEFORE this entry, if applicable
+        if u in fork_markers:
+            files = fork_markers[u]
+            ts = e.get("timestamp", "")[:16].replace("T", " ")
+            label = ", ".join(files)
+            out_parts.append(
+                f"---\n\n*[Fork point at {ts} — alternate path(s): {label}]*\n\n---"
+            )
         t = e.get("type")
         rendered = None
         if t == "system":
@@ -1268,24 +1507,478 @@ def _render_chain(chain, opts):
     return "\n\n".join(out_parts) + "\n"
 
 
+def _through_line_filename(idx, total):
+    """Stable filename like through-line-01.md, padded to width of total count."""
+    width = max(2, len(str(total)))
+    return f"through-line-{idx + 1:0{width}d}.md"
+
+
+def _through_line_title(tl, max_len=80):
+    """Best-effort title for a through-line: last user message preview."""
+    for e in reversed(tl["chain"]):
+        if e.get("type") != "user":
+            continue
+        if e.get("isMeta") or e.get("isCompactSummary"):
+            continue
+        text = _entry_text(e).strip()
+        if not text:
+            continue
+        if "<command-name>" in text:
+            continue
+        if text.lstrip().startswith(("<local-command-", "<ide_opened_file>",
+                                     "<system-reminder>")):
+            continue
+        if _COMPACT_SUMMARY_OPENING in text:
+            continue
+        text = " ".join(text.split())
+        return text if len(text) <= max_len else text[:max_len - 1] + "…"
+    # Fallback: last assistant message preview
+    for e in reversed(tl["chain"]):
+        if e.get("type") != "assistant":
+            continue
+        text = _entry_text(e).strip()
+        if text:
+            text = " ".join(text.split())
+            return text if len(text) <= max_len else text[:max_len - 1] + "…"
+    return "(no preview)"
+
+
+def _render_through_line_files(through_lines, sid, label, jsonl_path, opts, out_dir):
+    """Render an index.md plus one through-line-NN.md per through-line.
+    Returns list of (filename, num_entries_rendered) tuples."""
+    total = len(through_lines)
+    # Pre-compute filenames for cross-referencing in fork markers
+    filenames = [_through_line_filename(i, total) for i in range(total)]
+    titles = [_through_line_title(tl) for tl in through_lines]
+
+    # Index
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    idx_lines = [
+        f"# Transcript: {label}",
+        "",
+        f"- Session ID: `{sid}`",
+        f"- Source: `{jsonl_path}`",
+        f"- Generated: {now}",
+        f"- Through-lines: **{total}**",
+        f"- Min divergence threshold: {opts.get('min_divergence')}",
+        f"- Mode: per-through-line (one file per significant branch)",
+        "",
+        "## Through-lines",
+        "",
+        "| # | File | Leaf time | Chain length | Unique entries | Forks | Title / preview |",
+        "|---|------|-----------|--------------|----------------|-------|-----------------|",
+    ]
+    for i, tl in enumerate(through_lines):
+        leaf = tl["leaf"]
+        ts = leaf.get("timestamp", "")[:16].replace("T", " ")
+        chain_len = len(tl["chain"])
+        unique = tl["unique_count"]
+        forks = len(tl.get("fork_points", []))
+        title = titles[i].replace("|", "\\|")
+        idx_lines.append(
+            f"| {i + 1} | [{filenames[i]}](./{filenames[i]}) | {ts} | "
+            f"{chain_len} | {unique} | {forks} | {title} |"
+        )
+    idx_lines.append("")
+    idx_lines.append(
+        "Through-lines are numbered by leaf timestamp, most-recent first. "
+        "The unique-entries count reflects entries that don't appear in any "
+        "other through-line — a measure of how much this branch diverges."
+    )
+    idx_lines.append("")
+    (out_dir / "index.md").write_text("\n".join(idx_lines))
+
+    results = []
+    for i, tl in enumerate(through_lines):
+        # Build fork-marker map for this through-line
+        fork_markers = {}
+        for uuid, other_idxs in tl.get("fork_points", []):
+            files = [filenames[oi] for oi in other_idxs]
+            fork_markers[uuid] = files
+
+        chain_opts = dict(opts)
+        chain_opts["fork_markers"] = fork_markers
+        body = _render_chain(tl["chain"], chain_opts)
+
+        leaf = tl["leaf"]
+        ts = leaf.get("timestamp", "")[:16].replace("T", " ")
+
+        # Per-file header
+        header_lines = [
+            f"# Through-line {i + 1} of {total}: {ts}",
+            "",
+            f"- Session ID: `{sid}`",
+            f"- Leaf UUID: `{leaf.get('uuid')}`",
+            f"- Leaf timestamp: `{leaf.get('timestamp', '')}`",
+            f"- Chain length: {len(tl['chain'])} entries",
+            f"- Unique to this branch: {tl['unique_count']}",
+            f"- Fork points on this path: {len(tl.get('fork_points', []))}",
+            f"- Index: [index.md](./index.md)",
+        ]
+        if tl.get("fork_points"):
+            related = sorted({fi for _, ois in tl["fork_points"] for fi in ois})
+            related_files = [f"[{filenames[ri]}](./{filenames[ri]})"
+                             for ri in related]
+            header_lines.append(
+                f"- Related (sibling branches): {', '.join(related_files)}"
+            )
+        header_lines.append("")
+        header_lines.append("---")
+        header_lines.append("")
+
+        (out_dir / filenames[i]).write_text(
+            "\n".join(header_lines) + "\n" + body
+        )
+        results.append((filenames[i], len(tl["chain"])))
+    return results
+
+
 def cmd_session(argv):
     if not argv:
-        die("usage: mcc session <transcript> ...")
+        die("usage: mcc session <list|set|transcript> ...")
     sub = argv[0]
     if sub == "transcript":
         return cmd_session_transcript(argv[1:])
-    die(f"unknown session subcommand '{sub}' (expected: transcript)")
+    if sub == "list":
+        return cmd_session_list(argv[1:])
+    if sub == "set":
+        return cmd_session_set(argv[1:])
+    die(f"unknown session subcommand '{sub}' (expected: list, set, transcript)")
+
+
+# Session metadata helpers (used by `list` and the `set` picker)
+
+def _registered_names_by_sid():
+    """Reverse the .mcc[-scope]/sessions registry: {sid: name}."""
+    out = {}
+    for d in find_state_dirs():
+        sf = d / "sessions"
+        if not sf.exists():
+            continue
+        try:
+            text = sf.read_text()
+        except OSError:
+            continue
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or "=" not in line:
+                continue
+            n, sid = line.split("=", 1)
+            out[sid.strip()] = n.strip()
+    return out
+
+
+def _project_jsonl_files(cwd=None, all_projects=False):
+    """Return list of (sid, jsonl_path) for the current project (default) or
+    all projects (`all_projects=True`)."""
+    if not CLAUDE_PROJECTS_ROOT.exists():
+        return []
+    out = []
+    if all_projects:
+        for p in CLAUDE_PROJECTS_ROOT.glob("*/*.jsonl"):
+            sid = p.stem
+            if _looks_like_uuid(sid):
+                out.append((sid, p))
+    else:
+        slug = _project_slug_for_cwd(cwd)
+        for p in (CLAUDE_PROJECTS_ROOT / slug).glob("*.jsonl"):
+            sid = p.stem
+            if _looks_like_uuid(sid):
+                out.append((sid, p))
+    return out
+
+
+def _extract_session_meta(jsonl_path):
+    """Read a JSONL once and pluck out best-effort title signals + a first-user
+    preview. Returns a dict; missing fields are None."""
+    agent_name = None
+    custom_title = None
+    ai_title = None
+    first_user_text = None
+    last_ts = None
+    last_assistant_ts = None
+    line_count = 0
+
+    try:
+        with open(jsonl_path) as f:
+            for line in f:
+                line_count += 1
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(e, dict):
+                    continue
+
+                t = e.get("type")
+                ts = e.get("timestamp")
+                if ts and (last_ts is None or ts > last_ts):
+                    last_ts = ts
+
+                if t == "agent-name":
+                    agent_name = e.get("agentName") or agent_name
+                elif t == "custom-title":
+                    custom_title = e.get("customTitle") or custom_title
+                elif t == "ai-title":
+                    ai_title = e.get("aiTitle") or ai_title
+                elif t == "user":
+                    if e.get("isMeta") or e.get("isCompactSummary"):
+                        continue
+                    text = _entry_text(e).strip()
+                    if not text:
+                        continue
+                    if "<command-name>" in text:
+                        continue  # slash-command meta — skip for preview
+                    if _COMPACT_SUMMARY_OPENING in text:
+                        continue
+                    # Skip harness-injected wrappers (local command output,
+                    # IDE-opened-file notices, system reminders) — they're
+                    # not real user content
+                    if text.lstrip().startswith((
+                        "<local-command-",
+                        "<ide_opened_file>",
+                        "<system-reminder>",
+                        "<command-message>",
+                    )):
+                        continue
+                    if first_user_text is None:
+                        first_user_text = text
+                elif t == "assistant":
+                    if ts:
+                        last_assistant_ts = ts
+    except OSError:
+        return None
+
+    return {
+        "agent_name": agent_name,
+        "custom_title": custom_title,
+        "ai_title": ai_title,
+        "first_user_text": first_user_text,
+        "last_ts": last_ts,
+        "last_assistant_ts": last_assistant_ts,
+        "line_count": line_count,
+    }
+
+
+def _session_title(meta, max_len=80):
+    """Best-effort title with fallback chain: /rename -> /title -> ai-title ->
+    first user message preview."""
+    if not meta:
+        return "(unreadable)"
+    for k in ("agent_name", "custom_title", "ai_title"):
+        v = meta.get(k)
+        if v:
+            v = " ".join(v.split())
+            return v if len(v) <= max_len else v[:max_len - 1] + "…"
+    text = meta.get("first_user_text") or ""
+    text = " ".join(text.split())
+    if not text:
+        return "(no preview)"
+    return text if len(text) <= max_len else text[:max_len - 1] + "…"
+
+
+def _format_ts(ts_str):
+    """Render an ISO timestamp as 'YYYY-MM-DD HH:MM' for display."""
+    if not ts_str:
+        return "—"
+    # ISO format like 2026-04-29T02:01:30.077Z
+    return ts_str[:16].replace("T", " ")
+
+
+def _gather_session_summaries(cwd=None, all_projects=False):
+    """Return list of summary dicts sorted by last_ts descending."""
+    registered = _registered_names_by_sid()
+    summaries = []
+    for sid, path in _project_jsonl_files(cwd=cwd, all_projects=all_projects):
+        meta = _extract_session_meta(path)
+        if meta is None:
+            continue
+        summaries.append({
+            "sid": sid,
+            "path": path,
+            "registered_as": registered.get(sid),
+            "title": _session_title(meta),
+            "last_ts": meta.get("last_ts") or "",
+            "lines": meta.get("line_count", 0),
+        })
+    summaries.sort(key=lambda s: s["last_ts"], reverse=True)
+    return summaries
+
+
+def _print_session_table(summaries, show_path=False):
+    """Render a list of session summaries as a columnar readout."""
+    if not summaries:
+        print("  (none)")
+        return
+    # Compute column widths
+    title_max = max(len(s["title"]) for s in summaries)
+    title_w = min(title_max, 80)
+    print(f"  {'SID':<8}  {'Last activity':<16}  {'Reg.':<10}  {'Title / preview'}")
+    print(f"  {'-'*8}  {'-'*16}  {'-'*10}  {'-'*title_w}")
+    for s in summaries:
+        sid_short = s["sid"][:8]
+        ts = _format_ts(s["last_ts"])
+        reg = s["registered_as"] or ""
+        title = s["title"]
+        if len(title) > title_w:
+            title = title[:title_w - 1] + "…"
+        print(f"  {sid_short}  {ts:<16}  {reg:<10}  {title}")
+        if show_path:
+            print(f"  {' '*8}  {' '*16}  {' '*10}  {s['path']}")
+
+
+def cmd_session_list(argv):
+    """List Claude Code sessions for the current project (or all projects)."""
+    all_projects = False
+    show_path = False
+    for a in argv:
+        if a == "--all":
+            all_projects = True
+        elif a in ("--paths", "--show-path"):
+            show_path = True
+        elif a.startswith("--"):
+            die(f"unknown flag: {a}")
+        else:
+            die(f"unexpected arg: {a}")
+
+    summaries = _gather_session_summaries(all_projects=all_projects)
+    scope = "all Claude Code projects" if all_projects else f"this project ({Path.cwd()})"
+    print(f"Sessions in {scope}:")
+    print()
+    _print_session_table(summaries, show_path=show_path or all_projects)
+
+
+def _write_session_registration(name, sid, cwd=None):
+    """Append/update <name>=<sid> in .mcc/sessions, creating .mcc/ if needed."""
+    cwd = cwd or Path.cwd()
+    # Pick the canonical sessions file: prefer existing .mcc[-scope]/sessions
+    # if any, else create at .mcc/sessions.
+    target = None
+    for d in find_state_dirs():
+        sf = d / "sessions"
+        if sf.exists():
+            target = sf
+            break
+    if target is None:
+        # No state dir yet — create .mcc/sessions
+        mcc_dir = cwd / ".mcc"
+        mcc_dir.mkdir(parents=True, exist_ok=True)
+        target = mcc_dir / "sessions"
+
+    # Read existing, update or append
+    existing_lines = []
+    if target.exists():
+        existing_lines = target.read_text().splitlines()
+    out = []
+    found = False
+    for line in existing_lines:
+        s = line.strip()
+        if not s or "=" not in s:
+            out.append(line)
+            continue
+        n, _ = s.split("=", 1)
+        if n.strip() == name:
+            out.append(f"{name}={sid}")
+            found = True
+        else:
+            out.append(line)
+    if not found:
+        out.append(f"{name}={sid}")
+    target.write_text("\n".join(out) + "\n")
+    return target
+
+
+def cmd_session_set(argv):
+    """Register a session id under a name in .mcc/sessions.
+
+    Forms:
+      mcc session set <name> <session-id>  — non-interactive
+      mcc session set                      — interactive picker
+    """
+    rest = []
+    for a in argv:
+        if a.startswith("--"):
+            die(f"unknown flag: {a}")
+        rest.append(a)
+
+    if len(rest) == 2:
+        name, sid = rest
+        if not _looks_like_uuid(sid):
+            die(f"second arg must be a session-id UUID; got '{sid}'")
+        target = _write_session_registration(name, sid)
+        print(f"Registered: {name}={sid}")
+        print(f"  in: {target}")
+        # Trigger team setup so `mcc <name>` works immediately afterward
+        team_name = ensure_team_setup(verbose=True)
+        print(f"  team: {team_name}")
+        return
+
+    if len(rest) == 1:
+        die("usage: mcc session set <name> <session-id>  OR  mcc session set "
+            "(no args, for the interactive picker)")
+
+    # Interactive picker
+    summaries = _gather_session_summaries()
+    if not summaries:
+        die("no Claude Code sessions found for this project. Have you run "
+            "`claude` here yet?")
+    print(f"Sessions in {Path.cwd()}:")
+    print()
+    print(f"  {'#':<3}  {'SID':<8}  {'Last activity':<16}  {'Reg.':<10}  {'Title / preview'}")
+    print(f"  {'-'*3}  {'-'*8}  {'-'*16}  {'-'*10}  {'-'*60}")
+    for i, s in enumerate(summaries, 1):
+        sid_short = s["sid"][:8]
+        ts = _format_ts(s["last_ts"])
+        reg = s["registered_as"] or ""
+        title = s["title"]
+        if len(title) > 60:
+            title = title[:59] + "…"
+        print(f"  {i:<3}  {sid_short}  {ts:<16}  {reg:<10}  {title}")
+    print()
+    raw = prompt(f"Pick a session (1-{len(summaries)})", default="").strip()
+    if not raw:
+        print("Cancelled.")
+        return
+    try:
+        idx = int(raw)
+        if not (1 <= idx <= len(summaries)):
+            raise ValueError
+    except ValueError:
+        die(f"invalid selection: {raw}")
+    chosen = summaries[idx - 1]
+    default_name = chosen["registered_as"] or ""
+    name = prompt("Name to register as", default=default_name).strip()
+    if not name:
+        die("name cannot be empty")
+    target = _write_session_registration(name, chosen["sid"])
+    print()
+    print(f"Registered: {name}={chosen['sid']}")
+    print(f"  in: {target}")
+    team_name = ensure_team_setup(verbose=True)
+    print(f"  team: {team_name}")
 
 
 def cmd_session_transcript(argv):
-    """Dump a session's transcript to markdown."""
+    """Dump a session's transcript to markdown.
+
+    Default: per-through-line — one file per significant branch in a
+    subdirectory, plus an index.md summarizing the fork structure.
+    --single-file: classic single-file output (chronological by default).
+    --live-branch-only: implies --single-file; renders just the deepest chain.
+    """
     output = None
     include_thinking = False
     include_compact_summaries = False
     include_meta = False
     include_harness_commands = False
+    include_incomplete_branches = False
     post_compact_only = False
     live_branch_only = False
+    single_file = False
+    min_divergence = 10
     target = None
 
     i = 0
@@ -1293,6 +1986,14 @@ def cmd_session_transcript(argv):
         a = argv[i]
         if a == "--output" and i + 1 < len(argv):
             output = argv[i + 1]
+            i += 2
+        elif a == "--min-divergence" and i + 1 < len(argv):
+            try:
+                min_divergence = int(argv[i + 1])
+            except ValueError:
+                die(f"--min-divergence requires an integer (got '{argv[i + 1]}')")
+            if min_divergence < 1:
+                die("--min-divergence must be >= 1")
             i += 2
         elif a == "--include-thinking":
             include_thinking = True
@@ -1306,11 +2007,18 @@ def cmd_session_transcript(argv):
         elif a == "--include-harness-commands":
             include_harness_commands = True
             i += 1
+        elif a == "--include-incomplete-branches":
+            include_incomplete_branches = True
+            i += 1
         elif a == "--post-compact-only":
             post_compact_only = True
             i += 1
         elif a == "--live-branch-only":
             live_branch_only = True
+            single_file = True  # live-branch-only is inherently a single chain
+            i += 1
+        elif a == "--single-file":
+            single_file = True
             i += 1
         elif a.startswith("--"):
             die(f"unknown flag: {a}")
@@ -1322,10 +2030,11 @@ def cmd_session_transcript(argv):
 
     if target is None:
         die("usage: mcc session transcript <name|session-id> "
-            "[--output <path>] [--include-thinking] "
-            "[--include-compact-summaries] [--include-meta] "
-            "[--include-harness-commands] "
-            "[--live-branch-only] [--post-compact-only]")
+            "[--output <path>] [--min-divergence N] "
+            "[--include-thinking] [--include-compact-summaries] "
+            "[--include-meta] [--include-harness-commands] "
+            "[--include-incomplete-branches] "
+            "[--post-compact-only] [--live-branch-only] [--single-file]")
 
     # Resolve session id
     if _looks_like_uuid(target):
@@ -1342,65 +2051,91 @@ def cmd_session_transcript(argv):
     if jsonl_path is None:
         die(f"could not find JSONL for session {sid} under {CLAUDE_PROJECTS_ROOT}")
 
-    # Parse + walk
+    # Parse
     entries = _parse_jsonl(jsonl_path)
     if not entries:
         die(f"{jsonl_path} contained no parseable entries")
 
-    if live_branch_only:
-        chain = _select_live_branch(entries)
-        mode = "live-branch (depth-first tree walk)"
-    else:
-        chain = _select_chronological(entries)
-        mode = "chronological (all entries by timestamp)"
-    if not chain:
-        die(f"no transcript entries found in {jsonl_path}")
-
     # Pre-compute harness-only command uuids (slash-command entries that
-    # didn't go to Claude — /exit, /terminal-setup, /model, etc.). Discriminator
-    # is structural: real plugin commands produce a paired isMeta:true skill
-    # body child; harness commands don't.
+    # didn't go to Claude — /exit, /terminal-setup, /model, etc.).
     harness_uuids = _identify_harness_command_uuids(entries)
 
-    body = _render_chain(chain, {
+    base_opts = {
         "include_thinking": include_thinking,
         "include_compact_summaries": include_compact_summaries,
         "include_meta": include_meta,
         "include_harness_commands": include_harness_commands,
         "harness_uuids": harness_uuids,
         "post_compact_only": post_compact_only,
-    })
+    }
 
-    # Header
     short_sid = sid[:8]
-    now = time.strftime("%Y-%m-%d %H:%M:%S")
-    header = (
-        f"# Transcript: {label}\n\n"
-        f"- Session ID: `{sid}`\n"
-        f"- Source: `{jsonl_path}`\n"
-        f"- Generated: {now}\n"
-        f"- Mode: {mode}\n"
-        f"- Entries selected: {len(chain)}\n"
-        f"- Options: thinking={include_thinking} "
-        f"compact_summaries={include_compact_summaries} "
-        f"meta={include_meta} "
-        f"harness_commands={include_harness_commands} "
-        f"post_compact_only={post_compact_only}\n\n"
-        f"---\n\n"
+    ts_label = time.strftime("%Y%m%d-%H%M%S")
+
+    # ---- Single-file modes ----
+    if single_file:
+        if live_branch_only:
+            chain = _select_live_branch(entries)
+            mode = "live-branch (depth-first tree walk)"
+        else:
+            chain = _select_chronological(entries)
+            mode = "chronological (all entries by timestamp)"
+        if not chain:
+            die(f"no transcript entries found in {jsonl_path}")
+
+        body = _render_chain(chain, base_opts)
+        now = time.strftime("%Y-%m-%d %H:%M:%S")
+        header = (
+            f"# Transcript: {label}\n\n"
+            f"- Session ID: `{sid}`\n"
+            f"- Source: `{jsonl_path}`\n"
+            f"- Generated: {now}\n"
+            f"- Mode: {mode}\n"
+            f"- Entries selected: {len(chain)}\n"
+            f"- Options: thinking={include_thinking} "
+            f"compact_summaries={include_compact_summaries} "
+            f"meta={include_meta} "
+            f"harness_commands={include_harness_commands} "
+            f"post_compact_only={post_compact_only}\n\n"
+            f"---\n\n"
+        )
+        if output:
+            out_path = Path(output)
+        else:
+            out_path = Path("tmp") / f"transcript_{label}_{short_sid}_{ts_label}.md"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(header + body)
+        print(f"Wrote {out_path}")
+        print(f"  {len(chain)} entries from {jsonl_path}")
+        return
+
+    # ---- Default: per-through-line ----
+    through_lines = _select_through_lines(
+        entries,
+        min_divergence=min_divergence,
+        include_incomplete=include_incomplete_branches,
+    )
+    if not through_lines:
+        die(
+            f"no through-lines met the threshold (min_divergence={min_divergence}). "
+            f"Try a lower --min-divergence, or use --single-file."
+        )
+
+    if output:
+        out_dir = Path(output)
+    else:
+        out_dir = Path("tmp") / f"transcript_{label}_{short_sid}_{ts_label}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    base_opts["min_divergence"] = min_divergence
+    results = _render_through_line_files(
+        through_lines, sid, label, jsonl_path, base_opts, out_dir,
     )
 
-    # Output path
-    if output:
-        out_path = Path(output)
-    else:
-        ts = time.strftime("%Y%m%d-%H%M%S")
-        out_path = Path("tmp") / f"transcript_{label}_{short_sid}_{ts}.md"
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(header + body)
-
-    print(f"Wrote {out_path}")
-    print(f"  {len(chain)} entries from {jsonl_path}")
+    print(f"Wrote {len(results)} through-line file(s) to {out_dir}/")
+    print(f"  index: {out_dir}/index.md")
+    print(f"  threshold: --min-divergence {min_divergence}")
+    print(f"  source: {jsonl_path}")
 
 
 # ----------------------------- Commands -----------------------------
