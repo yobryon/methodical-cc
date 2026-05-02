@@ -2,8 +2,11 @@
 """mcc - methodical-cc helper CLI
 
 Usage:
-  mcc <name>                       Resume Claude Code session registered as <name>,
-                                   joined to the project's bus team automatically
+  mcc <name>                       Resume Claude Code session registered as <name>.
+                                   Shorthand for `mcc session resume <name>`.
+                                   If team mode is opted-in (via `mcc team setup`),
+                                   passes --team-name flags to claude; otherwise
+                                   runs plain `claude -r <sid>`.
   mcc create <name> [--persona <plugin>:<role>] [--plugin <p>]
                                    Create a new session, register it under <name>,
                                    optionally pre-load a persona profile (e.g.
@@ -15,12 +18,13 @@ Usage:
   mcc enable <plugin>              Enable plugin (pdt|mam|mama|bus) in current project
   mcc disable <plugin>             Disable plugin (pdt|mam|mama|bus) in current project
   mcc switch <target>              Swap impl plugin: mam | mama | off (leaves pdt alone)
-  mcc team setup [--name <name>]   Explicitly create/update the bus team config
-                                   for the current project (interactive prompt
-                                   for the team name, default = dirname; pass
-                                   --name to skip the prompt). Also runs
-                                   implicitly on every `mcc <name>` and
-                                   `mcc create <name>`.
+  mcc team setup [--name <name>]   Opt this project into team mode and create
+                                   the bus team config (interactive prompt for
+                                   the team name, default = dirname; pass
+                                   --name to skip). Writes `.mcc/team-name` as
+                                   the opt-in marker; thereafter `mcc <name>`
+                                   passes team flags to claude. Without this,
+                                   mcc operates as plain session-naming sugar.
   mcc team status                  Show the project's bus team state
   mcc migrate                      Consolidate legacy .mam/.mama/.pdt[-scope]/
                                    state directories into .mcc[-scope]/
@@ -36,10 +40,11 @@ Usage:
                                    → first user message preview).
   mcc session set <name> <session-id>
                                    Register a session id under <name> in
-                                   .mcc/sessions. Triggers team setup so
-                                   `mcc <name>` works afterward.
+                                   .mcc/sessions. If team mode is opted-in,
+                                   also tops up the team config.
   mcc session set                  Interactive picker — pick from sessions
                                    in this project, then enter a name.
+  mcc session resume <name>        Formal verb for `mcc <name>`.
   mcc session transcript <name|session-id> [--output <path>]
                                   [--min-divergence N]
                                   [--include-thinking]
@@ -88,7 +93,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.5.1"
+MCC_VERSION = "1.6.0"
 
 import json
 import time
@@ -286,9 +291,24 @@ def _compute_default_team_name(cwd):
 
 def _team_name_file(cwd=None):
     """Persisted team-name lives at <project>/.mcc/team-name regardless of scoping.
-    A project's team is a single thing even if state is split across .mcc-{scope}/ dirs."""
+    A project's team is a single thing even if state is split across .mcc-{scope}/ dirs.
+
+    Presence of this file is also the **opt-in marker** for team mode:
+      - `mcc team setup` writes this file and bootstraps the team
+      - `mcc <name>` / `mcc create <name>` only do team-related work
+        (claude --team-name flags, settings.json env, team config maintenance)
+        when this file exists
+    Without it, mcc operates as plain session-naming sugar over `claude -r`.
+    """
     cwd = cwd or Path.cwd()
     return cwd / ".mcc" / "team-name"
+
+
+def _team_mode_enabled(cwd=None):
+    """True iff team mode has been explicitly opted into (via `mcc team setup`)
+    for this project. Implicit setup was retired in 1.6.0 — projects that just
+    want session-naming convenience get plain `claude -r` without team flags."""
+    return _team_name_file(cwd).exists()
 
 
 def _load_persisted_team_name(cwd=None):
@@ -397,12 +417,9 @@ def ensure_team_setup(verbose=False):
     """Idempotent: ensure the team config exists and members are current.
 
     Returns the team_name. Safe to call repeatedly. Logs only when changes happen
-    (or always, when verbose=True).
-    """
-    # Passive upgrade: if a team was set up before the persisted-name feature,
-    # snapshot its dirname-derived name into .mcc/team-name so subsequent runs
-    # are stable even if the user later renames the directory.
-    _passive_upgrade_team_name()
+    (or always, when verbose=True). Callers are responsible for deciding whether
+    to invoke this — `mcc team setup` always does, and `mcc <name>` / `mcc create`
+    only do when team mode is opted-in (see `_team_mode_enabled`)."""
     team_name = derive_team_name()
     config = read_team_config(team_name)
     cwd = Path.cwd().resolve()
@@ -1635,7 +1652,7 @@ def _render_through_line_files(through_lines, sid, label, jsonl_path, opts, out_
 
 def cmd_session(argv):
     if not argv:
-        die("usage: mcc session <list|set|transcript> ...")
+        die("usage: mcc session <list|set|resume|transcript> ...")
     sub = argv[0]
     if sub == "transcript":
         return cmd_session_transcript(argv[1:])
@@ -1643,7 +1660,11 @@ def cmd_session(argv):
         return cmd_session_list(argv[1:])
     if sub == "set":
         return cmd_session_set(argv[1:])
-    die(f"unknown session subcommand '{sub}' (expected: list, set, transcript)")
+    if sub == "resume":
+        # Formal verb for the `mcc <name>` shorthand.
+        return cmd_resume(argv[1:])
+    die(f"unknown session subcommand '{sub}' "
+        f"(expected: list, set, resume, transcript)")
 
 
 # Session metadata helpers (used by `list` and the `set` picker)
@@ -1911,9 +1932,10 @@ def cmd_session_set(argv):
         target = _write_session_registration(name, sid)
         print(f"Registered: {name}={sid}")
         print(f"  in: {target}")
-        # Trigger team setup so `mcc <name>` works immediately afterward
-        team_name = ensure_team_setup(verbose=True)
-        print(f"  team: {team_name}")
+        # Only top up team config if team mode is opted-in for this project
+        if _team_mode_enabled():
+            team_name = ensure_team_setup(verbose=True)
+            print(f"  team: {team_name}")
         return
 
     if len(rest) == 1:
@@ -1957,8 +1979,9 @@ def cmd_session_set(argv):
     print()
     print(f"Registered: {name}={chosen['sid']}")
     print(f"  in: {target}")
-    team_name = ensure_team_setup(verbose=True)
-    print(f"  team: {team_name}")
+    if _team_mode_enabled():
+        team_name = ensure_team_setup(verbose=True)
+        print(f"  team: {team_name}")
 
 
 def cmd_session_transcript(argv):
@@ -2285,8 +2308,9 @@ def cmd_create(argv):
     if sid:
         print(f"✓ Created session '{name}' (id {sid}) registered in {src}.")
         print(f"  Resume with: mcc {name}")
-        # Top up team config now that the new identity is registered
-        ensure_team_setup(verbose=False)
+        # Top up team config only if team mode is opted-in for this project
+        if _team_mode_enabled():
+            ensure_team_setup(verbose=False)
     else:
         print(f"⚠ claude -p completed but no session registered as '{name}' was found.",
               file=sys.stderr)
@@ -2317,11 +2341,18 @@ def cmd_resume(argv):
         sys.exit(1)
     if not have_claude():
         die("'claude' command not found on PATH.")
-    # Implicitly ensure team setup is current (idempotent — fast no-op when nothing changed)
-    team_name = ensure_team_setup(verbose=False)
-    args = _team_launch_args(name, sid, team_name)
-    print(f"Resuming '{name}' from {src} on team '{team_name}' → "
-          f"claude -r {sid} (+team flags)", file=sys.stderr)
+    # Team-mode-aware launch: only attach team flags if the project has opted
+    # into team mode (`mcc team setup` writes .mcc/team-name as the marker).
+    # Otherwise mcc is plain session-naming sugar over `claude -r`.
+    if _team_mode_enabled():
+        team_name = ensure_team_setup(verbose=False)
+        args = _team_launch_args(name, sid, team_name)
+        print(f"Resuming '{name}' from {src} on team '{team_name}' → "
+              f"claude -r {sid} (+team flags)", file=sys.stderr)
+    else:
+        args = ["claude", "-r", sid]
+        print(f"Resuming '{name}' from {src} → claude -r {sid}",
+              file=sys.stderr)
     os.execvp(args[0], args)
 
 
@@ -2357,7 +2388,7 @@ def cmd_status(argv):
     print("=== Methodical-CC state in this project ===")
     state_dirs = find_state_dirs()
     if not state_dirs:
-        print("  (none — no .pdt/, .mam*/, or .mama*/ directories here)")
+        print("  (none — no .mcc/ directory here)")
     else:
         for d in state_dirs:
             arch_state = d / "architect_state.md"
@@ -2372,6 +2403,32 @@ def cmd_status(argv):
                         continue
                     n, sid = line.split("=", 1)
                     print(f"      {n.strip():<10}  claude -r {sid.strip()}")
+    print()
+
+    print("=== Team mode ===")
+    if _team_mode_enabled():
+        team_name = _load_persisted_team_name()
+        cfg_path = team_config_path(team_name) if team_name else None
+        cfg = read_team_config(team_name) if team_name else None
+        print(f"  Enabled — team: {team_name}")
+        if cfg_path:
+            print(f"  Config: {cfg_path}{' (present)' if cfg else ' (MISSING — run mcc team setup)'}")
+        if cfg:
+            real_members = [m["name"] for m in cfg.get("members", [])
+                            if m.get("name") != PHANTOM_LEAD_NAME]
+            print(f"  Members: {', '.join(real_members) if real_members else '(none registered yet)'}")
+        print(f"  `mcc <name>` will resume with --team-name flags.")
+    else:
+        # Detect orphan team configs from older mcc versions or manual setup
+        default = _compute_default_team_name(Path.cwd())
+        if (TEAMS_ROOT / default / "config.json").exists():
+            print(f"  Disabled (no .mcc/team-name marker).")
+            print(f"  Note: a team config exists at {TEAMS_ROOT / default}/")
+            print(f"  — run `mcc team setup` to opt in, or ignore it for plain "
+                  f"session-naming.")
+        else:
+            print(f"  Disabled — `mcc <name>` runs `claude -r <sid>` with no team flags.")
+            print(f"  To enable: `mcc team setup`")
 
 
 def _validate_plugin(name):
