@@ -76,6 +76,15 @@ Usage:
                                    only slash commands like /exit).
                                    Default output: tmp/transcript_*/ (dir)
                                    or tmp/transcript_*.md (single-file).
+  mcc reflect list                 List reflection artifacts in ./tmp/, marked
+                                   sent/unsent (sent ones have a .sent sidecar).
+  mcc reflect submit [<path>] [--repo <r>] [--no-scan] [--no-confirm]
+                                   Submit a reflection artifact to GitHub Issues.
+                                   Auto-picks latest unsent if no path. Runs a
+                                   privacy scan via `claude -p` first; user
+                                   confirms before posting. On success, writes
+                                   a `.sent` sidecar with the issue URL.
+  mcc reflect scan <path>          Dry-run: just runs the privacy scan.
   mcc version                      Show mcc version
   mcc help                         Show this help
 
@@ -93,7 +102,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.6.1"
+MCC_VERSION = "1.7.0"
 
 import json
 import time
@@ -1733,6 +1742,255 @@ def cmd_session(argv):
         f"(expected: list, set, resume, transcript)")
 
 
+# ----------------------------- Reflection submission -----------------------------
+#
+# `mama:reflect` produces methodology-feedback artifacts at tmp/mama_reflection_*.md.
+# This is the submission side — list/scan/submit, with a privacy gate via `claude -p`
+# before anything goes to GitHub Issues.
+
+FEEDBACK_REPO_DEFAULT = "yobryon/methodical-cc"
+FEEDBACK_LABEL = "methodology-feedback"
+PROMPT_DIR = Path(__file__).resolve().parent / "prompts"
+PRIVACY_SCAN_PROMPT = PROMPT_DIR / "methodology_feedback_privacy_scan.md"
+REFLECTION_GLOB_PATTERNS = ("mama_reflection*.md", "pdt_reflection*.md")
+
+
+def _list_reflection_files(cwd=None):
+    """Return list of (path, sent_url_or_None) tuples for reflection artifacts in
+    ./tmp/. Sent status determined by sidecar file `<artifact>.sent`."""
+    cwd = cwd or Path.cwd()
+    refl_dir = cwd / "tmp"
+    if not refl_dir.exists():
+        return []
+    files = []
+    seen = set()
+    for pat in REFLECTION_GLOB_PATTERNS:
+        for p in sorted(refl_dir.glob(pat)):
+            if p in seen:
+                continue
+            seen.add(p)
+            sidecar = p.with_suffix(p.suffix + ".sent")
+            url = None
+            if sidecar.exists():
+                lines = sidecar.read_text().strip().splitlines()
+                url = lines[0] if lines else "(sent — no url recorded)"
+            files.append((p, url))
+    return files
+
+
+def _pick_latest_unsent(cwd=None):
+    """Return the most-recently-modified unsent reflection artifact, or None."""
+    candidates = [p for p, url in _list_reflection_files(cwd) if url is None]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
+def _extract_reflection_title(path):
+    """Pull the title from the artifact's first `# ` heading; fall back to a
+    generic dated title."""
+    try:
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if line.startswith("# "):
+                title = line[2:].strip()
+                # Cap at GitHub's title limit (256), but practically keep <120
+                if len(title) > 120:
+                    title = title[:117] + "..."
+                if title:
+                    return title
+    except OSError:
+        pass
+    return f"Methodology feedback: {time.strftime('%Y-%m-%d')}"
+
+
+def _run_privacy_scan(path):
+    """Run `claude -p` with the bundled privacy-scan prompt over the artifact.
+    Returns (is_clear: bool, output_text: str). If anything prevents the scan
+    (claude missing, prompt missing, etc.), returns (True, '<reason>') —
+    we don't block submission on infrastructure problems."""
+    if not PRIVACY_SCAN_PROMPT.exists():
+        return True, f"(privacy scan prompt not found at {PRIVACY_SCAN_PROMPT}; skipping)"
+    if not have_claude():
+        return True, "(claude not on PATH; skipping privacy scan)"
+    try:
+        artifact_text = path.read_text()
+    except OSError as e:
+        return True, f"(could not read {path}: {e}; skipping privacy scan)"
+
+    prompt_text = PRIVACY_SCAN_PROMPT.read_text()
+    full_prompt = f"{prompt_text}\n\n{artifact_text}\n"
+    try:
+        result = subprocess.run(
+            ["claude", "-p", full_prompt],
+            capture_output=True, text=True, check=False,
+            timeout=180,
+        )
+    except subprocess.TimeoutExpired:
+        return True, "(privacy scan timed out after 180s; skipping)"
+    if result.returncode != 0:
+        return True, f"(privacy scan failed: {result.stderr.strip()[:200]}; skipping)"
+    output = result.stdout.strip()
+    # First non-empty line determines verdict
+    first_line = next((ln for ln in output.splitlines() if ln.strip()), "")
+    is_clear = first_line.strip().upper().startswith("CLEAR")
+    return is_clear, output
+
+
+def _submit_reflection_to_github(path, repo, title, label):
+    """Run `gh issue create` to publish the artifact. Returns (url, error_msg)
+    where exactly one is non-None."""
+    if not shutil.which("gh"):
+        return None, ("gh CLI not on PATH. Install from https://cli.github.com,\n"
+                      f"  or paste manually at https://github.com/{repo}/issues/new")
+    cmd = [
+        "gh", "issue", "create",
+        "--repo", repo,
+        "--title", title,
+        "--label", label,
+        "--body-file", str(path),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as e:
+        return None, str(e)
+    if result.returncode != 0:
+        return None, f"gh issue create failed:\n  {result.stderr.strip()}"
+    # gh prints the issue URL as the last non-empty line of stdout
+    lines = [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+    url = lines[-1] if lines else "(submitted, but gh did not print the URL)"
+    return url, None
+
+
+def cmd_reflect(argv):
+    if not argv:
+        die("usage: mcc reflect <list|submit|scan> ...")
+    sub = argv[0]
+    if sub == "list":
+        return cmd_reflect_list(argv[1:])
+    if sub == "submit":
+        return cmd_reflect_submit(argv[1:])
+    if sub == "scan":
+        return cmd_reflect_scan(argv[1:])
+    die(f"unknown reflect subcommand '{sub}' (expected: list, submit, scan)")
+
+
+def cmd_reflect_list(argv):
+    """List reflection artifacts in ./tmp/, marked sent or unsent."""
+    if argv:
+        die("usage: mcc reflect list  (no args)")
+    files = _list_reflection_files()
+    if not files:
+        print(f"No reflection artifacts found in ./tmp/. Run /mama:reflect first.")
+        return
+    print(f"Reflections in {Path.cwd()}/tmp/:")
+    print()
+    for p, url in files:
+        if url:
+            print(f"  {p.name:<60} [sent → {url}]")
+        else:
+            print(f"  {p.name:<60} [unsent]")
+
+
+def cmd_reflect_scan(argv):
+    """Dry-run: just runs the privacy scan and prints output."""
+    if not argv or argv[0].startswith("--"):
+        die("usage: mcc reflect scan <path>")
+    path = Path(argv[0])
+    if not path.exists():
+        die(f"no file at {path}")
+    print(f"Running privacy scan on {path}...")
+    print()
+    is_clear, output = _run_privacy_scan(path)
+    print(output)
+    print()
+    print(f"Result: {'CLEAR — safe to submit' if is_clear else 'concerns flagged — review before submitting'}")
+
+
+def cmd_reflect_submit(argv):
+    """Submit a reflection artifact to GitHub Issues."""
+    explicit_path = None
+    repo = FEEDBACK_REPO_DEFAULT
+    skip_scan = False
+    skip_confirm = False
+
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--repo" and i + 1 < len(argv):
+            repo = argv[i + 1]
+            i += 2
+        elif a == "--no-scan":
+            skip_scan = True
+            i += 1
+        elif a == "--no-confirm":
+            skip_confirm = True
+            i += 1
+        elif a.startswith("--"):
+            die(f"unknown flag: {a}")
+        else:
+            if explicit_path is not None:
+                die(f"unexpected positional arg: {a}")
+            explicit_path = a
+            i += 1
+
+    if explicit_path:
+        path = Path(explicit_path)
+        if not path.exists():
+            die(f"no file at {path}")
+    else:
+        path = _pick_latest_unsent()
+        if path is None:
+            die("no unsent reflections found in ./tmp/. Specify a path, "
+                "or run /mama:reflect first.")
+        print(f"Auto-picked latest unsent: {path}")
+
+    sidecar = path.with_suffix(path.suffix + ".sent")
+    if sidecar.exists():
+        existing = sidecar.read_text().strip().splitlines()
+        url = existing[0] if existing else "(unknown)"
+        die(f"already submitted: {url}\n  Sidecar: {sidecar}")
+
+    if not skip_scan:
+        print(f"Running privacy scan...")
+        is_clear, scan_output = _run_privacy_scan(path)
+        if is_clear:
+            # Only print the scan output if it's a status note (not the literal "CLEAR")
+            first = next((ln for ln in scan_output.splitlines() if ln.strip()), "")
+            if first.strip().upper() != "CLEAR":
+                print(f"  {scan_output}")
+            print(f"  ✓ scan: CLEAR")
+        else:
+            print(f"  ⚠ scan flagged concerns:")
+            print()
+            for line in scan_output.splitlines():
+                print(f"    {line}")
+            print()
+            if skip_confirm:
+                die("aborted: privacy scan flagged concerns and --no-confirm was set")
+            if not confirm("Submit anyway?", default=False):
+                print("Aborted. The artifact is unchanged; edit it and retry.")
+                return
+
+    title = _extract_reflection_title(path)
+    print(f"Submitting to {repo}")
+    print(f"  Title: \"{title}\"")
+    print(f"  Label: {FEEDBACK_LABEL}")
+    print(f"  Body:  {path}")
+    if not skip_confirm and not confirm("Proceed with submission?", default=True):
+        print("Aborted.")
+        return
+
+    url, err = _submit_reflection_to_github(path, repo, title, FEEDBACK_LABEL)
+    if err:
+        die(f"submission failed: {err}")
+
+    sidecar.write_text(f"{url}\n{time.strftime('%Y-%m-%dT%H:%M:%SZ')}\n")
+    print(f"✓ Submitted: {url}")
+    print(f"  Sidecar written: {sidecar}")
+
+
 # Session metadata helpers (used by `list` and the `set` picker)
 
 def _registered_names_by_sid():
@@ -2685,6 +2943,7 @@ HANDLERS = {
     "migrate": cmd_migrate,
     "vscode": cmd_vscode,
     "session": cmd_session,
+    "reflect": cmd_reflect,
     "version": cmd_version,
 }
 

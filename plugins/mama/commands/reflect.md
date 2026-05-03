@@ -113,7 +113,13 @@ If yes, write `tmp/mama_reflection_{YYYY-MM-DD}.md` (or `tmp/mama_reflection_{YY
 
 Be specific. Examples help. Don't write polite generalities — those don't help anyone.
 
-The user can then share this with whoever maintains the methodology.
+**Be mindful of what goes in.** This artifact may be shared with the methodology maintainers, and through them potentially published in a public GitHub issue tracker. Make your case with enough detail to be useful, but exercise judgment about project-internal specifics:
+
+- **Always safe**: generic methodology patterns and friction descriptions, your own first-person reflection, sprint numbers, tool names (`claude`, `mcc`, `mama`, `pdt`, `bus`), open-source library names, abstract architectural concerns.
+- **Usually unnecessary** to make the methodology point: specific code snippets, proprietary algorithms, internal hostnames, customer/user names, credentials of any kind, stack traces with internal paths.
+- **Use judgment**: if a specific detail is load-bearing for the methodology argument, abstract it (`<our internal pricing service>` rather than the actual name). If it isn't load-bearing, leave it out.
+
+The user can share the artifact with whoever maintains the methodology — typically via `mcc reflect submit`, which runs a privacy scan, asks for confirmation, and posts to GitHub Issues with the right label.
 
 ---
 
