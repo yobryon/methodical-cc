@@ -102,7 +102,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.7.0"
+MCC_VERSION = "1.7.1"
 
 import json
 import time
@@ -1838,12 +1838,53 @@ def _run_privacy_scan(path):
     return is_clear, output
 
 
+def _ensure_github_label(repo, label):
+    """Idempotent: ensure the methodology-feedback label exists on the repo.
+    Issue templates declare labels but only create them on first UI use, which
+    bites the very first `mcc reflect submit` to a fresh repo. We create-if-
+    missing here so the actual `gh issue create --label ...` always succeeds.
+
+    Returns (ok, message). On already-exists or successful create, returns
+    (True, ...). On other failures (auth, network, perms), returns (False, ...)
+    and the caller can decide how to handle."""
+    # `gh label create` returns non-zero with "already exists" in stderr if
+    # the label is present. We swallow that and treat it as success.
+    cmd = [
+        "gh", "label", "create", label,
+        "--repo", repo,
+        "--description", "Methodology reflection / friction / wishes "
+                         "from `mcc reflect submit`",
+        "--color", "0E8A16",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as e:
+        return False, str(e)
+    if result.returncode == 0:
+        return True, "created"
+    stderr = (result.stderr or "").strip()
+    if "already exists" in stderr.lower():
+        return True, "already-exists"
+    return False, stderr
+
+
 def _submit_reflection_to_github(path, repo, title, label):
     """Run `gh issue create` to publish the artifact. Returns (url, error_msg)
     where exactly one is non-None."""
     if not shutil.which("gh"):
         return None, ("gh CLI not on PATH. Install from https://cli.github.com,\n"
                       f"  or paste manually at https://github.com/{repo}/issues/new")
+
+    # Pre-flight: ensure the label exists. Don't hard-fail if this errors —
+    # auth or perm issues here will surface again at issue-create time with
+    # the same gh, and the user will see the real error there.
+    label_ok, label_msg = _ensure_github_label(repo, label)
+    if not label_ok:
+        # Soft warning, but try the submission anyway in case the label
+        # exists already and the create probe failed for unrelated reasons.
+        print(f"  (label pre-flight had a hiccup: {label_msg[:200]}; "
+              f"continuing)", file=sys.stderr)
+
     cmd = [
         "gh", "issue", "create",
         "--repo", repo,
