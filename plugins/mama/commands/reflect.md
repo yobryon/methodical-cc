@@ -30,6 +30,14 @@ For each section / each bullet:
 - **Is this duplicated in `decisions_log.md` or a delta?** If yes — propose dropping the duplicate from CLAUDE.md and pointing at the canonical home.
 - **Is the wording sprawling?** If a bullet is more than 3 lines, propose tightening to a one/two-line principle (lead with the rule, optional why/where).
 
+**Cluster check** (meta-pattern audit, distinct from the per-bullet questions above):
+
+Group existing CLAUDE.md rules by topic. Flag any topic with **3 or more rules** pointing at the same underlying gap. The per-bullet four-question gate filters individual rule additions; it doesn't catch the case where each successive rule independently passes the gate but the cluster collectively signals something deeper.
+
+For each flagged cluster, ask: *is this a sign that the underlying gap deserves a structural fix — a test helper, fixture, type, lint rule, build-script check — rather than a fourth rule?* Surface the cluster and the structural-fix question to the user; the right move may be opening a backlog item to build the structural fix and demoting (or removing) the rules once it lands.
+
+Three rules pointing at "tests don't catch real-mouse interactions" is not a calibration issue. It's a *missing test fixture*.
+
 ### architect_state.md
 
 The Architect's running project knowledge. It's allowed to grow, but not without bound.

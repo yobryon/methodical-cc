@@ -55,6 +55,7 @@ Protocol reminders:
 - Tag substantive messages: [HANDOFF] when you finish, [CONSULT] for design questions.
 - Default to proceeding. Message arch on real ambiguity or scope-changing discovery.
 - Exit conditions live in the plan; finalize via /mama:impl-end at the end.
+- Memory discipline: default-no on CLAUDE.md / architect_state additions. If a candidate clears the four gates in pattern-add, lead with the rule, optional one-line why or pointer.
 ```
 
 That's the whole kickoff. Don't restate the persona, don't summarize the plan, don't list every pattern from CLAUDE.md — they're already loaded.

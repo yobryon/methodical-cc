@@ -57,6 +57,22 @@ Update product documentation based on what actually happened:
 - If implementation differed from design, update docs to reflect reality
 - Don't hide deviations -- document them with rationale
 
+**Memorialization ownership** (who writes what, where):
+
+When both you and the Implementor observe the same lesson at sprint close, both can independently land on "this should go in CLAUDE.md." That's a real concurrent-write failure mode — independent writers each pass the four gates and the rule lands twice with different wording. To prevent it, the methodology has explicit ownership:
+
+| Surface | Owner | What it carries |
+|---|---|---|
+| `CLAUDE.md` | **Architect** | Evergreen project rules every session needs (auto-loaded). Impl surfaces candidates in their handoff/retrospective; arch reviews against the four `pattern-add` gates and lands them. |
+| `architect_state.md` | **Architect** | The Architect's running project knowledge across sessions. |
+| `implementor_state.md` | **Implementor** | Tacit knowledge for the next-session bootstrap. Written on demand (not every sprint). |
+| Implementation log | **Implementor** | Sprint-of-record narrative; arch reads but doesn't edit. |
+| `decisions_log.md` | **Architect** | First-class resolved decisions with rationale. |
+| `concept_backlog.md` | **Architect** | Deferred items / future-work tracking. |
+| `sprint_log.md` | **Architect** | Chronological sprint history. |
+
+When reconciling at sprint close: if the Implementor's handoff proposes CLAUDE.md additions AND you saw similar candidates while reading the log, **dedupe at this point** — pick one canonical wording, write it once, and move on. This is the moment to catch concurrent-write duplication before it lands.
+
 ### 3. Address Implementor Questions
 
 - Review any questions flagged in the implementation log

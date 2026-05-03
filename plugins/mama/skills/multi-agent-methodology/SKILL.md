@@ -83,6 +83,28 @@ The Implementor should NOT message the Architect for:
 
 The Architect should expect mid-sprint messages and respond efficiently -- answer the question, provide the clarification, then let the Implementor continue.
 
+**Channel taxonomy.** Three channels for inter-agent communication, each with a different latency and disruption profile:
+
+- **chat-mode `SendMessage`**: urgent clarification or quick acknowledgment. Interrupts the recipient's flow as a new turn. Use when the answer is needed *now*.
+- **consult-mode `SendMessage` + Write**: substantive design question worth a structured artifact. The artifact lives at `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md`; the framing message references it. Use for design questions that deserve considered responses and a durable record.
+- **Implementation-log sub-entry (architect → implementor only)**: non-urgent followup that doesn't need to interrupt mid-flow. The Architect queues it as a sub-bullet under the relevant phase entry in the implementation log; the Implementor picks it up at sprint-close cleanup. Use when the followup can wait until natural cleanup time and shouldn't pull impl out of flow state.
+
+Examples of items that fit the implementation-log sub-entry channel: a tooling fix the architect notices mid-sprint, a constraint the user lifts mid-flow, a small cleanup item that emerged from architect dogfood. None of these are urgent enough to warrant a SendMessage round-trip; queueing them under the relevant phase entry preserves impl's focus and ensures they're not forgotten.
+
+### Task tooling under MAMA
+
+The implementation log's **Phase Progress table** is the canonical sprint progress record (impl owns it; arch reads it). It's the durable record of "did each phase land, and how" — visible to all teammates via the file, persisted across sessions.
+
+Claude Code's **team task tools** (`TaskCreate`/`TaskUpdate`/`TaskList`) are a separate coordination surface with different semantics: tasks have owners, dependencies, and cross-session persistence. They're appropriate when the work shape calls for them:
+
+- Parallel implementors working on independent phases simultaneously
+- Cross-session task handoffs where progress visibility across conversation gaps is the bottleneck
+- Explicit dependency tracking across teammates ("phase B blocked by phase A's API decision")
+
+They're **unnecessary** for sequential single-conversation sprints where the implementation log already captures progress. Claude Code's "consider TaskCreate" reminder is conditional ("if your work would benefit"); it's appropriately ignored when the work doesn't fit the team-coordination shape.
+
+The decision rule: *does this work actually need cross-teammate or cross-session task coordination beyond what the implementation log provides?* If yes, use Tasks; if no, the nudge is informational and you can move on.
+
 ## The Two Agents
 
 ### The Architect Agent (Team Lead)
@@ -281,6 +303,7 @@ Two parts: sprint-specific content + a standing protocol pulse.
 - Tag substantive messages: `[HANDOFF]`, `[CONSULT]`
 - Default to proceeding; message arch on real ambiguity
 - Finalize via `/mama:impl-end`; exit conditions live in the plan
+- Memory discipline: default-no on CLAUDE.md / architect_state additions; clear the four `pattern-add` gates first; lead with the rule
 
 Target: ~100–150 words of sprint-specific content. The plan, persona, and CLAUDE.md are already loaded — the kickoff doesn't restate them. The protocol pulse is small and important: it's the per-sprint drumbeat that keeps long-running projects from drifting on bus conventions across compactions.
 
