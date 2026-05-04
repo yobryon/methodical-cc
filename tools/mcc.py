@@ -1,95 +1,10 @@
 #!/usr/bin/env python3
 """mcc - methodical-cc helper CLI
 
-Usage:
-  mcc <name>                       Resume Claude Code session registered as <name>.
-                                   Shorthand for `mcc session resume <name>`.
-                                   If team mode is opted-in (via `mcc team setup`),
-                                   passes --team-name flags to claude; otherwise
-                                   runs plain `claude -r <sid>`.
-  mcc create <name> [--persona <plugin>:<role>] [--plugin <p>]
-                                   Create a new session, register it under <name>,
-                                   optionally pre-load a persona profile (e.g.
-                                   `mcc create impl --persona mama:implementor`)
-  mcc list                         List all registered sessions in this project
-  mcc status                       Show plugin state and registered sessions
-  mcc setup                        Interactive first-time setup (install + enable user-wide)
-  mcc update                       Update the methodical-cc marketplace and all plugins
-  mcc enable <plugin>              Enable plugin (pdt|mam|mama|bus) in current project
-  mcc disable <plugin>             Disable plugin (pdt|mam|mama|bus) in current project
-  mcc switch <target>              Swap impl plugin: mam | mama | off (leaves pdt alone)
-  mcc team setup [--name <name>]   Opt this project into team mode and create
-                                   the bus team config (interactive prompt for
-                                   the team name, default = dirname; pass
-                                   --name to skip). Writes `.mcc/team-name` as
-                                   the opt-in marker; thereafter `mcc <name>`
-                                   passes team flags to claude. Without this,
-                                   mcc operates as plain session-naming sugar.
-  mcc team status                  Show the project's bus team state
-  mcc migrate                      Consolidate legacy .mam/.mama/.pdt[-scope]/
-                                   state directories into .mcc[-scope]/
-  mcc vscode [<name>...] [--no-folder-open]
-                                   Bootstrap/update .vscode/tasks.json with
-                                   mcc session tasks (interactive if no names)
-  mcc session list [--all] [--paths]
-                                   List Claude Code sessions for the current
-                                   project (default) or all projects (--all).
-                                   Works without .mcc/ setup. Shows last
-                                   activity, registered name, and a title
-                                   (best-effort: /rename → /title → ai-title
-                                   → first user message preview).
-  mcc session set <name> <session-id>
-                                   Register a session id under <name> in
-                                   .mcc/sessions. If team mode is opted-in,
-                                   also tops up the team config.
-  mcc session set                  Interactive picker — pick from sessions
-                                   in this project, then enter a name.
-  mcc session resume <name>        Formal verb for `mcc <name>`.
-  mcc session transcript <name|session-id> [--output <path>]
-                                  [--min-divergence N]
-                                  [--include-thinking]
-                                  [--include-compact-summaries]
-                                  [--include-meta]
-                                  [--include-harness-commands]
-                                  [--include-incomplete-branches]
-                                  [--single-file] [--live-branch-only]
-                                  [--post-compact-only]
-                                   Dump a session transcript to markdown.
-                                   Default: per-through-line — emits a
-                                   subdirectory with one file per significant
-                                   branch (chain root → real conversational
-                                   leaf), plus an index.md. --min-divergence
-                                   N (default 10) sets how many entries a
-                                   branch must have unique-to-itself to be
-                                   considered significant.
-                                   --single-file emits one combined markdown
-                                   file (chronological all-entries by
-                                   default; pair with --live-branch-only to
-                                   render only the deepest single chain).
-                                   --include-incomplete-branches restores
-                                   leaves that ended at tool-flow artifacts
-                                   (orphaned tool-results, interrupted
-                                   tool-uses) — forensic mode.
-                                   The other --include-* flags govern what
-                                   gets rendered within each chain (compact
-                                   summaries, system-injected meta, harness-
-                                   only slash commands like /exit).
-                                   Default output: tmp/transcript_*/ (dir)
-                                   or tmp/transcript_*.md (single-file).
-  mcc reflect list                 List reflection artifacts in ./tmp/, marked
-                                   sent/unsent (sent ones have a .sent sidecar).
-  mcc reflect submit [<path>] [--repo <r>] [--no-scan] [--no-confirm]
-                                   Submit a reflection artifact to GitHub Issues.
-                                   Auto-picks latest unsent if no path. Runs a
-                                   privacy scan via `claude -p` first; user
-                                   confirms before posting. On success, writes
-                                   a `.sent` sidecar with the issue URL.
-  mcc reflect scan <path>          Dry-run: just runs the privacy scan.
-  mcc version                      Show mcc version
-  mcc help                         Show this help
+Run `mcc -h` for help, `mcc <command> -h` for command-specific help.
 
-Sessions are registered from inside Claude Code via /pdt:session, /mam:session,
-or /mama:session — and via `mcc create <name>` from the shell.
+Sessions are registered from inside Claude Code via /pdt:session,
+/mam:session, or /mama:session — and via `mcc create <name>` from the shell.
 
 Plugin scoping: enable/disable/switch operate on the current project; setup
 operates on the user scope. Per-project always wins over user when both are set.
@@ -102,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.9.0"
+MCC_VERSION = "1.10.0"
 
 import json
 import time
@@ -3262,17 +3177,243 @@ HANDLERS = {
 }
 
 
+# Per-command help. Each entry is detailed help shown by `mcc <cmd> -h` or
+# `mcc <noun> <verb> -h`. Top-level summary in print_help() is built separately.
+HELP = {
+    # Top-level
+    "<name>": """\
+mcc <name> — resume the Claude Code session registered as <name>
+
+Shorthand for `mcc session resume <name>`. If team mode is opted-in
+(via `mcc team setup`), passes --team-name flags to claude; otherwise
+runs plain `claude -r <sid>`.""",
+    "create": """\
+mcc create <name> [--persona <plugin>:<role>] [--plugin <p>] [--scope <s>]
+
+Create a new Claude Code session, register it under <name>, and optionally
+pre-load a persona profile.
+
+  --persona <plugin>:<role>   e.g. mama:implementor
+  --plugin  <p>               override inferred plugin (pdt|mam|mama)
+  --scope   <s>               write registration to .mcc-<s>/sessions
+                              (multi-project repos; auto-prompts if needed)""",
+    "list": "mcc list — list all registered sessions in this project",
+    "status": "mcc status — show plugin state and registered sessions",
+    "setup": "mcc setup — interactive first-time setup (install + enable user-wide)",
+    "update": "mcc update — update the methodical-cc marketplace and all plugins",
+    "enable": "mcc enable <plugin> — enable plugin (pdt|mam|mama|bus) in current project",
+    "disable": "mcc disable <plugin> — disable plugin (pdt|mam|mama|bus) in current project",
+    "switch": "mcc switch <target> — swap impl plugin: mam | mama | off (leaves pdt alone)",
+    "migrate": """\
+mcc migrate — consolidate legacy state directories
+
+Migrates legacy .mam/, .mama/, and .pdt[-scope]/ state directories into
+the unified .mcc[-scope]/ layout. Idempotent.""",
+    "vscode": """\
+mcc vscode [<name|scope>...] [--no-folder-open]
+
+Bootstrap or update .vscode/tasks.json with mcc session tasks.
+
+In multi-project repos (multiple .mcc-{scope}/ dirs), session tasks are
+grouped into per-scope tabs and per-scope aggregators (mcc:all:{scope})
+are emitted alongside the top-level mcc:all. The user is asked which
+aggregator(s) auto-run on folder open. Pass scope names as positional
+args to filter.
+
+Single-project: one personas group, one mcc:all that auto-runs on folder
+open by default.
+
+Flags:
+  --no-folder-open    don't auto-run anything on folder open""",
+    "version": "mcc version — show mcc version",
+
+    # mcc team
+    "team": """\
+mcc team — bus team setup and status
+
+Subcommands:
+  mcc team setup [--name <name>]   opt this project into team mode
+  mcc team status                  show the project's bus team state
+
+Run `mcc team <verb> -h` for full help.""",
+    "team setup": """\
+mcc team setup [--name <name>]
+
+Opt this project into team mode and create the bus team config.
+Interactive prompt for the team name (default = dirname); pass --name
+to skip. Writes `.mcc/team-name` as the opt-in marker; thereafter
+`mcc <name>` passes team flags to claude. Without this, mcc operates
+as plain session-naming sugar.""",
+    "team status": "mcc team status — show the project's bus team state",
+
+    # mcc session
+    "session": """\
+mcc session — registered session management
+
+Subcommands:
+  mcc session list [--all] [--paths]              list sessions
+  mcc session set [<name> <session-id>] [--scope <s>]
+                                                  register a session
+  mcc session resume <name>                       formal verb for `mcc <name>`
+  mcc session transcript <name|sid> [opts...]     dump transcript
+
+Run `mcc session <verb> -h` for full help.""",
+    "session list": """\
+mcc session list [--all] [--paths]
+
+List Claude Code sessions for the current project (default) or all projects
+(--all). Works without .mcc/ setup. Shows last activity, registered name,
+and a title (best-effort: /rename → /title → ai-title → first user message
+preview).""",
+    "session set": """\
+mcc session set <name> <session-id> [--scope <s>]
+mcc session set [--scope <s>]
+
+Register a session id under <name>. Two forms:
+  - With both args: non-interactive registration.
+  - No positional args: interactive picker — pick from sessions in this
+    project, then enter a name.
+
+In multi-project repos with multiple .mcc-{scope}/ directories, you must
+disambiguate via --scope; if not given, mcc prompts (interactive) or
+errors with a hint (non-interactive). The prompt's default is derived
+from the session-name prefix (e.g. "admin-arch" → "admin").
+
+If team mode is opted-in, also tops up the team config.""",
+    "session resume": "mcc session resume <name> — formal verb for `mcc <name>`",
+    "session transcript": """\
+mcc session transcript <name|session-id> [options]
+
+Dump a session transcript to markdown.
+
+Default: per-through-line — emits a subdirectory with one file per
+significant branch (chain root → real conversational leaf), plus an
+index.md.
+
+Options:
+  --output <path>                  output dir or file
+  --min-divergence N               min unique entries for a branch to
+                                   count as significant (default 10)
+  --include-thinking
+  --include-compact-summaries
+  --include-meta                   system-injected meta entries
+  --include-harness-commands       harness-only slash commands like /exit
+  --include-incomplete-branches    restore tool-flow leaves (forensic)
+  --single-file                    one combined markdown file (chronological
+                                   all-entries by default)
+  --live-branch-only               with --single-file, render deepest chain
+  --post-compact-only              skip pre-compact history
+
+Default output: tmp/transcript_*/ (dir) or tmp/transcript_*.md (single-file).""",
+
+    # mcc reflect
+    "reflect": """\
+mcc reflect — submit methodology-feedback artifacts
+
+Subcommands:
+  mcc reflect list                 list reflection artifacts in ./tmp/
+  mcc reflect scan <path>          dry-run privacy scan
+  mcc reflect submit [<path>]      submit reflection to GitHub Issues
+
+Run `mcc reflect <verb> -h` for full help.""",
+    "reflect list": """\
+mcc reflect list — list reflection artifacts in ./tmp/, marked sent/unsent
+
+Artifacts at tmp/mama_reflection_*.md or similar. Sent ones have a `.sent`
+sidecar containing the issue URL.""",
+    "reflect scan": "mcc reflect scan <path> — dry-run: just runs the privacy scan",
+    "reflect submit": """\
+mcc reflect submit [<path>] [--repo <r>] [--no-scan] [--no-confirm]
+
+Submit a reflection artifact to GitHub Issues. Auto-picks latest unsent if
+no path. Runs a privacy scan via `claude -p` first; user confirms before
+posting. On success, writes a `.sent` sidecar with the issue URL.""",
+}
+
+
+# Top-level help structure: ordered groups → list of (token, one-liner).
+TOP_HELP_GROUPS = [
+    ("Session", [
+        ("<name>",  "Resume session by name (shorthand for `session resume`)"),
+        ("create",  "Create + register a new session"),
+        ("list",    "List registered sessions"),
+        ("session", "session list/set/resume/transcript (`mcc session -h`)"),
+    ]),
+    ("Project", [
+        ("status",  "Show plugin state and registered sessions"),
+        ("vscode",  "Bootstrap .vscode/tasks.json with session tasks"),
+        ("team",    "Bus team setup/status (`mcc team -h`)"),
+        ("migrate", "Migrate legacy .mam/.mama/.pdt[-scope]/ state dirs"),
+    ]),
+    ("Plugins", [
+        ("setup",   "Interactive first-time install + enable user-wide"),
+        ("enable",  "Enable plugin (pdt|mam|mama|bus) in current project"),
+        ("disable", "Disable plugin (pdt|mam|mama|bus) in current project"),
+        ("switch",  "Swap impl plugin: mam | mama | off"),
+        ("update",  "Update the marketplace and all plugins"),
+    ]),
+    ("Feedback", [
+        ("reflect", "reflect list/scan/submit (`mcc reflect -h`)"),
+    ]),
+    ("Other", [
+        ("version", "Show mcc version"),
+        ("help",    "Show this help (or `mcc <cmd> -h` for details)"),
+    ]),
+]
+
+
 def print_help():
-    print(__doc__.strip())
+    print("mcc — methodical-cc helper CLI")
+    print()
+    print("Usage:")
+    print("  mcc <command> [args...]")
+    print("  mcc <name>                 Resume registered session")
+    print()
+    for group, items in TOP_HELP_GROUPS:
+        print(f"{group}:")
+        for tok, desc in items:
+            print(f"  {tok:<10} {desc}")
+        print()
+    print("Run `mcc <command> -h` for detailed help.")
+
+
+def print_help_for(tokens):
+    """Print detailed help for a command path like ['session', 'set'] or ['vscode']."""
+    key = " ".join(tokens)
+    if key in HELP:
+        print(HELP[key])
+        return
+    # Maybe they asked for a noun that we have but with a verb suffix typo
+    if len(tokens) >= 2 and tokens[0] in HELP:
+        print(f"Unknown subcommand for `mcc {tokens[0]}`. Showing top-level help for `mcc {tokens[0]}`:")
+        print()
+        print(HELP[tokens[0]])
+        return
+    die(f"no help for: mcc {key}")
+
+
+def _is_help_flag(s):
+    return s in ("-h", "--help")
 
 
 def main():
     argv = sys.argv[1:]
+    # Top-level: no args, or `help`/`-h`/`--help` as the first token
     if not argv or argv[0] in ("help", "-h", "--help"):
         print_help()
         return
     if argv[0] in ("--version", "-v"):
         cmd_version(argv[1:])
+        return
+
+    # Help requests anywhere in the argv: `mcc <cmd> -h`, `mcc <noun> <verb> -h`
+    if any(_is_help_flag(a) for a in argv):
+        # Strip help flags and treat the remainder as the command path
+        path = [a for a in argv if not _is_help_flag(a)]
+        if not path:
+            print_help()
+            return
+        print_help_for(path)
         return
 
     cmd = argv[0]
