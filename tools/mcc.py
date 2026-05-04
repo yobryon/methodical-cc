@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.10.0"
+MCC_VERSION = "1.10.1"
 
 import json
 import time
@@ -2144,22 +2144,27 @@ def cmd_reflect_submit(argv):
 # Session metadata helpers (used by `list` and the `set` picker)
 
 def _registered_names_by_sid():
-    """Reverse the .mcc[-scope]/sessions registry: {sid: name}."""
+    """Reverse the .mcc[-scope]/sessions registry.
+
+    Returns {sid: {"name": <name>, "scope": <scope>}}, where scope is "" for
+    the default .mcc/ and "<s>" for .mcc-<s>/.
+    """
     out = {}
     for d in find_state_dirs():
         sf = d / "sessions"
         if not sf.exists():
             continue
         try:
-            text = sf.read_text()
+            text = sf.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
+        scope = "" if d.name == ".mcc" else d.name[len(".mcc-"):]
         for line in text.splitlines():
             line = line.strip()
             if not line or "=" not in line:
                 continue
             n, sid = line.split("=", 1)
-            out[sid.strip()] = n.strip()
+            out[sid.strip()] = {"name": n.strip(), "scope": scope}
     return out
 
 
@@ -2291,10 +2296,12 @@ def _gather_session_summaries(cwd=None, all_projects=False):
         meta = _extract_session_meta(path)
         if meta is None:
             continue
+        reg = registered.get(sid)
         summaries.append({
             "sid": sid,
             "path": path,
-            "registered_as": registered.get(sid),
+            "registered_as": reg["name"] if reg else None,
+            "registered_scope": reg["scope"] if reg else None,
             "title": _session_title(meta),
             "last_ts": meta.get("last_ts") or "",
             "lines": meta.get("line_count", 0),
@@ -2303,26 +2310,49 @@ def _gather_session_summaries(cwd=None, all_projects=False):
     return summaries
 
 
-def _print_session_table(summaries, show_path=False):
+def _print_session_table(summaries, show_path=False, show_scope=False):
     """Render a list of session summaries as a columnar readout. Full SIDs
-    are shown so they can be copy-pasted into `mcc session set <name> <sid>`."""
+    are shown so they can be copy-pasted into `mcc session set <name> <sid>`.
+
+    show_scope: include a "Scope" column showing which .mcc-{scope}/ each
+    registered session lives in. Only meaningful in multi-project repos.
+    """
     if not summaries:
         print("  (none)")
         return
     title_max = max(len(s["title"]) for s in summaries)
     title_w = min(title_max, 80)
     sid_w = 36  # full UUID
-    print(f"  {'Session ID':<{sid_w}}  {'Last activity':<16}  {'Reg.':<10}  {'Title / preview'}")
-    print(f"  {'-'*sid_w}  {'-'*16}  {'-'*10}  {'-'*title_w}")
+    reg_w = max(10, *(len(s["registered_as"] or "") for s in summaries))
+
+    # Compute scope column width if needed
+    scope_w = 0
+    if show_scope:
+        scope_w = max(7, *(len(s.get("registered_scope") or "") for s in summaries))
+
+    if show_scope:
+        header = f"  {'Session ID':<{sid_w}}  {'Last activity':<16}  {'Reg.':<{reg_w}}  {'Scope':<{scope_w}}  Title / preview"
+        rule   = f"  {'-'*sid_w}  {'-'*16}  {'-'*reg_w}  {'-'*scope_w}  {'-'*title_w}"
+    else:
+        header = f"  {'Session ID':<{sid_w}}  {'Last activity':<16}  {'Reg.':<{reg_w}}  Title / preview"
+        rule   = f"  {'-'*sid_w}  {'-'*16}  {'-'*reg_w}  {'-'*title_w}"
+    print(header)
+    print(rule)
     for s in summaries:
         ts = _format_ts(s["last_ts"])
         reg = s["registered_as"] or ""
         title = s["title"]
         if len(title) > title_w:
             title = title[:title_w - 1] + "…"
-        print(f"  {s['sid']:<{sid_w}}  {ts:<16}  {reg:<10}  {title}")
+        if show_scope:
+            scope = s.get("registered_scope")
+            scope_disp = "" if scope is None else (scope or "(default)")
+            print(f"  {s['sid']:<{sid_w}}  {ts:<16}  {reg:<{reg_w}}  {scope_disp:<{scope_w}}  {title}")
+        else:
+            print(f"  {s['sid']:<{sid_w}}  {ts:<16}  {reg:<{reg_w}}  {title}")
         if show_path:
-            print(f"  {' '*sid_w}  {' '*16}  {' '*10}  {s['path']}")
+            pad_extra = (scope_w + 2) if show_scope else 0
+            print(f"  {' '*sid_w}  {' '*16}  {' '*reg_w}  {' '*pad_extra}{s['path']}")
 
 
 def cmd_session_list(argv):
@@ -2340,10 +2370,17 @@ def cmd_session_list(argv):
             die(f"unexpected arg: {a}")
 
     summaries = _gather_session_summaries(all_projects=all_projects)
-    scope = "all Claude Code projects" if all_projects else f"this project ({Path.cwd()})"
-    print(f"Sessions in {scope}:")
+    where = "all Claude Code projects" if all_projects else f"this project ({Path.cwd()})"
+    print(f"Sessions in {where}:")
     print()
-    _print_session_table(summaries, show_path=show_path or all_projects)
+    # Show the scope column when this project actually has multiple state scopes,
+    # or when listing across projects (where mixed scopes are likely).
+    multi_scope = all_projects or len(_list_existing_scopes()) > 1
+    _print_session_table(
+        summaries,
+        show_path=show_path or all_projects,
+        show_scope=multi_scope,
+    )
 
 
 def _list_existing_scopes():
@@ -2491,15 +2528,27 @@ def cmd_session_set(argv):
     print(f"Sessions in {Path.cwd()}:")
     print()
     sid_w = 36
-    print(f"  {'#':<3}  {'Session ID':<{sid_w}}  {'Last activity':<16}  {'Reg.':<10}  {'Title / preview'}")
-    print(f"  {'-'*3}  {'-'*sid_w}  {'-'*16}  {'-'*10}  {'-'*60}")
+    multi_scope = len(_list_existing_scopes()) > 1
+    reg_w = max(10, *(len(s["registered_as"] or "") for s in summaries))
+    if multi_scope:
+        scope_w = max(7, *(len(s.get("registered_scope") or "") for s in summaries))
+        print(f"  {'#':<3}  {'Session ID':<{sid_w}}  {'Last activity':<16}  {'Reg.':<{reg_w}}  {'Scope':<{scope_w}}  {'Title / preview'}")
+        print(f"  {'-'*3}  {'-'*sid_w}  {'-'*16}  {'-'*reg_w}  {'-'*scope_w}  {'-'*60}")
+    else:
+        print(f"  {'#':<3}  {'Session ID':<{sid_w}}  {'Last activity':<16}  {'Reg.':<{reg_w}}  {'Title / preview'}")
+        print(f"  {'-'*3}  {'-'*sid_w}  {'-'*16}  {'-'*reg_w}  {'-'*60}")
     for i, s in enumerate(summaries, 1):
         ts = _format_ts(s["last_ts"])
         reg = s["registered_as"] or ""
         title = s["title"]
         if len(title) > 60:
             title = title[:59] + "…"
-        print(f"  {i:<3}  {s['sid']:<{sid_w}}  {ts:<16}  {reg:<10}  {title}")
+        if multi_scope:
+            scope = s.get("registered_scope")
+            scope_disp = "" if scope is None else (scope or "(default)")
+            print(f"  {i:<3}  {s['sid']:<{sid_w}}  {ts:<16}  {reg:<{reg_w}}  {scope_disp:<{scope_w}}  {title}")
+        else:
+            print(f"  {i:<3}  {s['sid']:<{sid_w}}  {ts:<16}  {reg:<{reg_w}}  {title}")
     print()
     raw = prompt(f"Pick a session (1-{len(summaries)})", default="").strip()
     if not raw:
