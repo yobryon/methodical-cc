@@ -102,7 +102,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.7.2"
+MCC_VERSION = "1.8.0"
 
 import json
 import time
@@ -750,6 +750,33 @@ def collect_all_registered_sessions():
     return names
 
 
+def collect_sessions_by_scope():
+    """Return ordered list of (scope, [names]) tuples across all .mcc[-scope]/sessions files.
+
+    Scope is "" for the default .mcc/ dir, or the suffix after .mcc- otherwise.
+    A name registered in multiple scopes appears in each. Empty scopes are skipped.
+    """
+    out = []
+    for d in find_state_dirs():
+        sf = d / "sessions"
+        if not sf.exists():
+            continue
+        scope = d.name[len(".mcc-"):] if d.name.startswith(".mcc-") else ""
+        names = []
+        seen = set()
+        for line in sf.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line or "=" not in line:
+                continue
+            n = line.split("=", 1)[0].strip()
+            if n and n not in seen:
+                seen.add(n)
+                names.append(n)
+        if names:
+            out.append((scope, names))
+    return out
+
+
 def _strip_jsonc_comments(text):
     """Strip // line comments and /* */ block comments so plain json.loads can parse JSONC.
     Conservative — respects string literals when scanning for //."""
@@ -771,7 +798,7 @@ def _strip_jsonc_comments(text):
     return "\n".join(out_lines)
 
 
-def _make_session_task(name):
+def _make_session_task(name, group="personas"):
     return {
         "label": f"mcc:{name}",
         "type": "shell",
@@ -780,7 +807,7 @@ def _make_session_task(name):
         "presentation": {
             "reveal": "always",
             "panel": "dedicated",
-            "group": "personas",
+            "group": group,
             "echo": False,
             "showReuseMessage": False,
         },
@@ -788,65 +815,224 @@ def _make_session_task(name):
     }
 
 
-def _make_aggregator_task(names):
-    return {
-        "label": "mcc:all",
-        "dependsOn": [f"mcc:{n}" for n in names],
+def _make_aggregator_task(label, dep_names, run_on_folder_open=False):
+    task = {
+        "label": label,
+        "dependsOn": [f"mcc:{n}" for n in dep_names],
         "dependsOrder": "parallel",
-        "runOptions": {"runOn": "folderOpen"},
         "problemMatcher": [],
     }
+    if run_on_folder_open:
+        task["runOptions"] = {"runOn": "folderOpen"}
+    return task
+
+
+def _parse_selection(raw, registered):
+    """Parse a comma-separated selection of numbers and/or names against an ordered list.
+    Returns list of names preserving the registered order. 'all' returns everything.
+    Raises ValueError on bad input."""
+    raw = raw.strip().lower()
+    if raw in ("", "all"):
+        return list(registered)
+    selected = set()
+    for tok in raw.split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        if tok.isdigit():
+            i = int(tok)
+            if i < 1 or i > len(registered):
+                raise ValueError(f"index out of range: {i}")
+            selected.add(registered[i - 1])
+        elif tok in registered:
+            selected.add(tok)
+        else:
+            raise ValueError(f"unknown: {tok}")
+    return [n for n in registered if n in selected]
 
 
 def cmd_vscode(argv):
-    """Bootstrap or update .vscode/tasks.json with mcc session tasks."""
+    """Bootstrap or update .vscode/tasks.json with mcc session tasks.
+
+    In multi-project repos (any .mcc-{scope}/ present), session tasks are grouped
+    into per-scope VSCode tabs and per-scope aggregators (`mcc:all:{scope}`) are
+    emitted in addition to the top-level `mcc:all`. The user is asked which
+    aggregator(s) should auto-run on folder open (default: none).
+
+    In single-project repos the behavior is unchanged: one `personas` group, one
+    `mcc:all` aggregator that runs on folder open by default.
+    """
     no_folder_open = False
-    names = []
+    cli_args = []
     for a in argv:
         if a == "--no-folder-open":
             no_folder_open = True
         elif a.startswith("--"):
             die(f"unknown flag: {a}")
         else:
-            names.append(a)
+            cli_args.append(a)
 
-    registered = collect_all_registered_sessions()
-    if not registered:
+    by_scope = collect_sessions_by_scope()
+    if not by_scope:
         die("no sessions registered in this project. Run `mcc create <name> ...` first.")
 
-    if not names:
-        # Interactive selection
-        print("Registered sessions in this project:")
-        for i, n in enumerate(registered, 1):
-            print(f"  {i}. {n}")
-        print()
-        raw = prompt("Which to include? (e.g. 1,2,3 or 'all')", default="all").strip().lower()
-        if raw == "all":
-            names = list(registered)
+    multi_project = any(scope for scope, _ in by_scope)
+
+    # Build flat ordered list and a name → scope map
+    flat = []
+    name_scope = {}
+    for scope, names in by_scope:
+        for n in names:
+            if n not in name_scope:
+                flat.append(n)
+                name_scope[n] = scope
+
+    # Selection: CLI args may name sessions OR scopes (multi-project only)
+    if cli_args:
+        selected = []
+        seen = set()
+        for tok in cli_args:
+            if multi_project and any(s == tok for s, _ in by_scope):
+                # scope argument — include all sessions in that scope
+                for s, ns in by_scope:
+                    if s == tok:
+                        for n in ns:
+                            if n not in seen:
+                                seen.add(n)
+                                selected.append(n)
+            elif tok in name_scope:
+                if tok not in seen:
+                    seen.add(tok)
+                    selected.append(tok)
+            else:
+                die(f"not registered: {tok}. Known sessions: {', '.join(flat)}"
+                    + (f"; scopes: {', '.join(s for s, _ in by_scope if s)}" if multi_project else ""))
+        names = selected
+    else:
+        # Interactive
+        if multi_project:
+            print("Registered sessions by project scope:")
+            i = 1
+            for scope, ns in by_scope:
+                print(f"  {scope or '(default)'}/")
+                for n in ns:
+                    print(f"    {i}. {n}")
+                    i += 1
+            print()
+            raw = prompt("Which to include? (numbers, scope names, or 'all')", default="all")
+        else:
+            print("Registered sessions in this project:")
+            for i, n in enumerate(flat, 1):
+                print(f"  {i}. {n}")
+            print()
+            raw = prompt("Which to include? (e.g. 1,2,3 or 'all')", default="all")
+
+        if multi_project:
+            # Allow scope names alongside numbers
+            try:
+                names = []
+                seen = set()
+                raw_l = raw.strip().lower()
+                if raw_l in ("", "all"):
+                    names = list(flat)
+                else:
+                    for tok in raw_l.split(","):
+                        tok = tok.strip()
+                        if not tok:
+                            continue
+                        if any(s == tok for s, _ in by_scope):
+                            for s, ns in by_scope:
+                                if s == tok:
+                                    for n in ns:
+                                        if n not in seen:
+                                            seen.add(n)
+                                            names.append(n)
+                        elif tok.isdigit():
+                            i = int(tok)
+                            if i < 1 or i > len(flat):
+                                raise ValueError(f"index out of range: {i}")
+                            n = flat[i - 1]
+                            if n not in seen:
+                                seen.add(n)
+                                names.append(n)
+                        elif tok in name_scope:
+                            if tok not in seen:
+                                seen.add(tok)
+                                names.append(tok)
+                        else:
+                            raise ValueError(f"unknown: {tok}")
+            except ValueError as e:
+                die(f"invalid selection: {e}")
         else:
             try:
-                idxs = [int(x.strip()) for x in raw.split(",") if x.strip()]
-                names = [registered[i - 1] for i in idxs]
-            except (ValueError, IndexError):
-                die(f"invalid selection: {raw}")
-    else:
-        unknown = [n for n in names if n not in registered]
-        if unknown:
-            die(f"not registered: {', '.join(unknown)}. Run `mcc create <name>` first.")
+                names = _parse_selection(raw, flat)
+            except ValueError as e:
+                die(f"invalid selection: {e}")
 
     if not names:
         die("no sessions selected; nothing to do.")
 
-    new_mcc_tasks = [_make_session_task(n) for n in names]
+    # Group selected names by scope, preserving by_scope order
+    selected_by_scope = []
+    for scope, ns in by_scope:
+        in_scope = [n for n in ns if n in names]
+        if in_scope:
+            selected_by_scope.append((scope, in_scope))
+
+    # Decide which aggregators run on folder open
+    auto_run_scopes = set()  # scope names whose mcc:all:{scope} runs on open
+    auto_run_top = False     # whether mcc:all runs on open
     if not no_folder_open:
-        new_mcc_tasks.append(_make_aggregator_task(names))
+        if multi_project:
+            scope_names = [s for s, _ in selected_by_scope if s]
+            print()
+            print("Auto-run on folder open?")
+            print(f"  Scopes available: {', '.join(scope_names)} (or 'all' for everything, 'none' for nothing)")
+            raw = prompt("Which to auto-run?", default="none").strip().lower()
+            if raw in ("", "none"):
+                pass
+            elif raw == "all":
+                auto_run_top = True
+            else:
+                for tok in raw.split(","):
+                    tok = tok.strip()
+                    if not tok:
+                        continue
+                    if tok in scope_names:
+                        auto_run_scopes.add(tok)
+                    else:
+                        die(f"unknown scope: {tok}")
+        else:
+            auto_run_top = True
+
+    # Build tasks
+    new_mcc_tasks = []
+    for scope, ns in selected_by_scope:
+        group = f"personas:{scope}" if (multi_project and scope) else "personas"
+        for n in ns:
+            new_mcc_tasks.append(_make_session_task(n, group=group))
+
+    # Per-scope aggregators (multi-project only)
+    if multi_project:
+        for scope, ns in selected_by_scope:
+            if not scope:
+                continue
+            label = f"mcc:all:{scope}"
+            new_mcc_tasks.append(_make_aggregator_task(
+                label, ns, run_on_folder_open=(scope in auto_run_scopes)
+            ))
+
+    # Top-level aggregator
+    new_mcc_tasks.append(_make_aggregator_task(
+        "mcc:all", names, run_on_folder_open=auto_run_top
+    ))
 
     vscode_dir = Path(".vscode")
     tasks_file = vscode_dir / "tasks.json"
     config = {"version": "2.0.0", "tasks": []}
     had_comments = False
     if tasks_file.exists():
-        text = tasks_file.read_text()
+        text = tasks_file.read_text(encoding="utf-8", errors="replace")
         if "//" in text or "/*" in text:
             had_comments = True
         try:
@@ -870,15 +1056,23 @@ def cmd_vscode(argv):
     config["tasks"] = other_tasks + new_mcc_tasks
 
     vscode_dir.mkdir(exist_ok=True)
-    tasks_file.write_text(json.dumps(config, indent=2) + "\n")
+    tasks_file.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
     print(f"Wrote {tasks_file} with mcc tasks for: {', '.join(names)}")
-    if not no_folder_open:
+    if multi_project:
+        for scope, ns in selected_by_scope:
+            if scope:
+                tag = " (auto-run on folder open)" if scope in auto_run_scopes else ""
+                print(f"  mcc:all:{scope} → {', '.join(ns)}{tag}")
+        top_tag = " (auto-run on folder open)" if auto_run_top else ""
+        print(f"  mcc:all → everything{top_tag}")
+    elif auto_run_top:
         print(f"  mcc:all will run automatically on folder open")
     if had_comments:
         print(f"  ! existing JSONC comments were dropped on write")
     print()
-    print("In VS Code: Cmd/Ctrl+Shift+P → 'Tasks: Run Task' → mcc:all (or any individual mcc:<name>)")
+    aggregator_hint = "mcc:all" if not multi_project else "mcc:all (or mcc:all:{scope})"
+    print(f"In VS Code: Cmd/Ctrl+Shift+P → 'Tasks: Run Task' → {aggregator_hint} or any individual mcc:<name>")
 
 
 # ----------------------------- Session transcript -----------------------------
