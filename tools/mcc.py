@@ -102,7 +102,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.7.1"
+MCC_VERSION = "1.7.2"
 
 import json
 import time
@@ -950,7 +950,7 @@ def _parse_jsonl(path):
     entries = []
     skipped = 0
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -2086,7 +2086,7 @@ def _extract_session_meta(jsonl_path):
     line_count = 0
 
     try:
-        with open(jsonl_path) as f:
+        with open(jsonl_path, encoding="utf-8", errors="replace") as f:
             for line in f:
                 line_count += 1
                 line = line.strip()
