@@ -11,18 +11,19 @@ The current session ID is: **${CLAUDE_SESSION_ID}**
 
 Parse the user's arguments and perform the requested action. All session registry data lives at `.mcc/sessions` in the project root (or `.mcc-{scope}/sessions` for scoped projects).
 
-### `set <name>`
+### `set <name> [--scope <s>]`
 
 Register the current session under the given name (e.g., `arch`, `impl`, `design`).
 
-1. Find the project's state directory:
-   - Check for `.mcc/` (unscoped) or `.mcc-{scope}/` (scoped) directories
-   - If no state directory exists, create `.mcc/` (default unscoped)
-2. Read `{state_dir}/sessions` if it exists (simple `name=id` format, one per line)
-3. Add or update the line for the given name with the session ID shown above
-4. Write the file back
+Run the helper, which handles state-dir picking (including `.mcc-{scope}/` disambiguation in multi-project repos):
 
-After registering, also report the result so a calling shell command (e.g. `mcc create`) can verify success. Print: `Registered <name>=<id>. Resume with: mcc <name>`.
+```
+mcc session set <name> ${CLAUDE_SESSION_ID} [--scope <s>]
+```
+
+If `--scope` was passed, forward it through. If not and the project has multiple `.mcc-{scope}/` directories, the helper will refuse with a hint to pass `--scope`.
+
+After the helper succeeds, also report: `Registered <name>=<id>. Resume with: mcc <name>` so a calling shell (e.g. `mcc create`) can verify.
 
 ### `list`
 

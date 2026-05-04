@@ -102,7 +102,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.8.0"
+MCC_VERSION = "1.9.0"
 
 import json
 import time
@@ -2431,22 +2431,79 @@ def cmd_session_list(argv):
     _print_session_table(summaries, show_path=show_path or all_projects)
 
 
-def _write_session_registration(name, sid, cwd=None):
-    """Append/update <name>=<sid> in .mcc/sessions, creating .mcc/ if needed."""
-    cwd = cwd or Path.cwd()
-    # Pick the canonical sessions file: prefer existing .mcc[-scope]/sessions
-    # if any, else create at .mcc/sessions.
-    target = None
+def _list_existing_scopes():
+    """Return sorted list of scope names ("" for the default .mcc/) for state dirs that exist."""
+    scopes = []
     for d in find_state_dirs():
-        sf = d / "sessions"
-        if sf.exists():
-            target = sf
-            break
-    if target is None:
-        # No state dir yet — create .mcc/sessions
-        mcc_dir = cwd / ".mcc"
-        mcc_dir.mkdir(parents=True, exist_ok=True)
-        target = mcc_dir / "sessions"
+        if d.name == ".mcc":
+            scopes.append("")
+        elif d.name.startswith(".mcc-"):
+            scopes.append(d.name[len(".mcc-"):])
+    return sorted(scopes)
+
+
+def _scope_dir_name(scope):
+    return ".mcc" if not scope else f".mcc-{scope}"
+
+
+def _guess_scope_from_name(session_name, candidate_scopes):
+    """If session_name starts with a scope name followed by '-' or '_', return that scope.
+    Otherwise return None. Only considers non-empty scopes."""
+    for s in candidate_scopes:
+        if not s:
+            continue
+        if session_name == s or session_name.startswith(s + "-") or session_name.startswith(s + "_"):
+            return s
+    return None
+
+
+def _resolve_scope_for_write(session_name, explicit_scope=None):
+    """Resolve which scope's sessions file to write to.
+
+    explicit_scope: caller-supplied scope ("" or "<name>"). If given, used as-is.
+    Else: looks at existing state dirs.
+      - 0 dirs → "" (caller will create .mcc/)
+      - 1 dir → that scope (no prompt)
+      - 2+ dirs → prompt interactively if stdin is a TTY, with a prefix-match
+                  default. If not interactive, raises SystemExit with a clear
+                  hint to pass --scope.
+    """
+    if explicit_scope is not None:
+        return explicit_scope
+    scopes = _list_existing_scopes()
+    if not scopes:
+        return ""
+    if len(scopes) == 1:
+        return scopes[0]
+    # Multiple scopes — disambiguate
+    guess = _guess_scope_from_name(session_name, scopes)
+    pretty = ", ".join(s or "(default)" for s in scopes)
+    if not sys.stdin.isatty():
+        hint = f" (e.g. --scope {guess})" if guess else ""
+        die(f"multiple state scopes exist ({pretty}); pass --scope <name> to disambiguate{hint}")
+    print(f"Multiple state scopes exist: {pretty}")
+    if guess:
+        print(f"  (guessing '{guess}' from session name '{session_name}')")
+    raw = prompt("Which scope?", default=(guess if guess is not None else "")).strip()
+    if raw == "(default)":
+        raw = ""
+    if raw not in scopes:
+        die(f"unknown scope: {raw!r}. Known scopes: {pretty}")
+    return raw
+
+
+def _write_session_registration(name, sid, cwd=None, scope=None):
+    """Append/update <name>=<sid> in <scope>/sessions, creating the dir if needed.
+
+    scope: None → resolve via _resolve_scope_for_write (may prompt).
+           "" → write to .mcc/sessions.
+           "<s>" → write to .mcc-<s>/sessions.
+    """
+    cwd = cwd or Path.cwd()
+    resolved_scope = _resolve_scope_for_write(name, explicit_scope=scope)
+    state_dir = cwd / _scope_dir_name(resolved_scope)
+    state_dir.mkdir(parents=True, exist_ok=True)
+    target = state_dir / "sessions"
 
     # Read existing, update or append
     existing_lines = []
@@ -2472,23 +2529,33 @@ def _write_session_registration(name, sid, cwd=None):
 
 
 def cmd_session_set(argv):
-    """Register a session id under a name in .mcc/sessions.
+    """Register a session id under a name in .mcc[-scope]/sessions.
 
     Forms:
-      mcc session set <name> <session-id>  — non-interactive
-      mcc session set                      — interactive picker
+      mcc session set <name> <session-id> [--scope <s>]  — non-interactive
+      mcc session set [--scope <s>]                      — interactive picker
     """
     rest = []
-    for a in argv:
+    explicit_scope = None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--scope":
+            if i + 1 >= len(argv):
+                die("--scope requires a value (use '' for the default .mcc/)")
+            explicit_scope = argv[i + 1]
+            i += 2
+            continue
         if a.startswith("--"):
             die(f"unknown flag: {a}")
         rest.append(a)
+        i += 1
 
     if len(rest) == 2:
         name, sid = rest
         if not _looks_like_uuid(sid):
             die(f"second arg must be a session-id UUID; got '{sid}'")
-        target = _write_session_registration(name, sid)
+        target = _write_session_registration(name, sid, scope=explicit_scope)
         print(f"Registered: {name}={sid}")
         print(f"  in: {target}")
         # Only top up team config if team mode is opted-in for this project
@@ -2498,8 +2565,8 @@ def cmd_session_set(argv):
         return
 
     if len(rest) == 1:
-        die("usage: mcc session set <name> <session-id>  OR  mcc session set "
-            "(no args, for the interactive picker)")
+        die("usage: mcc session set <name> <session-id> [--scope <s>]  OR  "
+            "mcc session set [--scope <s>]  (no positional args, for the interactive picker)")
 
     # Interactive picker
     summaries = _gather_session_summaries()
@@ -2534,7 +2601,7 @@ def cmd_session_set(argv):
     name = prompt("Name to register as", default=default_name).strip()
     if not name:
         die("name cannot be empty")
-    target = _write_session_registration(name, chosen["sid"])
+    target = _write_session_registration(name, chosen["sid"], scope=explicit_scope)
     print()
     print(f"Registered: {name}={chosen['sid']}")
     print(f"  in: {target}")
@@ -2796,12 +2863,13 @@ def _ensure_settings_local_allows_read(path):
 def cmd_create(argv):
     """Create a new session, register it, optionally pre-load persona profile."""
     if not argv:
-        die("usage: mcc create <name> [--persona <plugin>:<role>] [--plugin <p>]")
+        die("usage: mcc create <name> [--persona <plugin>:<role>] [--plugin <p>] [--scope <s>]")
 
     # Parse args
     name = None
     persona = None
     plugin = None
+    scope = None
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -2815,13 +2883,22 @@ def cmd_create(argv):
                 die("--plugin requires an argument like 'mama'")
             plugin = argv[i + 1]
             i += 2
+        elif a == "--scope":
+            if i + 1 >= len(argv):
+                die("--scope requires a value (use '' for the default .mcc/)")
+            scope = argv[i + 1]
+            i += 2
         elif name is None:
             name = a
             i += 1
         else:
             die(f"unexpected argument: {a}")
     if not name:
-        die("usage: mcc create <name> [--persona <plugin>:<role>] [--plugin <p>]")
+        die("usage: mcc create <name> [--persona <plugin>:<role>] [--plugin <p>] [--scope <s>]")
+
+    # Resolve scope upfront if multiple state dirs exist (interactive prompt allowed here).
+    # Resolved value is passed through to the inner agent so it doesn't have to guess.
+    scope = _resolve_scope_for_write(name, explicit_scope=scope)
 
     if not have_claude():
         die("'claude' command not found on PATH.")
@@ -2858,15 +2935,17 @@ def cmd_create(argv):
             print(f"  Granted read permission for {persona_path} in .claude/settings.local.json",
                   file=sys.stderr)
 
-    # Construct prompt for `claude -p`
+    # Construct prompt for `claude -p`. Pass scope explicitly so the inner agent
+    # writes to the right .mcc[-scope]/sessions file without having to guess.
+    scope_arg = f" --scope {scope}" if scope else ""
     if persona_path:
         prompt_text = (
-            f"/{plugin}:session set {name}\n\n"
+            f"/{plugin}:session set {name}{scope_arg}\n\n"
             f"Then read your persona profile at @{persona_path} "
             f"and acknowledge with \"ok\"."
         )
     else:
-        prompt_text = f"/{plugin}:session set {name}"
+        prompt_text = f"/{plugin}:session set {name}{scope_arg}"
 
     # Launch claude -p
     print(f"Creating session '{name}' on team '{team_name}'"
