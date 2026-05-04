@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.10.1"
+MCC_VERSION = "1.11.0"
 
 import json
 import time
@@ -766,26 +766,113 @@ def _parse_selection(raw, registered):
     return [n for n in registered if n in selected]
 
 
+VALID_GROUP_BY = ("scope", "none", "custom")
+
+
+def _validate_group_label(label):
+    label = label.strip()
+    if not label:
+        die("group label cannot be empty")
+    if ":" in label:
+        die(f"group label cannot contain ':' (got {label!r})")
+    return label
+
+
+def _resolve_groups(selection, name_scope, mode):
+    """Group session names per the requested mode.
+
+    selection: ordered list of (name, custom_label_or_None). For non-custom
+               modes the second element is ignored.
+    name_scope: {name: scope_str_or_empty}.
+    mode: "scope" | "none" | "custom".
+
+    Returns ordered list of (group_label, [names]) tuples. Group order =
+    first-seen-in-selection. Within each group, order = selection order.
+    """
+    if mode == "none":
+        return [("personas", [n for n, _ in selection])]
+    groups = []
+    bucket = {}
+    for n, custom in selection:
+        if mode == "scope":
+            label = name_scope.get(n) or "default"
+        elif mode == "custom":
+            if not custom:
+                die(f"session '{n}' has no group assignment")
+            label = _validate_group_label(custom)
+        else:
+            die(f"unknown group-by mode: {mode}")
+        if label not in bucket:
+            bucket[label] = []
+            groups.append((label, bucket[label]))
+        bucket[label].append(n)
+    return groups
+
+
+def _vscode_group_string(label):
+    """VSCode presentation.group string. Use 'personas' for the lone tab in
+    'none' mode (preserves single-project shape), else 'personas:<label>'."""
+    return "personas" if label == "personas" else f"personas:{label}"
+
+
 def cmd_vscode(argv):
     """Bootstrap or update .vscode/tasks.json with mcc session tasks.
 
-    In multi-project repos (any .mcc-{scope}/ present), session tasks are grouped
-    into per-scope VSCode tabs and per-scope aggregators (`mcc:all:{scope}`) are
-    emitted in addition to the top-level `mcc:all`. The user is asked which
-    aggregator(s) should auto-run on folder open (default: none).
+    Grouping modes (--group-by):
+      scope   one tab per .mcc-{scope}/ (default in multi-project repos)
+      none    everything in one tab (default in single-project repos)
+      custom  user-defined groups via --group <label>=<a>,<b> (repeatable)
 
-    In single-project repos the behavior is unchanged: one `personas` group, one
-    `mcc:all` aggregator that runs on folder open by default.
+    Passing any --group ... implies --group-by custom unless explicitly set.
+
+    Per-group aggregator tasks `mcc:all:<label>` are emitted alongside the
+    top-level `mcc:all`. The mcc:all:* sub-namespace is reserved.
+
+    Auto-run on folder open is opt-in per group (default: none) in scope/custom
+    mode. Single-project ('none' mode) auto-runs `mcc:all` by default.
     """
     no_folder_open = False
+    group_by = None
+    custom_groups = []  # list of (label, [names])
     cli_args = []
-    for a in argv:
+    i = 0
+    while i < len(argv):
+        a = argv[i]
         if a == "--no-folder-open":
             no_folder_open = True
+            i += 1
+        elif a == "--group-by":
+            if i + 1 >= len(argv):
+                die("--group-by requires a value (one of: scope, none, custom)")
+            v = argv[i + 1].strip().lower()
+            if v not in VALID_GROUP_BY:
+                die(f"--group-by must be one of: {', '.join(VALID_GROUP_BY)} (got {v!r})")
+            group_by = v
+            i += 2
+        elif a == "--group":
+            if i + 1 >= len(argv):
+                die("--group requires a value like 'label=name1,name2'")
+            spec = argv[i + 1]
+            if "=" not in spec:
+                die(f"--group expected 'label=name1,name2', got {spec!r}")
+            label, csv = spec.split("=", 1)
+            label = _validate_group_label(label)
+            members = [s.strip() for s in csv.split(",") if s.strip()]
+            if not members:
+                die(f"--group {label!r} has no members")
+            custom_groups.append((label, members))
+            i += 2
         elif a.startswith("--"):
             die(f"unknown flag: {a}")
         else:
             cli_args.append(a)
+            i += 1
+
+    # If --group given without --group-by, infer custom mode
+    if custom_groups and group_by is None:
+        group_by = "custom"
+    if custom_groups and group_by != "custom":
+        die("--group is only valid with --group-by custom")
 
     by_scope = collect_sessions_by_scope()
     if not by_scope:
@@ -802,12 +889,29 @@ def cmd_vscode(argv):
                 flat.append(n)
                 name_scope[n] = scope
 
-    # Selection: CLI args may name sessions OR scopes (multi-project only)
+    # If --group given without positional selection, the group definitions
+    # imply the selection (union of member names).
+    if not cli_args and custom_groups:
+        seen = set()
+        cli_args = []
+        for _, members in custom_groups:
+            for m in members:
+                if m not in seen:
+                    seen.add(m)
+                    cli_args.append(m)
+
+    # Selection: CLI args may name sessions OR scopes (multi-project only),
+    # or the literal "all".
     if cli_args:
         selected = []
         seen = set()
         for tok in cli_args:
-            if multi_project and any(s == tok for s, _ in by_scope):
+            if tok == "all":
+                for n in flat:
+                    if n not in seen:
+                        seen.add(n)
+                        selected.append(n)
+            elif multi_project and any(s == tok for s, _ in by_scope):
                 # scope argument — include all sessions in that scope
                 for s, ns in by_scope:
                     if s == tok:
@@ -887,22 +991,80 @@ def cmd_vscode(argv):
     if not names:
         die("no sessions selected; nothing to do.")
 
-    # Group selected names by scope, preserving by_scope order
-    selected_by_scope = []
-    for scope, ns in by_scope:
-        in_scope = [n for n in ns if n in names]
-        if in_scope:
-            selected_by_scope.append((scope, in_scope))
+    # Decide grouping mode if not yet set (interactive or default)
+    if group_by is None:
+        if cli_args:
+            # Non-interactive default
+            group_by = "scope" if multi_project else "none"
+        else:
+            print()
+            default_mode = "scope" if multi_project else "none"
+            print("Group sessions into VSCode tabs how?")
+            print("  scope    one tab per project scope")
+            print("  none     all in one tab")
+            print("  custom   manually assign each session to a group label")
+            raw = prompt("Mode", default=default_mode).strip().lower()
+            if raw not in VALID_GROUP_BY:
+                die(f"invalid mode {raw!r}; expected one of: {', '.join(VALID_GROUP_BY)}")
+            group_by = raw
+
+    # Build the (name, custom_label_or_None) selection
+    if group_by == "custom":
+        if custom_groups:
+            # Custom groups defined via CLI: build assignment from them
+            assigned = {}
+            for label, members in custom_groups:
+                for m in members:
+                    if m not in name_scope:
+                        die(f"--group {label!r} references unknown session '{m}'")
+                    if m not in names:
+                        die(f"--group {label!r} references '{m}' which wasn't selected")
+                    if m in assigned:
+                        die(f"session '{m}' assigned to multiple groups "
+                            f"({assigned[m]!r} and {label!r})")
+                    assigned[m] = label
+            unassigned = [n for n in names if n not in assigned]
+            if unassigned:
+                die(f"sessions with no group assignment: {', '.join(unassigned)}. "
+                    f"Add them to a --group, or remove from selection.")
+            selection = [(n, assigned[n]) for n in names]
+        else:
+            # Interactive: walk through each session, default = scope or last entered
+            print()
+            print("Custom grouping — enter a group label for each session.")
+            print("(Sessions with the same label share a VSCode tab.)")
+            selection = []
+            last_label = None
+            for n in names:
+                default_label = last_label or name_scope.get(n) or "default"
+                raw = prompt(f"  {n}", default=default_label).strip()
+                if not raw:
+                    raw = default_label
+                _validate_group_label(raw)
+                selection.append((n, raw))
+                last_label = raw
+    else:
+        selection = [(n, None) for n in names]
+
+    grouped = _resolve_groups(selection, name_scope, group_by)
 
     # Decide which aggregators run on folder open
-    auto_run_scopes = set()  # scope names whose mcc:all:{scope} runs on open
-    auto_run_top = False     # whether mcc:all runs on open
+    auto_run_groups = set()  # group labels whose mcc:all:<g> runs on open
+    auto_run_top = False     # whether top-level mcc:all runs on open
     if not no_folder_open:
-        if multi_project:
-            scope_names = [s for s, _ in selected_by_scope if s]
+        if group_by == "none":
+            # Single tab — fold "auto-run on open" into mcc:all (single-project default)
+            auto_run_top = True
+        elif cli_args:
+            # Non-interactive with multiple groups: don't presume; user can re-run
+            # interactively or pass --no-folder-open. Default = none.
+            pass
+        else:
+            group_labels = [g for g, _ in grouped]
             print()
             print("Auto-run on folder open?")
-            print(f"  Scopes available: {', '.join(scope_names)} (or 'all' for everything, 'none' for nothing)")
+            print(f"  Groups available: {', '.join(group_labels)} "
+                  f"(or 'all' for everything, 'none' for nothing)")
             raw = prompt("Which to auto-run?", default="none").strip().lower()
             if raw in ("", "none"):
                 pass
@@ -913,28 +1075,25 @@ def cmd_vscode(argv):
                     tok = tok.strip()
                     if not tok:
                         continue
-                    if tok in scope_names:
-                        auto_run_scopes.add(tok)
+                    if tok in group_labels:
+                        auto_run_groups.add(tok)
                     else:
-                        die(f"unknown scope: {tok}")
-        else:
-            auto_run_top = True
+                        die(f"unknown group: {tok}")
 
     # Build tasks
     new_mcc_tasks = []
-    for scope, ns in selected_by_scope:
-        group = f"personas:{scope}" if (multi_project and scope) else "personas"
+    for label, ns in grouped:
+        gstr = _vscode_group_string(label)
         for n in ns:
-            new_mcc_tasks.append(_make_session_task(n, group=group))
+            new_mcc_tasks.append(_make_session_task(n, group=gstr))
 
-    # Per-scope aggregators (multi-project only)
-    if multi_project:
-        for scope, ns in selected_by_scope:
-            if not scope:
-                continue
-            label = f"mcc:all:{scope}"
+    # Per-group aggregators (skip in 'none' mode — there's only one group, and
+    # the top-level mcc:all already covers it)
+    if group_by != "none":
+        for label, ns in grouped:
             new_mcc_tasks.append(_make_aggregator_task(
-                label, ns, run_on_folder_open=(scope in auto_run_scopes)
+                f"mcc:all:{label}", ns,
+                run_on_folder_open=(label in auto_run_groups),
             ))
 
     # Top-level aggregator
@@ -974,19 +1133,17 @@ def cmd_vscode(argv):
     tasks_file.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
     print(f"Wrote {tasks_file} with mcc tasks for: {', '.join(names)}")
-    if multi_project:
-        for scope, ns in selected_by_scope:
-            if scope:
-                tag = " (auto-run on folder open)" if scope in auto_run_scopes else ""
-                print(f"  mcc:all:{scope} → {', '.join(ns)}{tag}")
-        top_tag = " (auto-run on folder open)" if auto_run_top else ""
-        print(f"  mcc:all → everything{top_tag}")
-    elif auto_run_top:
-        print(f"  mcc:all will run automatically on folder open")
+    print(f"  group-by: {group_by}")
+    if group_by != "none":
+        for label, ns in grouped:
+            tag = " (auto-run on folder open)" if label in auto_run_groups else ""
+            print(f"  mcc:all:{label} → {', '.join(ns)}{tag}")
+    top_tag = " (auto-run on folder open)" if auto_run_top else ""
+    print(f"  mcc:all → everything{top_tag}")
     if had_comments:
         print(f"  ! existing JSONC comments were dropped on write")
     print()
-    aggregator_hint = "mcc:all" if not multi_project else "mcc:all (or mcc:all:{scope})"
+    aggregator_hint = "mcc:all" if group_by == "none" else "mcc:all (or mcc:all:<group>)"
     print(f"In VS Code: Cmd/Ctrl+Shift+P → 'Tasks: Run Task' → {aggregator_hint} or any individual mcc:<name>")
 
 
@@ -3259,21 +3416,36 @@ mcc migrate — consolidate legacy state directories
 Migrates legacy .mam/, .mama/, and .pdt[-scope]/ state directories into
 the unified .mcc[-scope]/ layout. Idempotent.""",
     "vscode": """\
-mcc vscode [<name|scope>...] [--no-folder-open]
+mcc vscode [<name|scope>...] [--group-by <mode>] [--group <label>=<a>,<b>]...
+           [--no-folder-open]
 
 Bootstrap or update .vscode/tasks.json with mcc session tasks.
 
-In multi-project repos (multiple .mcc-{scope}/ dirs), session tasks are
-grouped into per-scope tabs and per-scope aggregators (mcc:all:{scope})
-are emitted alongside the top-level mcc:all. The user is asked which
-aggregator(s) auto-run on folder open. Pass scope names as positional
-args to filter.
+Selection: positional args may be session names or scope names (multi-project
+repos). With no positional args, prompts interactively.
 
-Single-project: one personas group, one mcc:all that auto-runs on folder
-open by default.
+Grouping (--group-by): controls how sessions are grouped into VSCode tabs.
+  scope    one tab per .mcc-{scope}/ (default in multi-project repos)
+  none     all sessions in one tab (default in single-project repos)
+  custom   user-defined groups via --group <label>=<a>,<b> (repeatable)
+           Passing any --group implies --group-by custom.
+
+Per-group aggregator tasks `mcc:all:<label>` are emitted alongside the
+top-level `mcc:all`. The mcc:all:* sub-namespace is reserved.
+
+Auto-run on folder open: opt-in per group in scope/custom mode (default
+none); none mode auto-runs `mcc:all` by default.
 
 Flags:
-  --no-folder-open    don't auto-run anything on folder open""",
+  --group-by <scope|none|custom>
+  --group <label>=<name1>,<name2>      repeatable; implies --group-by custom
+  --no-folder-open                     don't auto-run anything on open
+
+Examples:
+  mcc vscode --group-by scope                       # tabs per project scope
+  mcc vscode --group-by none                        # one tab with everything
+  mcc vscode --group arch=admin-arch,app-arch \\
+             --group impl=admin-impl,app-impl       # custom cross-project tabs""",
     "version": "mcc version — show mcc version",
 
     # mcc team
