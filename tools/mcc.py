@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.11.0"
+MCC_VERSION = "1.12.0"
 
 import json
 import time
@@ -2946,18 +2946,28 @@ def _team_launch_args(name, sid, team_name):
 
 
 def _resolve_persona(persona_arg):
-    """Parse 'plugin:role' → (plugin, role, persona_path). Returns (None, None, None) on error."""
+    """Parse 'plugin:role' → (plugin, role, persona_path). Returns (None, None, None) on error.
+
+    Looks for the persona file in two locations, in order:
+      1. plugins/<plugin>/personas/<role>.md   — primary-role starter profiles
+         (e.g. mama:architect, pdt:design-partner). Brief, identity-only.
+      2. plugins/<plugin>/agents/<role>/agent.md — teammate-agent definitions
+         (e.g. mama:implementor, mama:ux-designer). Full agent profiles.
+    """
     if ":" not in persona_arg:
         return (None, None, None)
     plugin, role = persona_arg.split(":", 1)
     if plugin not in PLUGINS:
         return (None, None, None)
-    # Persona file lives at <marketplace-clone>/plugins/<plugin>/agents/<role>/agent.md
-    mcc_dir = Path(__file__).resolve().parent  # /tools
-    persona_path = mcc_dir.parent / "plugins" / plugin / "agents" / role / "agent.md"
-    if not persona_path.exists():
-        return (plugin, role, None)
-    return (plugin, role, persona_path)
+    plugins_root = Path(__file__).resolve().parent.parent / "plugins"
+    candidates = [
+        plugins_root / plugin / "personas" / f"{role}.md",
+        plugins_root / plugin / "agents" / role / "agent.md",
+    ]
+    for path in candidates:
+        if path.exists():
+            return (plugin, role, path)
+    return (plugin, role, None)
 
 
 def _ensure_settings_local_allows_read(path):
