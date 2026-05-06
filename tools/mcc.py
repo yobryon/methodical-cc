@@ -18,7 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.15.0"
+MCC_VERSION = "1.15.1"
 
 import json
 import time
@@ -1374,42 +1374,32 @@ def _select_live_branch(entries):
     return chain
 
 
-def _select_walk_back(entries):
-    """Walk back from the latest-timestamp eligible leaf via
-    parentUuid → logicalParentUuid (the compact-bridge field).
+def _walk_back_one(leaf, msgs, skip=None):
+    """Walk back from leaf via parentUuid → logicalParentUuid (compact bridge).
 
-    Returns (chain_root_first, leaf, bridges_followed, dead_bridge_or_None).
-    `dead_bridge` is a dict describing where the walk terminated when a
-    parent/logical link couldn't be resolved in-file — used by the
-    verification step to surface negative findings.
+    Returns (chain_root_first, bridges_followed, dead_bridge_or_None, stop_reason)
+    where stop_reason is one of:
+      'root'        — reached an entry with no parent/logical reference (natural start)
+      'dead_bridge' — parent/logical referenced a uuid not in the file
+      'skip'        — converged into already-claimed content (fork stub)
+      'cycle'       — re-encountered a uuid (corrupt/circular file)
     """
-    msgs = {}
-    for e in entries:
-        if not isinstance(e, dict):
-            continue
-        u = e.get("uuid")
-        if not u:
-            continue
-        msgs[u] = e
-
-    eligible = [
-        e for e in msgs.values()
-        if e.get("type") in ("user", "assistant")
-        and not e.get("isSidechain", False)
-        and e.get("timestamp")
-    ]
-    if not eligible:
-        return [], None, 0, None
-
-    leaf = max(eligible, key=lambda e: e.get("timestamp", ""))
-
+    skip = skip or set()
     chain = []
     seen = set()
     cur = leaf
     bridges = 0
     dead_bridge = None
-    while cur is not None and cur.get("uuid") not in seen:
-        seen.add(cur.get("uuid"))
+    stop_reason = "root"
+    while cur is not None:
+        u = cur.get("uuid")
+        if u in seen:
+            stop_reason = "cycle"
+            break
+        if u in skip:
+            stop_reason = "skip"
+            break
+        seen.add(u)
         chain.append(cur)
         parent_id = cur.get("parentUuid")
         nxt = msgs.get(parent_id) if parent_id else None
@@ -1427,17 +1417,116 @@ def _select_walk_back(entries):
                     "wanted_parent": parent_id,
                     "wanted_logical": logical_id,
                 }
+                stop_reason = "dead_bridge"
+                break
+            else:
+                stop_reason = "root"
                 break
         cur = nxt
-
     chain.reverse()
-    return chain, leaf, bridges, dead_bridge
+    return chain, bridges, dead_bridge, stop_reason
 
 
-def _verify_walk_chain(entries, chain):
-    """Check whether the file's first/last eligible (user/assistant non-sidechain)
-    entries by timestamp both appear in the produced chain. Returns a list of
-    (which, entry) tuples for any missing endpoints — empty list = PASS."""
+def _select_walk_back_segments(entries):
+    """Walk back from the latest-eligible leaf, then enumerate orphan
+    subtrees (disconnected from the main chain because of dead compact-
+    bridge predecessors but still walkable on their own).
+
+    Returns a list of segments in chronological order (oldest segment first,
+    main segment last). Each segment is:
+      {chain, leaf, bridges, dead_bridge, is_main}
+    """
+    msgs = {}
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        u = e.get("uuid")
+        if not u:
+            continue
+        msgs[u] = e
+
+    eligible = [
+        e for e in msgs.values()
+        if e.get("type") in ("user", "assistant")
+        and not e.get("isSidechain", False)
+        and e.get("timestamp")
+    ]
+    if not eligible:
+        return []
+
+    # ---- Main segment: walk from latest-by-timestamp eligible leaf ----
+    # Prefer true leaves (entries not referenced as parent by anyone) — when
+    # multiple entries share the same timestamp (a chain in the same tick),
+    # picking an internal node would leave the actual tip outside the chain.
+    referenced_as_parent = set()
+    for e in msgs.values():
+        for k in ("parentUuid", "logicalParentUuid"):
+            pid = e.get(k)
+            if pid:
+                referenced_as_parent.add(pid)
+    leaf_eligible = [e for e in eligible if e.get("uuid") not in referenced_as_parent]
+    primary_leaf = max(
+        leaf_eligible or eligible,
+        key=lambda e: e.get("timestamp", ""),
+    )
+    primary_chain, primary_bridges, primary_dead, _ = _walk_back_one(primary_leaf, msgs)
+    claimed = {e.get("uuid") for e in primary_chain}
+
+    # ---- Orphan segments: enumerate eligible entries not in claimed,
+    # find their leaves (within-orphan-set), walk each back stopping at
+    # already-claimed entries. Discard "fork stubs" — segments that
+    # converge into already-claimed content rather than reaching a real
+    # root or dead bridge — they're branches that diverged then merged
+    # back, not lost upstream history.
+    orphans = [e for e in eligible if e.get("uuid") not in claimed]
+    orphan_segments = []
+    while orphans:
+        orphan_uuids = {e.get("uuid") for e in orphans}
+        referenced = set()
+        for e in orphans:
+            for k in ("parentUuid", "logicalParentUuid"):
+                pid = e.get(k)
+                if pid in orphan_uuids:
+                    referenced.add(pid)
+        orphan_leaves = [e for e in orphans if e.get("uuid") not in referenced]
+        if not orphan_leaves:
+            break
+        orphan_leaves.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
+        leaf = orphan_leaves[0]
+        chain, bridges, dead, stop_reason = _walk_back_one(leaf, msgs, skip=claimed)
+        # Always claim the walked entries so we don't re-walk them, even if
+        # we drop the segment (fork stub).
+        chain_ids = {e.get("uuid") for e in chain}
+        claimed |= chain_ids
+        orphans = [e for e in orphans if e.get("uuid") not in claimed]
+        if not chain:
+            continue
+        if stop_reason in ("skip", "cycle"):
+            continue  # fork stub: this branch converged into already-walked content
+        orphan_segments.append({
+            "chain": chain,
+            "leaf": leaf,
+            "bridges": bridges,
+            "dead_bridge": dead,
+            "is_main": False,
+        })
+
+    # Order: orphan segments by leaf-ts ASCENDING (oldest first), then main last.
+    orphan_segments.sort(key=lambda s: s["leaf"].get("timestamp", ""))
+    segments = orphan_segments + [{
+        "chain": primary_chain,
+        "leaf": primary_leaf,
+        "bridges": primary_bridges,
+        "dead_bridge": primary_dead,
+        "is_main": True,
+    }]
+    return segments
+
+
+def _verify_walk_segments(entries, segments):
+    """Check whether the file's first/last eligible entries by timestamp both
+    appear in any segment. Returns a list of (which, entry) tuples for missing
+    endpoints — empty list = PASS."""
     eligible = [
         e for e in entries
         if isinstance(e, dict)
@@ -1448,11 +1537,13 @@ def _verify_walk_chain(entries, chain):
     if not eligible:
         return []
     eligible.sort(key=lambda e: e.get("timestamp", ""))
-    chain_uuids = {e.get("uuid") for e in chain}
+    union_uuids = set()
+    for seg in segments:
+        union_uuids.update(e.get("uuid") for e in seg["chain"])
     findings = []
-    if eligible[0].get("uuid") not in chain_uuids:
+    if eligible[0].get("uuid") not in union_uuids:
         findings.append(("first", eligible[0]))
-    if eligible[-1].get("uuid") not in chain_uuids:
+    if eligible[-1].get("uuid") not in union_uuids:
         findings.append(("last", eligible[-1]))
     return findings
 
@@ -2427,23 +2518,25 @@ def cmd_session_transcript(args):
         "post_compact_only": post_compact_only,
     }
 
-    # ---- Pick chain ----
-    leaf = None
-    bridges = 0
-    dead_bridge = None
+    # ---- Pick chain(s) ----
+    segments = []
     if chronological:
         chain = _select_chronological(entries)
         mode = "chronological (all eligible entries by timestamp)"
+        single_chain = chain
     elif live_branch:
         chain = _select_live_branch(entries)
         mode = "live-branch (longest reachable chain)"
+        single_chain = chain
     else:
-        chain, leaf, bridges, dead_bridge = _select_walk_back(entries)
-        mode = "walk-back (latest-eligible leaf, parentUuid + logicalParentUuid bridge)"
-    if not chain:
+        segments = _select_walk_back_segments(entries)
+        mode = "walk-back (latest-eligible leaf + orphan-subtree splicing)"
+        single_chain = None
+        if not segments:
+            die(f"no transcript entries found in {jsonl_path}")
+    if single_chain is not None and not single_chain:
         die(f"no transcript entries found in {jsonl_path}")
 
-    body = _render_chain(chain, base_opts)
     now = time.strftime("%Y-%m-%d %H:%M:%S")
     fork_line = ""
     if fork_origin and fork_origin[0]:
@@ -2456,14 +2549,63 @@ def cmd_session_transcript(args):
         else:
             fork_line = f"- **Forked from**: session `{parent_sid}`\n"
 
-    walk_meta = ""
-    if not chronological and not live_branch:
-        walk_meta = f"- Logical bridges followed: {bridges}\n"
-        if leaf is not None:
-            walk_meta += (
-                f"- Leaf: `{leaf.get('uuid')}` "
-                f"(`{leaf.get('type')}` at `{leaf.get('timestamp')}`)\n"
+    # ---- Render body ----
+    if segments:
+        total_entries = sum(len(s["chain"]) for s in segments)
+        total_bridges = sum(s["bridges"] for s in segments)
+        seg_lines = []
+        for i, seg in enumerate(segments, 1):
+            kind = "main" if seg["is_main"] else "orphan"
+            leaf = seg["leaf"]
+            root = seg["chain"][0]
+            seg_lines.append(
+                f"  - segment {i} [{kind}]: {len(seg['chain'])} entries, "
+                f"{seg['bridges']} bridges, "
+                f"root ts {root.get('timestamp')}, leaf ts {leaf.get('timestamp')}"
             )
+        seg_block = "\n".join(seg_lines)
+        walk_meta = (
+            f"- Segments: {len(segments)} (orphan: {len(segments) - 1}, main: 1)\n"
+            f"- Total logical bridges followed: {total_bridges}\n"
+            f"{seg_block}\n"
+        )
+        body_parts = []
+        for i, seg in enumerate(segments):
+            kind = "main" if seg["is_main"] else "orphan"
+            leaf = seg["leaf"]
+            root = seg["chain"][0]
+            body_parts.append(
+                f"---\n\n"
+                f"## Segment {i + 1} of {len(segments)} — {kind}\n\n"
+                f"- Chain: {len(seg['chain'])} entries\n"
+                f"- Logical bridges: {seg['bridges']}\n"
+                f"- Leaf: `{leaf.get('uuid')}` ts `{leaf.get('timestamp')}`\n"
+                f"- Root: `{root.get('uuid')}` ts `{root.get('timestamp')}`\n"
+            )
+            if seg["dead_bridge"]:
+                db = seg["dead_bridge"]
+                want_l = (db["wanted_logical"] or "")[:8] if db["wanted_logical"] else None
+                want_p = (db["wanted_parent"] or "")[:8] if db["wanted_parent"] else None
+                bridge_line = ""
+                if want_p:
+                    bridge_line += f"parentUuid={want_p} (unresolved)"
+                if want_l:
+                    if bridge_line:
+                        bridge_line += "; "
+                    bridge_line += f"logicalParentUuid={want_l} (unresolved)"
+                body_parts.append(
+                    f"- **Dead bridge** at root: {bridge_line}\n"
+                    f"  History prior to this point exists in another segment "
+                    f"or is missing from the file.\n"
+                )
+            body_parts.append("\n---\n\n")
+            body_parts.append(_render_chain(seg["chain"], base_opts))
+        body = "".join(body_parts)
+        entries_summary = total_entries
+    else:
+        walk_meta = ""
+        body = "---\n\n" + _render_chain(single_chain, base_opts)
+        entries_summary = len(single_chain)
 
     header = (
         f"# Transcript: {label}\n\n"
@@ -2471,7 +2613,7 @@ def cmd_session_transcript(args):
         f"- Source: `{jsonl_path}`\n"
         f"- Generated: {now}\n"
         f"- Mode: {mode}\n"
-        f"- Entries selected: {len(chain)}\n"
+        f"- Entries selected: {entries_summary}\n"
         f"{walk_meta}"
         f"{fork_line}"
         f"- Options: thinking={include_thinking} "
@@ -2479,7 +2621,6 @@ def cmd_session_transcript(args):
         f"meta={include_meta} "
         f"harness_commands={include_harness_commands} "
         f"post_compact_only={post_compact_only}\n\n"
-        f"---\n\n"
     )
 
     short_sid = sid[:8]
@@ -2491,13 +2632,13 @@ def cmd_session_transcript(args):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(header + body)
     print(f"Wrote {out_path}")
-    print(f"  {len(chain)} entries from {jsonl_path}")
+    print(f"  {entries_summary} entries from {jsonl_path}")
 
     # ---- Verification (walk-back mode only) ----
     if chronological or live_branch:
         return
 
-    findings = _verify_walk_chain(entries, chain)
+    findings = _verify_walk_segments(entries, segments)
     eligible_count = sum(
         1 for e in entries
         if isinstance(e, dict)
@@ -2505,39 +2646,44 @@ def cmd_session_transcript(args):
         and not e.get("isSidechain", False)
         and e.get("timestamp")
     )
+    total_bridges = sum(s["bridges"] for s in segments)
     print(
         f"  verification: file eligible={eligible_count} "
-        f"chain={len(chain)} bridges={bridges}",
+        f"chain={entries_summary} segments={len(segments)} bridges={total_bridges}",
         file=sys.stderr,
     )
     if not findings:
-        print("  verification: PASS — first and last eligible messages in chain", file=sys.stderr)
+        print("  verification: PASS — first and last eligible messages reached", file=sys.stderr)
         return
 
     print("  verification: NEGATIVE FINDINGS", file=sys.stderr)
     for which, entry in findings:
         print(
-            f"    {which} eligible NOT in chain: "
+            f"    {which} eligible NOT in any segment: "
             f"uuid={(entry.get('uuid') or '')[:8]} "
             f"ts={entry.get('timestamp')} "
             f"type={entry.get('type')}",
             file=sys.stderr,
         )
         print(f"      content: {_excerpt_for_diag(entry)}", file=sys.stderr)
-    if dead_bridge:
+    # Surface dead bridges across all segments
+    for i, seg in enumerate(segments, 1):
+        db = seg["dead_bridge"]
+        if not db:
+            continue
         print(
-            f"    walk terminated at uuid={(dead_bridge['at_uuid'] or '')[:8]} "
-            f"({dead_bridge['type']}/{dead_bridge['subtype']}) ts={dead_bridge['ts']}",
+            f"    segment {i} terminated at uuid={(db['at_uuid'] or '')[:8]} "
+            f"({db['type']}/{db['subtype']}) ts={db['ts']}",
             file=sys.stderr,
         )
-        if dead_bridge["wanted_parent"]:
+        if db["wanted_parent"]:
             print(
-                f"      wanted parentUuid={dead_bridge['wanted_parent'][:8]} (unresolved)",
+                f"      wanted parentUuid={db['wanted_parent'][:8]} (unresolved)",
                 file=sys.stderr,
             )
-        if dead_bridge["wanted_logical"]:
+        if db["wanted_logical"]:
             print(
-                f"      wanted logicalParentUuid={dead_bridge['wanted_logical'][:8]} (unresolved)",
+                f"      wanted logicalParentUuid={db['wanted_logical'][:8]} (unresolved)",
                 file=sys.stderr,
             )
     print(
