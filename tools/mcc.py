@@ -17,7 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.12.0"
+MCC_VERSION = "1.13.0"
 
 import json
 import time
@@ -25,6 +25,15 @@ import time
 PLUGINS = ("pdt", "mam", "mama", "bus")
 MARKETPLACE = "methodical-cc"
 STATE_DIR_GLOBS = (".mcc", ".mcc-*")
+
+# Two-level commands: noun → verbs. Drives shell completion and the
+# command_path enumerator. Single source of truth alongside HANDLERS.
+SUBVERBS = {
+    "team":        ("setup", "status"),
+    "session":     ("list", "set", "resume", "transcript"),
+    "reflect":     ("list", "scan", "submit"),
+    "completions": ("bash", "zsh", "install", "uninstall", "print"),
+}
 LEGACY_PLUGIN_PREFIXES = ("pdt", "mam", "mama")  # legacy state-dir prefixes (pre-3.0.0)
 TEAMS_ROOT = Path.home() / ".claude" / "teams"
 PHANTOM_LEAD_NAME = "coordinator"
@@ -3301,6 +3310,20 @@ def cmd_update(argv):
         sys.exit(1)
     print("Update complete. Restart any active Claude Code sessions to pick up changes.")
 
+    # If shell completions are installed, mcc's command surface may have
+    # changed — remind the user to refresh in current shells.
+    shell = _detect_shell()
+    if shell:
+        rc = _rc_file_for(shell)
+        try:
+            if rc and rc.exists() and _COMPLETION_BLOCK_BEGIN in rc.read_text():
+                print()
+                print("Tab-completion: command surface may have changed. Refresh now with:")
+                print(f'  eval "$(mcc completions {shell})"')
+                print("Or open a new shell.")
+        except OSError:
+            pass
+
 
 def cmd_setup(argv):
     print("Methodical-CC setup")
@@ -3373,6 +3396,490 @@ def cmd_version(argv):
     print(f"  script: {Path(__file__).resolve()}")
 
 
+# ----------------------------- Completion --------------------------
+#
+# Shell tab-completion is split in two halves:
+#
+#   1. Static structure lives in shell. `mcc completions bash|zsh` emits a
+#      complete shell function with all subcommands, sub-verbs, and flags
+#      hard-coded (so per-Tab dispatch never invokes Python).
+#
+#   2. Dynamic value sets are served by the `mcc complete --kind <kind>`
+#      fast path. The shell function shells out only for these kinds:
+#      session, scope, persona, session_or_scope_or_all, command_path.
+#
+# Users wire it in via `eval "$(mcc completions bash)"` in their rc file
+# (or `mcc completions install`, which appends a marked block for them).
+
+_COMPLETION_BLOCK_BEGIN = "# >>> mcc completions >>>"
+_COMPLETION_BLOCK_END   = "# <<< mcc completions <<<"
+
+
+def _fast_session_names(cwd=None):
+    cwd = cwd or Path.cwd()
+    names = set()
+    for pat in STATE_DIR_GLOBS:
+        for d in cwd.glob(pat):
+            if not d.is_dir():
+                continue
+            sessions = d / "sessions"
+            if not sessions.exists():
+                continue
+            try:
+                text = sessions.read_text()
+            except OSError:
+                continue
+            for line in text.splitlines():
+                line = line.strip()
+                if not line or "=" not in line:
+                    continue
+                n, _ = line.split("=", 1)
+                n = n.strip()
+                if n:
+                    names.add(n)
+    return sorted(names)
+
+
+def _fast_scope_names(cwd=None):
+    """Named scopes only — empty/default scope is not surfaced for completion."""
+    cwd = cwd or Path.cwd()
+    scopes = set()
+    for d in cwd.glob(".mcc-*"):
+        if d.is_dir():
+            suffix = d.name[len(".mcc-"):]
+            if suffix:
+                scopes.add(suffix)
+    return sorted(scopes)
+
+
+def _fast_personas():
+    plugins_root = Path(__file__).resolve().parent.parent / "plugins"
+    if not plugins_root.is_dir():
+        return []
+    out = set()
+    for plugin in PLUGINS:
+        pdir = plugins_root / plugin
+        personas = pdir / "personas"
+        if personas.is_dir():
+            for p in personas.glob("*.md"):
+                out.add(f"{plugin}:{p.stem}")
+        agents = pdir / "agents"
+        if agents.is_dir():
+            for sub in agents.iterdir():
+                if sub.is_dir() and (sub / "agent.md").exists():
+                    out.add(f"{plugin}:{sub.name}")
+    return sorted(out)
+
+
+def _fast_command_paths():
+    paths = set(HANDLERS.keys())
+    paths.add("complete")
+    for noun, verbs in SUBVERBS.items():
+        for v in verbs:
+            paths.add(f"{noun} {v}")
+    return sorted(paths)
+
+
+def cmd_complete(argv):
+    """Fast-path completion data source for shell completion functions.
+
+    Usage: mcc complete --kind <kind>
+
+    Kinds: session, scope, session_or_scope_or_all, persona, plugin,
+    command_path.
+
+    Output: candidates one per line on stdout. No errors, no prompts —
+    completion functions swallow stderr and treat empty output as "no
+    candidates."
+    """
+    if len(argv) < 2 or argv[0] != "--kind":
+        return
+    kind = argv[1]
+    items = []
+    if kind == "session":
+        items = _fast_session_names()
+    elif kind == "scope":
+        items = _fast_scope_names()
+    elif kind == "session_or_scope_or_all":
+        items = sorted(set(_fast_session_names()) | set(_fast_scope_names()) | {"all"})
+    elif kind == "persona":
+        items = _fast_personas()
+    elif kind == "plugin":
+        items = list(PLUGINS)
+    elif kind == "command_path":
+        items = _fast_command_paths()
+    for x in items:
+        print(x)
+
+
+# Bash completion script. Generated once per shell startup via
+# `eval "$(mcc completions bash)"`. Self-contained: only shells out to
+# `mcc complete --kind <kind>` for dynamic value sets.
+_BASH_COMPLETION = r"""
+_mcc_complete() {
+    COMPREPLY=()
+    local cur cword words prev IFS=$' \t\n'
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    cword=$COMP_CWORD
+    words=("${COMP_WORDS[@]}")
+    prev=""
+    (( cword > 0 )) && prev="${words[$((cword-1))]}"
+
+    # ---- Top level: subcommands ∪ registered session names ----
+    if (( cword == 1 )); then
+        local subs="list status setup update enable disable switch team create migrate vscode session reflect version help completions"
+        local sessions
+        sessions=$(mcc complete --kind session 2>/dev/null)
+        COMPREPLY=( $(compgen -W "${subs} ${sessions}" -- "${cur}") )
+        return
+    fi
+
+    local cmd1="${words[1]}"
+    local cmd2=""
+    local args_start=2
+
+    # ---- Two-level nouns: complete the verb at position 2, then continue ----
+    case "$cmd1" in
+        team|session|reflect|completions)
+            if (( cword == 2 )); then
+                local verbs=""
+                case "$cmd1" in
+                    team)        verbs="setup status" ;;
+                    session)     verbs="list set resume transcript" ;;
+                    reflect)     verbs="list scan submit" ;;
+                    completions) verbs="bash zsh install uninstall print" ;;
+                esac
+                COMPREPLY=( $(compgen -W "$verbs" -- "$cur") )
+                return
+            fi
+            cmd2="${words[2]}"
+            args_start=3
+            ;;
+    esac
+
+    # ---- Special case: --group <label>=<csv-of-sessions> ----
+    # When the previous word is --group and we're typing label=item1,item2,...
+    # we complete the comma-separated session list after '='.
+    if [[ "$prev" == "--group" && "$cur" == *=* ]]; then
+        local label="${cur%%=*}"
+        local list="${cur#*=}"
+        local last="${list##*,}"
+        local prefix=""
+        [[ "$list" == *,* ]] && prefix="${list%,*}"
+        local sessions s
+        sessions=$(mcc complete --kind session 2>/dev/null)
+        COMPREPLY=()
+        for s in $sessions; do
+            [[ "$s" == "$last"* ]] || continue
+            if [[ -n "$prefix" ]]; then
+                COMPREPLY+=( "${label}=${prefix},${s}" )
+            else
+                COMPREPLY+=( "${label}=${s}" )
+            fi
+        done
+        return
+    fi
+
+    # ---- Flag-with-value: complete the value ----
+    case "$prev" in
+        --persona)
+            local items
+            items=$(mcc complete --kind persona 2>/dev/null)
+            COMPREPLY=( $(compgen -W "$items" -- "$cur") )
+            return ;;
+        --plugin)
+            COMPREPLY=( $(compgen -W "pdt mam mama bus" -- "$cur") )
+            return ;;
+        --scope)
+            local items
+            items=$(mcc complete --kind scope 2>/dev/null)
+            COMPREPLY=( $(compgen -W "$items" -- "$cur") )
+            return ;;
+        --group-by)
+            COMPREPLY=( $(compgen -W "scope none custom" -- "$cur") )
+            return ;;
+        --shell)
+            COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
+            return ;;
+        --output)
+            compopt -o default 2>/dev/null
+            COMPREPLY=()
+            return ;;
+        --name|--repo|--min-divergence)
+            return ;;
+        --group)
+            # Awaiting "label=..." — let the user type the label
+            return ;;
+    esac
+
+    # ---- Bare flag completion (cur starts with -) ----
+    if [[ "$cur" == -* ]]; then
+        local flags=""
+        case "$cmd1:$cmd2" in
+            create:)                                       flags="--persona --plugin --scope" ;;
+            vscode:)                                       flags="--group-by --group --no-folder-open" ;;
+            team:setup)                                    flags="--name" ;;
+            session:list)                                  flags="--all --paths --show-path" ;;
+            session:set)                                   flags="--scope" ;;
+            session:transcript)                            flags="--output --min-divergence --include-thinking --include-compact-summaries --include-meta --include-harness-commands --include-incomplete-branches --single-file --live-branch-only --post-compact-only" ;;
+            reflect:submit)                                flags="--repo --no-scan --no-confirm" ;;
+            completions:install|completions:uninstall)     flags="--shell" ;;
+        esac
+        COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
+        return
+    fi
+
+    # ---- Count positional args consumed (skipping flags + their values) ----
+    local pos_idx=0 i w
+    for ((i=args_start; i<cword; i++)); do
+        w="${words[$i]}"
+        case "$w" in
+            --persona|--plugin|--scope|--group-by|--group|--name|--repo|--shell|--output|--min-divergence)
+                ((i++)) ;;
+            --*)
+                ;;
+            *)
+                ((pos_idx++)) ;;
+        esac
+    done
+
+    # ---- Positional completion ----
+    case "$cmd1:$cmd2" in
+        enable:|disable:)
+            (( pos_idx == 0 )) && COMPREPLY=( $(compgen -W "pdt mam mama bus" -- "$cur") )
+            return ;;
+        switch:)
+            (( pos_idx == 0 )) && COMPREPLY=( $(compgen -W "mam mama off" -- "$cur") )
+            return ;;
+        create:)
+            if (( pos_idx == 0 )); then
+                local items
+                items=$(mcc complete --kind session 2>/dev/null)
+                COMPREPLY=( $(compgen -W "$items" -- "$cur") )
+            fi
+            return ;;
+        vscode:)
+            local items
+            items=$(mcc complete --kind session_or_scope_or_all 2>/dev/null)
+            COMPREPLY=( $(compgen -W "$items" -- "$cur") )
+            return ;;
+        session:resume|session:transcript|session:set)
+            if (( pos_idx == 0 )); then
+                local items
+                items=$(mcc complete --kind session 2>/dev/null)
+                COMPREPLY=( $(compgen -W "$items" -- "$cur") )
+            fi
+            return ;;
+        reflect:scan|reflect:submit)
+            compopt -o default 2>/dev/null
+            COMPREPLY=()
+            return ;;
+        help:)
+            local items
+            items=$(mcc complete --kind command_path 2>/dev/null)
+            local oldIFS="$IFS"; IFS=$'\n'
+            COMPREPLY=( $(compgen -W "$items" -- "$cur") )
+            IFS="$oldIFS"
+            return ;;
+    esac
+}
+complete -F _mcc_complete mcc
+"""
+
+
+def _emit_bash_completion():
+    return _BASH_COMPLETION.lstrip("\n")
+
+
+def _emit_zsh_completion():
+    """Zsh completion via bashcompinit.
+
+    Reuses the bash function verbatim so behavior is identical across shells.
+    Native zsh completion (with descriptions) is a future enhancement; this
+    covers the full command surface today.
+    """
+    return (
+        "# Generated by `mcc completions zsh`. Loads the bash completion\n"
+        "# function under zsh's bashcompinit shim.\n"
+        "if ! whence -w bashcompinit >/dev/null 2>&1; then\n"
+        "    autoload -U +X bashcompinit && bashcompinit\n"
+        "fi\n"
+        "if ! whence -w compinit >/dev/null 2>&1; then\n"
+        "    autoload -U +X compinit && compinit\n"
+        "fi\n"
+    ) + _BASH_COMPLETION.lstrip("\n")
+
+
+def _detect_shell():
+    name = Path(os.environ.get("SHELL", "")).name
+    if name in ("bash", "zsh"):
+        return name
+    return None
+
+
+def _rc_file_for(shell):
+    home = Path.home()
+    if shell == "bash":
+        return home / ".bashrc"
+    if shell == "zsh":
+        return home / ".zshrc"
+    return None
+
+
+def _completions_block(shell):
+    return (
+        f"{_COMPLETION_BLOCK_BEGIN}\n"
+        f'eval "$(mcc completions {shell})"\n'
+        f"{_COMPLETION_BLOCK_END}\n"
+    )
+
+
+def _strip_completion_block(text):
+    """Remove the marked completion block. Returns (new_text, found)."""
+    begin = _COMPLETION_BLOCK_BEGIN
+    end = _COMPLETION_BLOCK_END
+    if begin not in text:
+        return text, False
+    pre, _, rest = text.partition(begin)
+    _, _, post = rest.partition(end)
+    pre = pre.rstrip("\n")
+    post = post.lstrip("\n")
+    sep = "\n\n" if pre and post else ("\n" if pre or post else "")
+    return (pre + sep + post).rstrip("\n") + ("\n" if (pre + post) else ""), True
+
+
+def _completions_install(argv):
+    shell = None
+    rc_override = None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--shell":
+            if i + 1 >= len(argv):
+                die("--shell requires a value (bash|zsh)")
+            shell = argv[i + 1]; i += 2
+        elif a == "--rc-file":
+            if i + 1 >= len(argv):
+                die("--rc-file requires a path")
+            rc_override = Path(argv[i + 1]).expanduser(); i += 2
+        else:
+            die(f"unknown arg: {a}")
+    if shell is None:
+        shell = _detect_shell()
+        if shell is None:
+            die("could not detect shell from $SHELL; pass --shell bash|zsh")
+    if shell not in ("bash", "zsh"):
+        die(f"unsupported shell: {shell} (supported: bash, zsh)")
+    rc = rc_override or _rc_file_for(shell)
+    if rc is None:
+        die(f"no rc file known for shell: {shell}")
+
+    block = _completions_block(shell)
+    existing = rc.read_text() if rc.exists() else ""
+    stripped, had_block = _strip_completion_block(existing)
+    base = stripped.rstrip("\n")
+    sep = "\n\n" if base else ""
+    new = base + sep + block
+    rc.parent.mkdir(parents=True, exist_ok=True)
+    rc.write_text(new)
+    if had_block:
+        print(f"Updated mcc completions block in {rc}")
+    else:
+        print(f"Added mcc completions block to {rc}")
+    print()
+    print("To activate now in this shell:")
+    print(f'  eval "$(mcc completions {shell})"')
+    print("Or open a new shell.")
+    if shell == "bash" and sys.platform == "darwin":
+        bp = Path.home() / ".bash_profile"
+        print()
+        print(f"Note: macOS Terminal.app starts a login shell, which loads "
+              f"~/.bash_profile, not ~/.bashrc. If completions don't activate "
+              f"in new terminals, ensure ~/.bash_profile sources ~/.bashrc:")
+        print(f"  [ -f ~/.bashrc ] && source ~/.bashrc")
+        if bp.exists():
+            try:
+                bp_text = bp.read_text()
+                if ".bashrc" not in bp_text:
+                    print(f"  ({bp} exists but does not appear to source ~/.bashrc.)")
+            except OSError:
+                pass
+
+
+def _completions_uninstall(argv):
+    shell = None
+    rc_override = None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--shell":
+            if i + 1 >= len(argv):
+                die("--shell requires a value (bash|zsh)")
+            shell = argv[i + 1]; i += 2
+        elif a == "--rc-file":
+            if i + 1 >= len(argv):
+                die("--rc-file requires a path")
+            rc_override = Path(argv[i + 1]).expanduser(); i += 2
+        else:
+            die(f"unknown arg: {a}")
+    if shell is None:
+        shell = _detect_shell()
+        if shell is None:
+            die("could not detect shell from $SHELL; pass --shell bash|zsh")
+    rc = rc_override or _rc_file_for(shell)
+    if rc is None or not rc.exists():
+        print(f"No rc file at {rc} — nothing to remove.")
+        return
+    text = rc.read_text()
+    new, found = _strip_completion_block(text)
+    if not found:
+        print(f"No mcc completions block found in {rc}.")
+        return
+    rc.write_text(new)
+    print(f"Removed mcc completions block from {rc}.")
+    print("(Existing shells still have completions loaded; open a new shell to clear.)")
+
+
+def cmd_completions(argv):
+    """Shell tab-completion: emit script, install/uninstall in rc files."""
+    if not argv:
+        die("usage: mcc completions <bash|zsh|install|uninstall|print> [opts...]")
+    sub = argv[0]
+    rest = argv[1:]
+    if sub == "bash":
+        sys.stdout.write(_emit_bash_completion())
+        return
+    if sub == "zsh":
+        sys.stdout.write(_emit_zsh_completion())
+        return
+    if sub == "print":
+        # Print whichever shell is detected (or --shell override) — convenience
+        shell = None
+        i = 0
+        while i < len(rest):
+            if rest[i] == "--shell":
+                if i + 1 >= len(rest):
+                    die("--shell requires a value")
+                shell = rest[i + 1]; i += 2
+            else:
+                die(f"unknown arg: {rest[i]}")
+        shell = shell or _detect_shell()
+        if shell == "bash":
+            sys.stdout.write(_emit_bash_completion())
+        elif shell == "zsh":
+            sys.stdout.write(_emit_zsh_completion())
+        else:
+            die("could not detect shell; pass --shell bash|zsh")
+        return
+    if sub == "install":
+        _completions_install(rest)
+        return
+    if sub == "uninstall":
+        _completions_uninstall(rest)
+        return
+    die(f"unknown completions subcommand: {sub}")
+
+
 # ----------------------------- Dispatch -----------------------------
 
 HANDLERS = {
@@ -3390,6 +3897,7 @@ HANDLERS = {
     "session": cmd_session,
     "reflect": cmd_reflect,
     "version": cmd_version,
+    "completions": cmd_completions,
 }
 
 
@@ -3559,6 +4067,43 @@ mcc reflect submit [<path>] [--repo <r>] [--no-scan] [--no-confirm]
 Submit a reflection artifact to GitHub Issues. Auto-picks latest unsent if
 no path. Runs a privacy scan via `claude -p` first; user confirms before
 posting. On success, writes a `.sent` sidecar with the issue URL.""",
+
+    # mcc completions
+    "completions": """\
+mcc completions — shell tab-completion
+
+Subcommands:
+  mcc completions bash                 emit bash completion script to stdout
+  mcc completions zsh                  emit zsh completion script to stdout
+  mcc completions print [--shell <s>]  emit script for detected (or chosen) shell
+  mcc completions install [--shell <s>] [--rc-file <path>]
+                                       append source line to your rc file
+  mcc completions uninstall [--shell <s>] [--rc-file <path>]
+                                       remove the source line
+
+Typical use: `mcc completions install` once, then new shells pick up
+completions automatically. `mcc update` will remind you to refresh
+when commands have changed.""",
+    "completions bash":
+        "mcc completions bash — emit bash completion script (use with `eval \"$(mcc completions bash)\"`)",
+    "completions zsh":
+        "mcc completions zsh — emit zsh completion script (use with `eval \"$(mcc completions zsh)\"`)",
+    "completions print":
+        "mcc completions print [--shell bash|zsh] — emit script for detected shell",
+    "completions install": """\
+mcc completions install [--shell bash|zsh] [--rc-file <path>]
+
+Append a marked block to your shell's rc file that sources mcc's
+completion script on shell startup. Idempotent — re-running updates
+the existing block in place.
+
+Defaults: detects shell from $SHELL; writes to ~/.bashrc or ~/.zshrc.
+Pass --rc-file to override the destination.""",
+    "completions uninstall": """\
+mcc completions uninstall [--shell bash|zsh] [--rc-file <path>]
+
+Remove the mcc completions block (between `# >>> mcc completions >>>`
+and `# <<< mcc completions <<<` markers) from your shell's rc file.""",
 }
 
 
@@ -3585,6 +4130,9 @@ TOP_HELP_GROUPS = [
     ]),
     ("Feedback", [
         ("reflect", "reflect list/scan/submit (`mcc reflect -h`)"),
+    ]),
+    ("Shell", [
+        ("completions", "Tab-completion: install/emit (`mcc completions -h`)"),
     ]),
     ("Other", [
         ("version", "Show mcc version"),
@@ -3629,6 +4177,12 @@ def _is_help_flag(s):
 
 def main():
     argv = sys.argv[1:]
+    # Fast path for shell tab-completion. Must stay cheap — invoked on every
+    # Tab keypress that hits a dynamic slot. Avoids `claude` calls, plugin
+    # scans, and any other heavy work below.
+    if argv and argv[0] == "complete":
+        cmd_complete(argv[1:])
+        return
     # Top-level: no args, or `help`/`-h`/`--help` as the first token
     if not argv or argv[0] in ("help", "-h", "--help"):
         print_help()
