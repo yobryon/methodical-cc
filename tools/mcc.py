@@ -14,10 +14,11 @@ import os
 import re
 import shutil
 import subprocess
+import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.13.0"
+MCC_VERSION = "1.14.0"
 
 import json
 import time
@@ -26,14 +27,6 @@ PLUGINS = ("pdt", "mam", "mama", "bus")
 MARKETPLACE = "methodical-cc"
 STATE_DIR_GLOBS = (".mcc", ".mcc-*")
 
-# Two-level commands: noun → verbs. Drives shell completion and the
-# command_path enumerator. Single source of truth alongside HANDLERS.
-SUBVERBS = {
-    "team":        ("setup", "status"),
-    "session":     ("list", "set", "resume", "transcript"),
-    "reflect":     ("list", "scan", "submit"),
-    "completions": ("bash", "zsh", "install", "uninstall", "print"),
-}
 LEGACY_PLUGIN_PREFIXES = ("pdt", "mam", "mama")  # legacy state-dir prefixes (pre-3.0.0)
 TEAMS_ROOT = Path.home() / ".claude" / "teams"
 PHANTOM_LEAD_NAME = "coordinator"
@@ -423,37 +416,14 @@ def ensure_experimental_teams_flag(verbose=False):
     return True
 
 
-def cmd_team(argv):
-    if not argv:
-        die("usage: mcc team <setup|status>")
-    sub = argv[0]
-    if sub == "setup":
-        return cmd_team_setup(argv[1:])
-    if sub == "status":
-        return cmd_team_status(argv[1:])
-    die(f"unknown team subcommand '{sub}' (expected: setup, status)")
-
-
-def cmd_team_setup(argv):
+def cmd_team_setup(args):
     """Interactive: prompt for team name (default = persisted or dirname).
     Non-interactive: `mcc team setup --name <name>` skips the prompt."""
     print("Bus team setup")
     print("==============")
     print()
 
-    # Parse --name flag for non-interactive use
-    explicit_name = None
-    rest = []
-    i = 0
-    while i < len(argv):
-        if argv[i] == "--name" and i + 1 < len(argv):
-            explicit_name = argv[i + 1]
-            i += 2
-        else:
-            rest.append(argv[i])
-            i += 1
-    if rest:
-        die(f"unknown args to `team setup`: {' '.join(rest)}")
+    explicit_name = args.name
 
     # Run passive upgrade first so a pre-existing team gets its name persisted
     # before we ask the user about it
@@ -506,7 +476,7 @@ def cmd_team_setup(argv):
     print("`mcc create <name>` automatically join this team on launch.")
 
 
-def cmd_team_status(argv):
+def cmd_team_status(args):
     team_name = derive_team_name()
     config = read_team_config(team_name)
     print(f"Team: {team_name}")
@@ -593,7 +563,7 @@ def _merge_sessions_files(src, dst):
     dst.write_text("\n".join(f"{n}={merged[n]}" for n in order) + "\n")
 
 
-def cmd_migrate(argv):
+def cmd_migrate(args):
     """Migrate legacy .mam/.mama/.pdt[-scope]/ state dirs into .mcc[-scope]/."""
     pairs = find_legacy_dirs()
     if not pairs:
@@ -824,7 +794,7 @@ def _vscode_group_string(label):
     return "personas" if label == "personas" else f"personas:{label}"
 
 
-def cmd_vscode(argv):
+def cmd_vscode(args):
     """Bootstrap or update .vscode/tasks.json with mcc session tasks.
 
     Grouping modes (--group-by):
@@ -840,42 +810,21 @@ def cmd_vscode(argv):
     Auto-run on folder open is opt-in per group (default: none) in scope/custom
     mode. Single-project ('none' mode) auto-runs `mcc:all` by default.
     """
-    no_folder_open = False
-    group_by = None
+    no_folder_open = bool(args.no_folder_open)
+    group_by = args.group_by  # may be None; resolved below
+    cli_args = list(args.tokens or [])
+
+    # Parse repeated --group label=name1,name2 specs
     custom_groups = []  # list of (label, [names])
-    cli_args = []
-    i = 0
-    while i < len(argv):
-        a = argv[i]
-        if a == "--no-folder-open":
-            no_folder_open = True
-            i += 1
-        elif a == "--group-by":
-            if i + 1 >= len(argv):
-                die("--group-by requires a value (one of: scope, none, custom)")
-            v = argv[i + 1].strip().lower()
-            if v not in VALID_GROUP_BY:
-                die(f"--group-by must be one of: {', '.join(VALID_GROUP_BY)} (got {v!r})")
-            group_by = v
-            i += 2
-        elif a == "--group":
-            if i + 1 >= len(argv):
-                die("--group requires a value like 'label=name1,name2'")
-            spec = argv[i + 1]
-            if "=" not in spec:
-                die(f"--group expected 'label=name1,name2', got {spec!r}")
-            label, csv = spec.split("=", 1)
-            label = _validate_group_label(label)
-            members = [s.strip() for s in csv.split(",") if s.strip()]
-            if not members:
-                die(f"--group {label!r} has no members")
-            custom_groups.append((label, members))
-            i += 2
-        elif a.startswith("--"):
-            die(f"unknown flag: {a}")
-        else:
-            cli_args.append(a)
-            i += 1
+    for spec in (args.group or []):
+        if "=" not in spec:
+            die(f"--group expected 'label=name1,name2', got {spec!r}")
+        label, csv = spec.split("=", 1)
+        label = _validate_group_label(label)
+        members = [s.strip() for s in csv.split(",") if s.strip()]
+        if not members:
+            die(f"--group {label!r} has no members")
+        custom_groups.append((label, members))
 
     # If --group given without --group-by, infer custom mode
     if custom_groups and group_by is None:
@@ -2000,21 +1949,9 @@ def _render_through_line_files(through_lines, sid, label, jsonl_path, opts, out_
     return results
 
 
-def cmd_session(argv):
-    if not argv:
-        die("usage: mcc session <list|set|resume|transcript> ...")
-    sub = argv[0]
-    if sub == "transcript":
-        return cmd_session_transcript(argv[1:])
-    if sub == "list":
-        return cmd_session_list(argv[1:])
-    if sub == "set":
-        return cmd_session_set(argv[1:])
-    if sub == "resume":
-        # Formal verb for the `mcc <name>` shorthand.
-        return cmd_resume(argv[1:])
-    die(f"unknown session subcommand '{sub}' "
-        f"(expected: list, set, resume, transcript)")
+# cmd_session was a manual subverb dispatcher; argparse subparsers now route
+# directly to cmd_session_list / cmd_session_set / cmd_session_transcript /
+# cmd_resume. This stub remains only as documentation of the previous shape.
 
 
 # ----------------------------- Reflection submission -----------------------------
@@ -2179,23 +2116,12 @@ def _submit_reflection_to_github(path, repo, title, label):
     return url, None
 
 
-def cmd_reflect(argv):
-    if not argv:
-        die("usage: mcc reflect <list|submit|scan> ...")
-    sub = argv[0]
-    if sub == "list":
-        return cmd_reflect_list(argv[1:])
-    if sub == "submit":
-        return cmd_reflect_submit(argv[1:])
-    if sub == "scan":
-        return cmd_reflect_scan(argv[1:])
-    die(f"unknown reflect subcommand '{sub}' (expected: list, submit, scan)")
+# cmd_reflect was a manual subverb dispatcher; argparse subparsers route
+# directly to cmd_reflect_list / cmd_reflect_scan / cmd_reflect_submit now.
 
 
-def cmd_reflect_list(argv):
+def cmd_reflect_list(args):
     """List reflection artifacts in ./tmp/, marked sent or unsent."""
-    if argv:
-        die("usage: mcc reflect list  (no args)")
     files = _list_reflection_files()
     if not files:
         print(f"No reflection artifacts found in ./tmp/. Run /mama:reflect first.")
@@ -2209,11 +2135,9 @@ def cmd_reflect_list(argv):
             print(f"  {p.name:<60} [unsent]")
 
 
-def cmd_reflect_scan(argv):
+def cmd_reflect_scan(args):
     """Dry-run: just runs the privacy scan and prints output."""
-    if not argv or argv[0].startswith("--"):
-        die("usage: mcc reflect scan <path>")
-    path = Path(argv[0])
+    path = Path(args.path)
     if not path.exists():
         die(f"no file at {path}")
     print(f"Running privacy scan on {path}...")
@@ -2224,32 +2148,12 @@ def cmd_reflect_scan(argv):
     print(f"Result: {'CLEAR — safe to submit' if is_clear else 'concerns flagged — review before submitting'}")
 
 
-def cmd_reflect_submit(argv):
+def cmd_reflect_submit(args):
     """Submit a reflection artifact to GitHub Issues."""
-    explicit_path = None
-    repo = FEEDBACK_REPO_DEFAULT
-    skip_scan = False
-    skip_confirm = False
-
-    i = 0
-    while i < len(argv):
-        a = argv[i]
-        if a == "--repo" and i + 1 < len(argv):
-            repo = argv[i + 1]
-            i += 2
-        elif a == "--no-scan":
-            skip_scan = True
-            i += 1
-        elif a == "--no-confirm":
-            skip_confirm = True
-            i += 1
-        elif a.startswith("--"):
-            die(f"unknown flag: {a}")
-        else:
-            if explicit_path is not None:
-                die(f"unexpected positional arg: {a}")
-            explicit_path = a
-            i += 1
+    explicit_path = args.path
+    repo = args.repo or FEEDBACK_REPO_DEFAULT
+    skip_scan = bool(args.no_scan)
+    skip_confirm = bool(args.no_confirm)
 
     if explicit_path:
         path = Path(explicit_path)
@@ -2521,19 +2425,10 @@ def _print_session_table(summaries, show_path=False, show_scope=False):
             print(f"  {' '*sid_w}  {' '*16}  {' '*reg_w}  {' '*pad_extra}{s['path']}")
 
 
-def cmd_session_list(argv):
+def cmd_session_list(args):
     """List Claude Code sessions for the current project (or all projects)."""
-    all_projects = False
-    show_path = False
-    for a in argv:
-        if a == "--all":
-            all_projects = True
-        elif a in ("--paths", "--show-path"):
-            show_path = True
-        elif a.startswith("--"):
-            die(f"unknown flag: {a}")
-        else:
-            die(f"unexpected arg: {a}")
+    all_projects = bool(args.all)
+    show_path = bool(args.paths)
 
     summaries = _gather_session_summaries(all_projects=all_projects)
     where = "all Claude Code projects" if all_projects else f"this project ({Path.cwd()})"
@@ -2646,28 +2541,15 @@ def _write_session_registration(name, sid, cwd=None, scope=None):
     return target
 
 
-def cmd_session_set(argv):
+def cmd_session_set(args):
     """Register a session id under a name in .mcc[-scope]/sessions.
 
     Forms:
       mcc session set <name> <session-id> [--scope <s>]  — non-interactive
       mcc session set [--scope <s>]                      — interactive picker
     """
-    rest = []
-    explicit_scope = None
-    i = 0
-    while i < len(argv):
-        a = argv[i]
-        if a == "--scope":
-            if i + 1 >= len(argv):
-                die("--scope requires a value (use '' for the default .mcc/)")
-            explicit_scope = argv[i + 1]
-            i += 2
-            continue
-        if a.startswith("--"):
-            die(f"unknown flag: {a}")
-        rest.append(a)
-        i += 1
+    rest = list(args.posargs or [])
+    explicit_scope = args.scope
 
     if len(rest) == 2:
         name, sid = rest
@@ -2740,7 +2622,7 @@ def cmd_session_set(argv):
         print(f"  team: {team_name}")
 
 
-def cmd_session_transcript(argv):
+def cmd_session_transcript(args):
     """Dump a session's transcript to markdown.
 
     Default: per-through-line — one file per significant branch in a
@@ -2748,72 +2630,20 @@ def cmd_session_transcript(argv):
     --single-file: classic single-file output (chronological by default).
     --live-branch-only: implies --single-file; renders just the deepest chain.
     """
-    output = None
-    include_thinking = False
-    include_compact_summaries = False
-    include_meta = False
-    include_harness_commands = False
-    include_incomplete_branches = False
-    post_compact_only = False
-    live_branch_only = False
-    single_file = False
-    min_divergence = 10
-    target = None
-
-    i = 0
-    while i < len(argv):
-        a = argv[i]
-        if a == "--output" and i + 1 < len(argv):
-            output = argv[i + 1]
-            i += 2
-        elif a == "--min-divergence" and i + 1 < len(argv):
-            try:
-                min_divergence = int(argv[i + 1])
-            except ValueError:
-                die(f"--min-divergence requires an integer (got '{argv[i + 1]}')")
-            if min_divergence < 1:
-                die("--min-divergence must be >= 1")
-            i += 2
-        elif a == "--include-thinking":
-            include_thinking = True
-            i += 1
-        elif a == "--include-compact-summaries":
-            include_compact_summaries = True
-            i += 1
-        elif a == "--include-meta":
-            include_meta = True
-            i += 1
-        elif a == "--include-harness-commands":
-            include_harness_commands = True
-            i += 1
-        elif a == "--include-incomplete-branches":
-            include_incomplete_branches = True
-            i += 1
-        elif a == "--post-compact-only":
-            post_compact_only = True
-            i += 1
-        elif a == "--live-branch-only":
-            live_branch_only = True
-            single_file = True  # live-branch-only is inherently a single chain
-            i += 1
-        elif a == "--single-file":
-            single_file = True
-            i += 1
-        elif a.startswith("--"):
-            die(f"unknown flag: {a}")
-        else:
-            if target is not None:
-                die(f"unexpected positional arg: {a}")
-            target = a
-            i += 1
-
-    if target is None:
-        die("usage: mcc session transcript <name|session-id> "
-            "[--output <path>] [--min-divergence N] "
-            "[--include-thinking] [--include-compact-summaries] "
-            "[--include-meta] [--include-harness-commands] "
-            "[--include-incomplete-branches] "
-            "[--post-compact-only] [--live-branch-only] [--single-file]")
+    target = args.target
+    output = args.output
+    min_divergence = args.min_divergence
+    if min_divergence < 1:
+        die("--min-divergence must be >= 1")
+    include_thinking = bool(args.include_thinking)
+    include_compact_summaries = bool(args.include_compact_summaries)
+    include_meta = bool(args.include_meta)
+    include_harness_commands = bool(args.include_harness_commands)
+    include_incomplete_branches = bool(args.include_incomplete_branches)
+    post_compact_only = bool(args.post_compact_only)
+    live_branch_only = bool(args.live_branch_only)
+    # --live-branch-only is inherently a single chain
+    single_file = bool(args.single_file) or live_branch_only
 
     # Resolve session id
     if _looks_like_uuid(target):
@@ -3000,41 +2830,12 @@ def _ensure_settings_local_allows_read(path):
     return True
 
 
-def cmd_create(argv):
+def cmd_create(args):
     """Create a new session, register it, optionally pre-load persona profile."""
-    if not argv:
-        die("usage: mcc create <name> [--persona <plugin>:<role>] [--plugin <p>] [--scope <s>]")
-
-    # Parse args
-    name = None
-    persona = None
-    plugin = None
-    scope = None
-    i = 0
-    while i < len(argv):
-        a = argv[i]
-        if a == "--persona":
-            if i + 1 >= len(argv):
-                die("--persona requires an argument like 'mama:implementor'")
-            persona = argv[i + 1]
-            i += 2
-        elif a == "--plugin":
-            if i + 1 >= len(argv):
-                die("--plugin requires an argument like 'mama'")
-            plugin = argv[i + 1]
-            i += 2
-        elif a == "--scope":
-            if i + 1 >= len(argv):
-                die("--scope requires a value (use '' for the default .mcc/)")
-            scope = argv[i + 1]
-            i += 2
-        elif name is None:
-            name = a
-            i += 1
-        else:
-            die(f"unexpected argument: {a}")
-    if not name:
-        die("usage: mcc create <name> [--persona <plugin>:<role>] [--plugin <p>] [--scope <s>]")
+    name = args.name
+    persona = args.persona
+    plugin = args.plugin
+    scope = args.scope
 
     # Resolve scope upfront if multiple state dirs exist (interactive prompt allowed here).
     # Resolved value is passed through to the inner agent so it doesn't have to guess.
@@ -3113,10 +2914,8 @@ def cmd_create(argv):
               file=sys.stderr)
 
 
-def cmd_resume(argv):
-    if not argv:
-        die("usage: mcc <name>")
-    name = argv[0]
+def cmd_resume(args):
+    name = args.name
     sid, src = find_session(name)
     if not sid:
         # If we can't find the session but legacy plugin dirs are present,
@@ -3132,7 +2931,7 @@ def cmd_resume(argv):
             sys.exit(1)
         print(f"No session registered as '{name}'.", file=sys.stderr)
         print()
-        cmd_list([])
+        cmd_list(None)
         sys.exit(1)
     if not have_claude():
         die("'claude' command not found on PATH.")
@@ -3151,7 +2950,7 @@ def cmd_resume(argv):
     os.execvp(args[0], args)
 
 
-def cmd_list(argv):
+def cmd_list(args):
     state_dirs = find_state_dirs()
     found_any = False
     for d in state_dirs:
@@ -3170,7 +2969,7 @@ def cmd_list(argv):
         print("No sessions registered. Use /pdt:session, /mam:session, or /mama:session to register.")
 
 
-def cmd_status(argv):
+def cmd_status(args):
     print("=== Plugins (claude plugins list) ===")
     if have_claude():
         result = claude_plugins("list")
@@ -3231,10 +3030,8 @@ def _validate_plugin(name):
         die(f"unknown plugin '{name}' (expected one of: {', '.join(PLUGINS)})")
 
 
-def cmd_enable(argv):
-    if not argv:
-        die("usage: mcc enable <pdt|mam|mama>")
-    plugin = argv[0]
+def cmd_enable(args):
+    plugin = args.plugin
     _validate_plugin(plugin)
     if not have_claude():
         die("'claude' command not found on PATH.")
@@ -3243,10 +3040,8 @@ def cmd_enable(argv):
     sys.exit(rc)
 
 
-def cmd_disable(argv):
-    if not argv:
-        die("usage: mcc disable <pdt|mam|mama>")
-    plugin = argv[0]
+def cmd_disable(args):
+    plugin = args.plugin
     _validate_plugin(plugin)
     if not have_claude():
         die("'claude' command not found on PATH.")
@@ -3255,10 +3050,8 @@ def cmd_disable(argv):
     sys.exit(rc)
 
 
-def cmd_switch(argv):
-    if not argv:
-        die("usage: mcc switch <mam|mama|off>")
-    target = argv[0]
+def cmd_switch(args):
+    target = args.target
     if target not in ("mam", "mama", "off"):
         die(f"unknown switch target '{target}' (expected mam, mama, or off)")
     if not have_claude():
@@ -3281,7 +3074,7 @@ def cmd_switch(argv):
         print("→ Implementation plugins disabled in this project. (pdt unchanged.)")
 
 
-def cmd_update(argv):
+def cmd_update(args):
     if not have_claude():
         die("'claude' command not found on PATH.")
 
@@ -3325,7 +3118,7 @@ def cmd_update(argv):
             pass
 
 
-def cmd_setup(argv):
+def cmd_setup(args):
     print("Methodical-CC setup")
     print("===================")
     print()
@@ -3391,7 +3184,7 @@ def cmd_setup(argv):
     print("  mcc switch mam|mama|off - swap implementation plugin")
 
 
-def cmd_version(argv):
+def cmd_version(args):
     print(f"mcc {MCC_VERSION}")
     print(f"  script: {Path(__file__).resolve()}")
 
@@ -3472,15 +3265,26 @@ def _fast_personas():
 
 
 def _fast_command_paths():
-    paths = set(HANDLERS.keys())
-    paths.add("complete")
-    for noun, verbs in SUBVERBS.items():
-        for v in verbs:
-            paths.add(f"{noun} {v}")
+    """Walk the parser tree and enumerate every reachable command path.
+
+    Powers `mcc complete --kind command_path`. Cheap (parser construction is
+    microseconds) and stays in sync with the actual command surface.
+    """
+    parser = build_parser()
+    paths = set()
+    for act in parser._actions:
+        if isinstance(act, argparse._SubParsersAction):
+            for cmd, sp in act.choices.items():
+                paths.add(cmd)
+                for sub_act in sp._actions:
+                    if isinstance(sub_act, argparse._SubParsersAction):
+                        for verb in sub_act.choices:
+                            paths.add(f"{cmd} {verb}")
+            break
     return sorted(paths)
 
 
-def cmd_complete(argv):
+def cmd_complete(args):
     """Fast-path completion data source for shell completion functions.
 
     Usage: mcc complete --kind <kind>
@@ -3492,9 +3296,7 @@ def cmd_complete(argv):
     completion functions swallow stderr and treat empty output as "no
     candidates."
     """
-    if len(argv) < 2 or argv[0] != "--kind":
-        return
-    kind = argv[1]
+    kind = args.kind
     items = []
     if kind == "session":
         items = _fast_session_names()
@@ -3512,10 +3314,38 @@ def cmd_complete(argv):
         print(x)
 
 
-# Bash completion script. Generated once per shell startup via
-# `eval "$(mcc completions bash)"`. Self-contained: only shells out to
-# `mcc complete --kind <kind>` for dynamic value sets.
-_BASH_COMPLETION = r"""
+# --------------------- Bundled bash completion (file-loaded) ---------------------
+# The shell-side completion function lives at tools/completions/mcc.bash and is
+# generated from the parser tree by `mcc completions emit`. The file is checked
+# into git; CI / pre-commit may run `mcc completions verify` to guard against
+# drift.
+
+def _bundled_bash_completion_path():
+    return Path(__file__).resolve().parent / "completions" / "mcc.bash"
+
+
+def _emit_bash_completion():
+    p = _bundled_bash_completion_path()
+    if not p.exists():
+        die(f"missing bundled completion at {p}; run `mcc completions emit`")
+    return p.read_text(encoding="utf-8")
+
+
+def _emit_zsh_completion():
+    """Zsh completion via bashcompinit shim. Reuses the bundled bash function."""
+    return (
+        "# Generated by `mcc completions zsh`. Loads the bash completion\n"
+        "# function under zsh's bashcompinit shim.\n"
+        "if ! whence -w bashcompinit >/dev/null 2>&1; then\n"
+        "    autoload -U +X bashcompinit && bashcompinit\n"
+        "fi\n"
+        "if ! whence -w compinit >/dev/null 2>&1; then\n"
+        "    autoload -U +X compinit && compinit\n"
+        "fi\n"
+    ) + _emit_bash_completion()
+
+
+_LEGACY_BASH = r"""
 _mcc_complete() {
     COMPREPLY=()
     local cur cword words prev IFS=$' \t\n'
@@ -3685,29 +3515,7 @@ _mcc_complete() {
 }
 complete -F _mcc_complete mcc
 """
-
-
-def _emit_bash_completion():
-    return _BASH_COMPLETION.lstrip("\n")
-
-
-def _emit_zsh_completion():
-    """Zsh completion via bashcompinit.
-
-    Reuses the bash function verbatim so behavior is identical across shells.
-    Native zsh completion (with descriptions) is a future enhancement; this
-    covers the full command surface today.
-    """
-    return (
-        "# Generated by `mcc completions zsh`. Loads the bash completion\n"
-        "# function under zsh's bashcompinit shim.\n"
-        "if ! whence -w bashcompinit >/dev/null 2>&1; then\n"
-        "    autoload -U +X bashcompinit && bashcompinit\n"
-        "fi\n"
-        "if ! whence -w compinit >/dev/null 2>&1; then\n"
-        "    autoload -U +X compinit && compinit\n"
-        "fi\n"
-    ) + _BASH_COMPLETION.lstrip("\n")
+del _LEGACY_BASH  # historical reference only; the bundled file is the source of truth
 
 
 def _detect_shell():
@@ -3748,22 +3556,7 @@ def _strip_completion_block(text):
     return (pre + sep + post).rstrip("\n") + ("\n" if (pre + post) else ""), True
 
 
-def _completions_install(argv):
-    shell = None
-    rc_override = None
-    i = 0
-    while i < len(argv):
-        a = argv[i]
-        if a == "--shell":
-            if i + 1 >= len(argv):
-                die("--shell requires a value (bash|zsh)")
-            shell = argv[i + 1]; i += 2
-        elif a == "--rc-file":
-            if i + 1 >= len(argv):
-                die("--rc-file requires a path")
-            rc_override = Path(argv[i + 1]).expanduser(); i += 2
-        else:
-            die(f"unknown arg: {a}")
+def _completions_install(shell, rc_override):
     if shell is None:
         shell = _detect_shell()
         if shell is None:
@@ -3806,22 +3599,7 @@ def _completions_install(argv):
                 pass
 
 
-def _completions_uninstall(argv):
-    shell = None
-    rc_override = None
-    i = 0
-    while i < len(argv):
-        a = argv[i]
-        if a == "--shell":
-            if i + 1 >= len(argv):
-                die("--shell requires a value (bash|zsh)")
-            shell = argv[i + 1]; i += 2
-        elif a == "--rc-file":
-            if i + 1 >= len(argv):
-                die("--rc-file requires a path")
-            rc_override = Path(argv[i + 1]).expanduser(); i += 2
-        else:
-            die(f"unknown arg: {a}")
+def _completions_uninstall(shell, rc_override):
     if shell is None:
         shell = _detect_shell()
         if shell is None:
@@ -3840,274 +3618,607 @@ def _completions_uninstall(argv):
     print("(Existing shells still have completions loaded; open a new shell to clear.)")
 
 
-def cmd_completions(argv):
-    """Shell tab-completion: emit script, install/uninstall in rc files."""
-    if not argv:
-        die("usage: mcc completions <bash|zsh|install|uninstall|print> [opts...]")
-    sub = argv[0]
-    rest = argv[1:]
-    if sub == "bash":
+def cmd_completions_bash(args):
+    sys.stdout.write(_emit_bash_completion())
+
+
+def cmd_completions_zsh(args):
+    sys.stdout.write(_emit_zsh_completion())
+
+
+def cmd_completions_print(args):
+    shell = args.shell or _detect_shell()
+    if shell == "bash":
         sys.stdout.write(_emit_bash_completion())
-        return
-    if sub == "zsh":
+    elif shell == "zsh":
         sys.stdout.write(_emit_zsh_completion())
+    else:
+        die("could not detect shell; pass --shell bash|zsh")
+
+
+def cmd_completions_install(args):
+    rc_override = Path(args.rc_file).expanduser() if args.rc_file else None
+    _completions_install(args.shell, rc_override)
+
+
+def cmd_completions_uninstall(args):
+    rc_override = Path(args.rc_file).expanduser() if args.rc_file else None
+    _completions_uninstall(args.shell, rc_override)
+
+
+def cmd_completions_emit(args):
+    """Regenerate the on-disk bash completion file from the live parser tree."""
+    parser = build_parser()
+    text = _generate_bash_from_parser(parser)
+    target = Path(args.output) if args.output else _bundled_bash_completion_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    print(f"Wrote {target}")
+
+
+def cmd_completions_verify(args):
+    """Compare on-disk bash completion against parser-derived output."""
+    parser = build_parser()
+    expected = _generate_bash_from_parser(parser)
+    on_disk = _bundled_bash_completion_path()
+    if not on_disk.exists():
+        die(f"missing {on_disk}; run `mcc completions emit` to generate it")
+    actual = on_disk.read_text(encoding="utf-8")
+    if actual == expected:
+        print(f"OK: {on_disk} matches the parser-derived output.")
         return
-    if sub == "print":
-        # Print whichever shell is detected (or --shell override) — convenience
-        shell = None
-        i = 0
-        while i < len(rest):
-            if rest[i] == "--shell":
-                if i + 1 >= len(rest):
-                    die("--shell requires a value")
-                shell = rest[i + 1]; i += 2
+    import difflib
+    diff = "".join(difflib.unified_diff(
+        actual.splitlines(keepends=True),
+        expected.splitlines(keepends=True),
+        fromfile=str(on_disk),
+        tofile="<parser-derived>",
+        n=3,
+    ))
+    sys.stdout.write(diff)
+    die(f"\n{on_disk} is out of date — run `mcc completions emit` and commit the result.")
+
+
+# ----------------------------- Parser-driven bash generation ------------------
+#
+# The shell completion script in tools/completions/mcc.bash is generated from
+# the argparse parser tree. Any command/flag the parser knows about gets
+# completion; anything else does not. This eliminates drift between the tool
+# shape and the completion script.
+#
+# Completion hints are stamped on argparse Actions via a small helper:
+#   act = parser.add_argument(...)
+#   act.complete = "session" | "scope" | "persona" | "plugin" | "shell" |
+#                  "group_by_mode" | "switch_target" | "session_or_scope_or_all"
+#                  | "command_path" | "file" | "group_label_eq_csv"
+# Bool flags and value-less args get no hint.
+
+def _action_kind(action):
+    """Return the completion kind stamped on an action, or None."""
+    return getattr(action, "complete", None)
+
+
+def _is_value_flag(action):
+    """True if this argparse action consumes a value after the flag."""
+    if not action.option_strings:
+        return False
+    return action.nargs not in (0,) and not isinstance(
+        action, (argparse._StoreTrueAction, argparse._StoreFalseAction,
+                 argparse._CountAction, argparse._HelpAction, argparse._VersionAction)
+    )
+
+
+def _all_flag_strings(parser):
+    """Set of every long flag declared anywhere in the parser tree (for the
+    bash positional-arg counting case-skip table)."""
+    flags = set()
+    def walk(p):
+        for act in p._actions:
+            for opt in act.option_strings:
+                if opt.startswith("--") and _is_value_flag(act):
+                    flags.add(opt)
+        for sa in p._actions:
+            if isinstance(sa, argparse._SubParsersAction):
+                for sub in sa.choices.values():
+                    walk(sub)
+    walk(parser)
+    return flags
+
+
+def _generate_bash_from_parser(parser):
+    """Walk the parser tree and emit a complete bash completion function.
+
+    Output is deterministic (sorted where order doesn't matter) so `mcc
+    completions verify` can exact-match the on-disk file.
+    """
+    # Collect: top-level cmds, sub-verbs per noun, flags + positionals per (cmd, sub).
+    # Subparsers structure: parser → subparsers action → choices dict
+    top_subs = None
+    for act in parser._actions:
+        if isinstance(act, argparse._SubParsersAction):
+            top_subs = act
+            break
+    if top_subs is None:
+        die("internal: top-level parser has no subparsers")
+
+    top_cmds = sorted(c for c in top_subs.choices if c != "complete")
+    # Nouns (have their own subparsers) vs leaves
+    nouns = {}  # cmd → [verbs]
+    for cmd, sp in top_subs.choices.items():
+        sub_action = next((a for a in sp._actions
+                           if isinstance(a, argparse._SubParsersAction)), None)
+        if sub_action is not None:
+            nouns[cmd] = sorted(sub_action.choices.keys())
+
+    # Per-(cmd, verb) flag list and positional kind
+    def collect(p):
+        flags = []
+        positionals = []
+        for act in p._actions:
+            if isinstance(act, argparse._SubParsersAction):
+                continue
+            if act.option_strings:
+                # Skip help/version
+                if isinstance(act, (argparse._HelpAction, argparse._VersionAction)):
+                    continue
+                # Pick the longest-form long option for completion
+                long_opts = [o for o in act.option_strings if o.startswith("--")]
+                if long_opts:
+                    flags.append(long_opts[0])
             else:
-                die(f"unknown arg: {rest[i]}")
-        shell = shell or _detect_shell()
-        if shell == "bash":
-            sys.stdout.write(_emit_bash_completion())
-        elif shell == "zsh":
-            sys.stdout.write(_emit_zsh_completion())
+                positionals.append(act)
+        return sorted(flags), positionals
+
+    per_cmd = {}  # (cmd1, cmd2) → (flags, positionals)
+    for cmd, sp in top_subs.choices.items():
+        if cmd in nouns:
+            sub_action = next(a for a in sp._actions
+                              if isinstance(a, argparse._SubParsersAction))
+            for verb, vp in sub_action.choices.items():
+                per_cmd[(cmd, verb)] = collect(vp)
         else:
-            die("could not detect shell; pass --shell bash|zsh")
-        return
-    if sub == "install":
-        _completions_install(rest)
-        return
-    if sub == "uninstall":
-        _completions_uninstall(rest)
-        return
-    die(f"unknown completions subcommand: {sub}")
+            per_cmd[(cmd, "")] = collect(sp)
+
+    # Build value-flag lookup (flag → completion kind), considering all parsers
+    flag_kinds = {}  # "--flag" → kind (or None for "no completion known")
+    def gather_flags(p):
+        for act in p._actions:
+            if isinstance(act, argparse._SubParsersAction):
+                for sub in act.choices.values():
+                    gather_flags(sub)
+                continue
+            if not act.option_strings:
+                continue
+            if not _is_value_flag(act):
+                continue
+            kind = _action_kind(act)
+            for opt in act.option_strings:
+                if opt.startswith("--"):
+                    # First seen wins — flags reused across subparsers should
+                    # share a kind anyway.
+                    flag_kinds.setdefault(opt, kind)
+    gather_flags(parser)
+
+    value_flags_all = sorted(flag_kinds.keys())
+
+    # ---- Emit bash ----
+    out = []
+    o = out.append
+    o("# Generated by `mcc completions emit` from the argparse parser.")
+    o("# DO NOT EDIT BY HAND — run `mcc completions emit` to regenerate.")
+    o("")
+    o("_mcc_complete() {")
+    o("    COMPREPLY=()")
+    o("    local cur cword words prev IFS=$' \\t\\n'")
+    o('    cur="${COMP_WORDS[COMP_CWORD]}"')
+    o("    cword=$COMP_CWORD")
+    o('    words=("${COMP_WORDS[@]}")')
+    o('    prev=""')
+    o('    (( cword > 0 )) && prev="${words[$((cword-1))]}"')
+    o("")
+    o("    # ---- Top level: subcommands ∪ registered session names ----")
+    o("    if (( cword == 1 )); then")
+    o(f'        local subs="{ " ".join(top_cmds) } help"')
+    o("        local sessions")
+    o("        sessions=$(mcc complete --kind session 2>/dev/null)")
+    o('        COMPREPLY=( $(compgen -W "${subs} ${sessions}" -- "${cur}") )')
+    o("        return")
+    o("    fi")
+    o("")
+    o('    local cmd1="${words[1]}"')
+    o('    local cmd2=""')
+    o("    local args_start=2")
+    o("")
+    o("    # ---- Two-level nouns ----")
+    o('    case "$cmd1" in')
+    for n in sorted(nouns):
+        verbs = " ".join(nouns[n])
+        o(f"        {n})")
+        o("            if (( cword == 2 )); then")
+        o(f'                COMPREPLY=( $(compgen -W "{verbs}" -- "$cur") )')
+        o("                return")
+        o("            fi")
+        o('            cmd2="${words[2]}"')
+        o("            args_start=3")
+        o("            ;;")
+    o("    esac")
+    o("")
+    # Special case: --group label=name1,name2
+    o("    # ---- Special case: --group <label>=<csv-of-sessions> ----")
+    o('    if [[ "$prev" == "--group" && "$cur" == *=* ]]; then')
+    o('        local label="${cur%%=*}"')
+    o('        local list="${cur#*=}"')
+    o('        local last="${list##*,}"')
+    o('        local prefix=""')
+    o('        [[ "$list" == *,* ]] && prefix="${list%,*}"')
+    o("        local sessions s")
+    o("        sessions=$(mcc complete --kind session 2>/dev/null)")
+    o("        COMPREPLY=()")
+    o('        for s in $sessions; do')
+    o('            [[ "$s" == "$last"* ]] || continue')
+    o('            if [[ -n "$prefix" ]]; then')
+    o('                COMPREPLY+=( "${label}=${prefix},${s}" )')
+    o("            else")
+    o('                COMPREPLY+=( "${label}=${s}" )')
+    o("            fi")
+    o("        done")
+    o("        return")
+    o("    fi")
+    o("")
+    # Per-flag value completion
+    o("    # ---- Flag-with-value: complete the value ----")
+    o('    case "$prev" in')
+    # Group flags by kind for compactness
+    by_kind = {}
+    for flag in value_flags_all:
+        by_kind.setdefault(flag_kinds[flag], []).append(flag)
+    fixed_lists = {
+        "plugin": "pdt mam mama bus",
+        "shell": "bash zsh",
+        "group_by_mode": "scope none custom",
+        "switch_target": "mam mama off",
+    }
+    # Order: hint kinds with shell shellouts first, then fixed lists, then no-hint
+    for kind in sorted(k for k in by_kind if k):
+        flags = by_kind[kind]
+        if kind == "group_label_eq_csv":
+            # --group is handled by the special-case block above; here we just
+            # avoid completing it as a regular flag value.
+            o(f'        {"|".join(flags)})')
+            o("            return ;;")
+            continue
+        if kind in fixed_lists:
+            o(f'        {"|".join(flags)})')
+            o(f'            COMPREPLY=( $(compgen -W "{fixed_lists[kind]}" -- "$cur") )')
+            o("            return ;;")
+        elif kind == "file":
+            o(f'        {"|".join(flags)})')
+            o("            compopt -o default 2>/dev/null")
+            o("            COMPREPLY=()")
+            o("            return ;;")
+        elif kind == "command_path":
+            o(f'        {"|".join(flags)})')
+            o("            local items")
+            o("            items=$(mcc complete --kind command_path 2>/dev/null)")
+            o('            local oldIFS="$IFS"; IFS=$\'\\n\'')
+            o('            COMPREPLY=( $(compgen -W "$items" -- "$cur") )')
+            o('            IFS="$oldIFS"')
+            o("            return ;;")
+        else:
+            # Generic dynamic kind: shell out to mcc complete --kind <kind>
+            o(f'        {"|".join(flags)})')
+            o("            local items")
+            o(f'            items=$(mcc complete --kind {kind} 2>/dev/null)')
+            o('            COMPREPLY=( $(compgen -W "$items" -- "$cur") )')
+            o("            return ;;")
+    # No-hint value flags: just don't complete
+    if None in by_kind:
+        o(f'        {"|".join(by_kind[None])})')
+        o("            return ;;")
+    o("    esac")
+    o("")
+    # Bare flag completion
+    o("    # ---- Bare flag completion (cur starts with -) ----")
+    o('    if [[ "$cur" == -* ]]; then')
+    o('        local flags=""')
+    o('        case "$cmd1:$cmd2" in')
+    for (cmd, verb), (flags, _pos) in sorted(per_cmd.items()):
+        if not flags:
+            continue
+        # Filter out --help; argparse always adds it but the shell help is via -h
+        flag_list = [f for f in flags if f != "--help"]
+        if not flag_list:
+            continue
+        o(f'            {cmd}:{verb})  flags="{" ".join(flag_list)}" ;;')
+    o("        esac")
+    o('        COMPREPLY=( $(compgen -W "$flags" -- "$cur") )')
+    o("        return")
+    o("    fi")
+    o("")
+    # Positional skip table
+    skip_flags = " ".join(sorted(value_flags_all))
+    o("    # ---- Count positional args consumed (skipping flags + their values) ----")
+    o("    local pos_idx=0 i w")
+    o("    for ((i=args_start; i<cword; i++)); do")
+    o('        w="${words[$i]}"')
+    o('        case "$w" in')
+    o(f'            {"|".join(sorted(value_flags_all))})')
+    o("                ((i++)) ;;")
+    o("            --*)")
+    o("                ;;")
+    o("            *)")
+    o("                ((pos_idx++)) ;;")
+    o("        esac")
+    o("    done")
+    o("")
+    # Positional completion per (cmd, verb)
+    o("    # ---- Positional completion ----")
+    o('    case "$cmd1:$cmd2" in')
+    for (cmd, verb), (_flags, positionals) in sorted(per_cmd.items()):
+        if not positionals:
+            continue
+        # Collect kinds for positional slots in order
+        slot_kinds = [_action_kind(p) for p in positionals]
+        # nargs="*"-style positionals (e.g., vscode tokens): every position takes the same kind
+        nargs_star = any(p.nargs in ("*", "+", argparse.REMAINDER) for p in positionals)
+        if not any(slot_kinds):
+            continue
+        o(f"        {cmd}:{verb})")
+        if nargs_star:
+            kind = slot_kinds[0]
+            _emit_positional_case(o, kind, "")  # always complete
+        else:
+            for idx, kind in enumerate(slot_kinds):
+                if not kind:
+                    continue
+                _emit_positional_case(o, kind, f"(( pos_idx == {idx} )) && ")
+        o("            return ;;")
+    o("    esac")
+    o("}")
+    o("complete -F _mcc_complete mcc")
+    o("")
+    return "\n".join(out)
 
 
-# ----------------------------- Dispatch -----------------------------
-
-HANDLERS = {
-    "list": cmd_list,
-    "status": cmd_status,
-    "setup": cmd_setup,
-    "update": cmd_update,
-    "enable": cmd_enable,
-    "disable": cmd_disable,
-    "switch": cmd_switch,
-    "team": cmd_team,
-    "create": cmd_create,
-    "migrate": cmd_migrate,
-    "vscode": cmd_vscode,
-    "session": cmd_session,
-    "reflect": cmd_reflect,
-    "version": cmd_version,
-    "completions": cmd_completions,
-}
-
-
-# Per-command help. Each entry is detailed help shown by `mcc <cmd> -h` or
-# `mcc <noun> <verb> -h`. Top-level summary in print_help() is built separately.
-HELP = {
-    # Top-level
-    "<name>": """\
-mcc <name> — resume the Claude Code session registered as <name>
-
-Shorthand for `mcc session resume <name>`. If team mode is opted-in
-(via `mcc team setup`), passes --team-name flags to claude; otherwise
-runs plain `claude -r <sid>`.""",
-    "create": """\
-mcc create <name> [--persona <plugin>:<role>] [--plugin <p>] [--scope <s>]
-
-Create a new Claude Code session, register it under <name>, and optionally
-pre-load a persona profile.
-
-  --persona <plugin>:<role>   e.g. mama:implementor
-  --plugin  <p>               override inferred plugin (pdt|mam|mama)
-  --scope   <s>               write registration to .mcc-<s>/sessions
-                              (multi-project repos; auto-prompts if needed)""",
-    "list": "mcc list — list all registered sessions in this project",
-    "status": "mcc status — show plugin state and registered sessions",
-    "setup": "mcc setup — interactive first-time setup (install + enable user-wide)",
-    "update": "mcc update — update the methodical-cc marketplace and all plugins",
-    "enable": "mcc enable <plugin> — enable plugin (pdt|mam|mama|bus) in current project",
-    "disable": "mcc disable <plugin> — disable plugin (pdt|mam|mama|bus) in current project",
-    "switch": "mcc switch <target> — swap impl plugin: mam | mama | off (leaves pdt alone)",
-    "migrate": """\
-mcc migrate — consolidate legacy state directories
-
-Migrates legacy .mam/, .mama/, and .pdt[-scope]/ state directories into
-the unified .mcc[-scope]/ layout. Idempotent.""",
-    "vscode": """\
-mcc vscode [<name|scope>...] [--group-by <mode>] [--group <label>=<a>,<b>]...
-           [--no-folder-open]
-
-Bootstrap or update .vscode/tasks.json with mcc session tasks.
-
-Selection: positional args may be session names or scope names (multi-project
-repos). With no positional args, prompts interactively.
-
-Grouping (--group-by): controls how sessions are grouped into VSCode tabs.
-  scope    one tab per .mcc-{scope}/ (default in multi-project repos)
-  none     all sessions in one tab (default in single-project repos)
-  custom   user-defined groups via --group <label>=<a>,<b> (repeatable)
-           Passing any --group implies --group-by custom.
-
-Per-group aggregator tasks `mcc:all:<label>` are emitted alongside the
-top-level `mcc:all`. The mcc:all:* sub-namespace is reserved.
-
-Auto-run on folder open: opt-in per group in scope/custom mode (default
-none); none mode auto-runs `mcc:all` by default.
-
-Flags:
-  --group-by <scope|none|custom>
-  --group <label>=<name1>,<name2>      repeatable; implies --group-by custom
-  --no-folder-open                     don't auto-run anything on open
-
-Examples:
-  mcc vscode --group-by scope                       # tabs per project scope
-  mcc vscode --group-by none                        # one tab with everything
-  mcc vscode --group arch=admin-arch,app-arch \\
-             --group impl=admin-impl,app-impl       # custom cross-project tabs""",
-    "version": "mcc version — show mcc version",
-
-    # mcc team
-    "team": """\
-mcc team — bus team setup and status
-
-Subcommands:
-  mcc team setup [--name <name>]   opt this project into team mode
-  mcc team status                  show the project's bus team state
-
-Run `mcc team <verb> -h` for full help.""",
-    "team setup": """\
-mcc team setup [--name <name>]
-
-Opt this project into team mode and create the bus team config.
-Interactive prompt for the team name (default = dirname); pass --name
-to skip. Writes `.mcc/team-name` as the opt-in marker; thereafter
-`mcc <name>` passes team flags to claude. Without this, mcc operates
-as plain session-naming sugar.""",
-    "team status": "mcc team status — show the project's bus team state",
-
-    # mcc session
-    "session": """\
-mcc session — registered session management
-
-Subcommands:
-  mcc session list [--all] [--paths]              list sessions
-  mcc session set [<name> <session-id>] [--scope <s>]
-                                                  register a session
-  mcc session resume <name>                       formal verb for `mcc <name>`
-  mcc session transcript <name|sid> [opts...]     dump transcript
-
-Run `mcc session <verb> -h` for full help.""",
-    "session list": """\
-mcc session list [--all] [--paths]
-
-List Claude Code sessions for the current project (default) or all projects
-(--all). Works without .mcc/ setup. Shows last activity, registered name,
-and a title (best-effort: /rename → /title → ai-title → first user message
-preview).""",
-    "session set": """\
-mcc session set <name> <session-id> [--scope <s>]
-mcc session set [--scope <s>]
-
-Register a session id under <name>. Two forms:
-  - With both args: non-interactive registration.
-  - No positional args: interactive picker — pick from sessions in this
-    project, then enter a name.
-
-In multi-project repos with multiple .mcc-{scope}/ directories, you must
-disambiguate via --scope; if not given, mcc prompts (interactive) or
-errors with a hint (non-interactive). The prompt's default is derived
-from the session-name prefix (e.g. "admin-arch" → "admin").
-
-If team mode is opted-in, also tops up the team config.""",
-    "session resume": "mcc session resume <name> — formal verb for `mcc <name>`",
-    "session transcript": """\
-mcc session transcript <name|session-id> [options]
-
-Dump a session transcript to markdown.
-
-Default: per-through-line — emits a subdirectory with one file per
-significant branch (chain root → real conversational leaf), plus an
-index.md.
-
-Options:
-  --output <path>                  output dir or file
-  --min-divergence N               min unique entries for a branch to
-                                   count as significant (default 10)
-  --include-thinking
-  --include-compact-summaries
-  --include-meta                   system-injected meta entries
-  --include-harness-commands       harness-only slash commands like /exit
-  --include-incomplete-branches    restore tool-flow leaves (forensic)
-  --single-file                    one combined markdown file (chronological
-                                   all-entries by default)
-  --live-branch-only               with --single-file, render deepest chain
-  --post-compact-only              skip pre-compact history
-
-Default output: tmp/transcript_*/ (dir) or tmp/transcript_*.md (single-file).""",
-
-    # mcc reflect
-    "reflect": """\
-mcc reflect — submit methodology-feedback artifacts
-
-Subcommands:
-  mcc reflect list                 list reflection artifacts in ./tmp/
-  mcc reflect scan <path>          dry-run privacy scan
-  mcc reflect submit [<path>]      submit reflection to GitHub Issues
-
-Run `mcc reflect <verb> -h` for full help.""",
-    "reflect list": """\
-mcc reflect list — list reflection artifacts in ./tmp/, marked sent/unsent
-
-Artifacts at tmp/mama_reflection_*.md or similar. Sent ones have a `.sent`
-sidecar containing the issue URL.""",
-    "reflect scan": "mcc reflect scan <path> — dry-run: just runs the privacy scan",
-    "reflect submit": """\
-mcc reflect submit [<path>] [--repo <r>] [--no-scan] [--no-confirm]
-
-Submit a reflection artifact to GitHub Issues. Auto-picks latest unsent if
-no path. Runs a privacy scan via `claude -p` first; user confirms before
-posting. On success, writes a `.sent` sidecar with the issue URL.""",
-
-    # mcc completions
-    "completions": """\
-mcc completions — shell tab-completion
-
-Subcommands:
-  mcc completions bash                 emit bash completion script to stdout
-  mcc completions zsh                  emit zsh completion script to stdout
-  mcc completions print [--shell <s>]  emit script for detected (or chosen) shell
-  mcc completions install [--shell <s>] [--rc-file <path>]
-                                       append source line to your rc file
-  mcc completions uninstall [--shell <s>] [--rc-file <path>]
-                                       remove the source line
-
-Typical use: `mcc completions install` once, then new shells pick up
-completions automatically. `mcc update` will remind you to refresh
-when commands have changed.""",
-    "completions bash":
-        "mcc completions bash — emit bash completion script (use with `eval \"$(mcc completions bash)\"`)",
-    "completions zsh":
-        "mcc completions zsh — emit zsh completion script (use with `eval \"$(mcc completions zsh)\"`)",
-    "completions print":
-        "mcc completions print [--shell bash|zsh] — emit script for detected shell",
-    "completions install": """\
-mcc completions install [--shell bash|zsh] [--rc-file <path>]
-
-Append a marked block to your shell's rc file that sources mcc's
-completion script on shell startup. Idempotent — re-running updates
-the existing block in place.
-
-Defaults: detects shell from $SHELL; writes to ~/.bashrc or ~/.zshrc.
-Pass --rc-file to override the destination.""",
-    "completions uninstall": """\
-mcc completions uninstall [--shell bash|zsh] [--rc-file <path>]
-
-Remove the mcc completions block (between `# >>> mcc completions >>>`
-and `# <<< mcc completions <<<` markers) from your shell's rc file.""",
-}
+def _emit_positional_case(o, kind, guard):
+    """Emit the right bash bit for a positional kind, behind the guard."""
+    fixed_lists = {
+        "plugin": "pdt mam mama bus",
+        "switch_target": "mam mama off",
+    }
+    if kind in fixed_lists:
+        o(f'            {guard}COMPREPLY=( $(compgen -W "{fixed_lists[kind]}" -- "$cur") )')
+    elif kind == "file":
+        o(f"            {guard}compopt -o default 2>/dev/null")
+        o(f"            {guard}COMPREPLY=()")
+    elif kind == "command_path":
+        o(f"            {guard}{{")
+        o("                local items")
+        o("                items=$(mcc complete --kind command_path 2>/dev/null)")
+        o('                local oldIFS="$IFS"; IFS=$\'\\n\'')
+        o('                COMPREPLY=( $(compgen -W "$items" -- "$cur") )')
+        o('                IFS="$oldIFS"')
+        o("            }")
+    else:
+        o(f"            {guard}{{")
+        o("                local items")
+        o(f"                items=$(mcc complete --kind {kind} 2>/dev/null)")
+        o('                COMPREPLY=( $(compgen -W "$items" -- "$cur") )')
+        o("            }")
 
 
-# Top-level help structure: ordered groups → list of (token, one-liner).
+# ----------------------------- Parser construction --------------------
+
+
+def _arg(parser, *args, complete=None, **kwargs):
+    """add_argument that stamps a 'complete' hint on the resulting action."""
+    act = parser.add_argument(*args, **kwargs)
+    act.complete = complete
+    return act
+
+
+def build_parser():
+    p = argparse.ArgumentParser(
+        prog="mcc",
+        description="mcc — methodical-cc helper CLI",
+        add_help=True,
+    )
+    p.add_argument("--version", "-v", action="store_true",
+                   help="show mcc version and exit")
+    sub = p.add_subparsers(dest="cmd", metavar="<command>")
+
+    # --- list ---
+    pl = sub.add_parser("list", help="list registered sessions")
+    pl.set_defaults(func=cmd_list)
+
+    # --- status ---
+    ps = sub.add_parser("status", help="show plugin state and registered sessions")
+    ps.set_defaults(func=cmd_status)
+
+    # --- setup ---
+    pset = sub.add_parser("setup", help="interactive first-time install + enable user-wide")
+    pset.set_defaults(func=cmd_setup)
+
+    # --- update ---
+    pu = sub.add_parser("update", help="update marketplace and all plugins")
+    pu.set_defaults(func=cmd_update)
+
+    # --- enable / disable ---
+    pe = sub.add_parser("enable", help="enable plugin in current project")
+    _arg(pe, "plugin", help="plugin name (pdt|mam|mama|bus)", complete="plugin")
+    pe.set_defaults(func=cmd_enable)
+
+    pd = sub.add_parser("disable", help="disable plugin in current project")
+    _arg(pd, "plugin", help="plugin name (pdt|mam|mama|bus)", complete="plugin")
+    pd.set_defaults(func=cmd_disable)
+
+    # --- switch ---
+    psw = sub.add_parser("switch", help="swap impl plugin: mam | mama | off")
+    _arg(psw, "target", help="mam, mama, or off", complete="switch_target")
+    psw.set_defaults(func=cmd_switch)
+
+    # --- create ---
+    pc = sub.add_parser(
+        "create",
+        help="create a new Claude Code session and register it",
+    )
+    _arg(pc, "name", help="session name (e.g. arch, impl, design)", complete="session")
+    _arg(pc, "--persona", help="persona to load, e.g. mama:architect", complete="persona")
+    _arg(pc, "--plugin", help="override inferred plugin (pdt|mam|mama)", complete="plugin")
+    _arg(pc, "--scope", help="state scope (multi-project repos); '' for default .mcc/",
+         complete="scope")
+    pc.set_defaults(func=cmd_create)
+
+    # --- migrate ---
+    pm = sub.add_parser("migrate",
+                        help="consolidate legacy .mam/.mama/.pdt[-scope]/ state dirs")
+    pm.set_defaults(func=cmd_migrate)
+
+    # --- vscode ---
+    pv = sub.add_parser(
+        "vscode",
+        help="bootstrap .vscode/tasks.json with mcc session tasks",
+        description=(
+            "Bootstrap or update .vscode/tasks.json with mcc session tasks.\n"
+            "Grouping (--group-by): scope (default in multi-project), none "
+            "(default in single-project), custom (with --group)."),
+    )
+    _arg(pv, "tokens", nargs="*",
+         help="session names, scope names, or 'all' (interactive if empty)",
+         complete="session_or_scope_or_all")
+    _arg(pv, "--group-by", choices=("scope", "none", "custom"),
+         help="how to group sessions into VSCode tabs",
+         complete="group_by_mode")
+    _arg(pv, "--group", action="append", metavar="LABEL=A,B",
+         help="custom group: 'label=name1,name2' (repeatable; implies --group-by custom)",
+         complete="group_label_eq_csv")
+    _arg(pv, "--no-folder-open", action="store_true",
+         help="don't auto-run anything on folder open")
+    pv.set_defaults(func=cmd_vscode)
+
+    # --- team ---
+    pt = sub.add_parser("team", help="bus team: setup, status")
+    pt_sub = pt.add_subparsers(dest="team_cmd", metavar="<verb>")
+    pt_setup = pt_sub.add_parser("setup", help="opt this project into team mode")
+    _arg(pt_setup, "--name", help="team name (skip prompt)")
+    pt_setup.set_defaults(func=cmd_team_setup)
+    pt_status = pt_sub.add_parser("status", help="show project's team state")
+    pt_status.set_defaults(func=cmd_team_status)
+
+    # --- session ---
+    psess = sub.add_parser("session", help="session list/set/resume/transcript")
+    psess_sub = psess.add_subparsers(dest="session_cmd", metavar="<verb>")
+
+    psl = psess_sub.add_parser("list", help="list Claude Code sessions for this project")
+    _arg(psl, "--all", action="store_true", help="list across all Claude Code projects")
+    _arg(psl, "--paths", action="store_true", help="show jsonl path under each row")
+    _arg(psl, "--show-path", action="store_true", help="alias for --paths",
+         dest="paths")  # keep behavior; --show-path is the legacy spelling
+    psl.set_defaults(func=cmd_session_list)
+
+    psset = psess_sub.add_parser(
+        "set", help="register a session under a name in .mcc[-scope]/sessions",
+    )
+    _arg(psset, "posargs", nargs="*", metavar="[<name> <session-id>]",
+         help="optional non-interactive form: name and UUID. Empty for interactive picker.",
+         complete="session")
+    _arg(psset, "--scope", help="state scope; '' for default .mcc/", complete="scope")
+    psset.set_defaults(func=cmd_session_set)
+
+    psresume = psess_sub.add_parser("resume", help="formal verb for `mcc <name>`")
+    _arg(psresume, "name", help="registered session name", complete="session")
+    psresume.set_defaults(func=cmd_resume)
+
+    pst = psess_sub.add_parser(
+        "transcript", help="dump a session transcript to markdown",
+    )
+    _arg(pst, "target", help="session name or session-id UUID", complete="session")
+    _arg(pst, "--output", help="output dir or file", complete="file")
+    _arg(pst, "--min-divergence", type=int, default=10,
+         help="min unique entries for a branch to count as significant (default 10)")
+    _arg(pst, "--include-thinking", action="store_true")
+    _arg(pst, "--include-compact-summaries", action="store_true")
+    _arg(pst, "--include-meta", action="store_true")
+    _arg(pst, "--include-harness-commands", action="store_true")
+    _arg(pst, "--include-incomplete-branches", action="store_true")
+    _arg(pst, "--single-file", action="store_true",
+         help="emit one combined markdown file (chronological by default)")
+    _arg(pst, "--live-branch-only", action="store_true",
+         help="implies --single-file; render only the deepest single chain")
+    _arg(pst, "--post-compact-only", action="store_true",
+         help="skip pre-compact history")
+    pst.set_defaults(func=cmd_session_transcript)
+
+    # --- reflect ---
+    pr = sub.add_parser("reflect", help="reflect list/scan/submit (methodology feedback)")
+    pr_sub = pr.add_subparsers(dest="reflect_cmd", metavar="<verb>")
+
+    prl = pr_sub.add_parser("list", help="list reflection artifacts in ./tmp/")
+    prl.set_defaults(func=cmd_reflect_list)
+
+    prs = pr_sub.add_parser("scan", help="dry-run privacy scan")
+    _arg(prs, "path", help="reflection artifact to scan", complete="file")
+    prs.set_defaults(func=cmd_reflect_scan)
+
+    prsub = pr_sub.add_parser("submit", help="submit reflection to GitHub Issues")
+    _arg(prsub, "path", nargs="?", help="reflection artifact (auto-picks latest if omitted)",
+         complete="file")
+    _arg(prsub, "--repo", help=f"GitHub repo (default {FEEDBACK_REPO_DEFAULT})")
+    _arg(prsub, "--no-scan", action="store_true", help="skip privacy scan")
+    _arg(prsub, "--no-confirm", action="store_true", help="skip confirmation prompts")
+    prsub.set_defaults(func=cmd_reflect_submit)
+
+    # --- completions ---
+    pcomp = sub.add_parser("completions", help="shell tab-completion: install/emit")
+    pcomp_sub = pcomp.add_subparsers(dest="completions_cmd", metavar="<verb>")
+
+    pcomp_bash = pcomp_sub.add_parser("bash", help="emit bash completion script")
+    pcomp_bash.set_defaults(func=cmd_completions_bash)
+    pcomp_zsh = pcomp_sub.add_parser("zsh", help="emit zsh completion script")
+    pcomp_zsh.set_defaults(func=cmd_completions_zsh)
+
+    pcomp_print = pcomp_sub.add_parser("print", help="emit script for detected shell")
+    _arg(pcomp_print, "--shell", choices=("bash", "zsh"),
+         help="override detected shell", complete="shell")
+    pcomp_print.set_defaults(func=cmd_completions_print)
+
+    pcomp_inst = pcomp_sub.add_parser("install", help="install completion in your rc file")
+    _arg(pcomp_inst, "--shell", choices=("bash", "zsh"),
+         help="override detected shell", complete="shell")
+    _arg(pcomp_inst, "--rc-file", help="override rc file path", complete="file")
+    pcomp_inst.set_defaults(func=cmd_completions_install)
+
+    pcomp_uninst = pcomp_sub.add_parser("uninstall", help="remove completion from your rc file")
+    _arg(pcomp_uninst, "--shell", choices=("bash", "zsh"),
+         help="override detected shell", complete="shell")
+    _arg(pcomp_uninst, "--rc-file", help="override rc file path", complete="file")
+    pcomp_uninst.set_defaults(func=cmd_completions_uninstall)
+
+    pcomp_emit = pcomp_sub.add_parser(
+        "emit", help="regenerate the bundled bash completion file from the parser")
+    _arg(pcomp_emit, "--output", help="override output path", complete="file")
+    pcomp_emit.set_defaults(func=cmd_completions_emit)
+
+    pcomp_verify = pcomp_sub.add_parser(
+        "verify", help="check that the bundled completion matches the parser")
+    pcomp_verify.set_defaults(func=cmd_completions_verify)
+
+    # --- complete (fast-path; not advertised to users) ---
+    pcompfast = sub.add_parser("complete", help=argparse.SUPPRESS)
+    _arg(pcompfast, "--kind", required=True,
+         choices=("session", "scope", "session_or_scope_or_all",
+                  "persona", "plugin", "command_path"))
+    pcompfast.set_defaults(func=cmd_complete)
+
+    # --- version ---
+    pver = sub.add_parser("version", help="show mcc version")
+    pver.set_defaults(func=cmd_version)
+
+    return p
+
+
+# ----------------------------- Top-level help (categorical) -------------------
+
 TOP_HELP_GROUPS = [
     ("Session", [
         ("<name>",  "Resume session by name (shorthand for `session resume`)"),
@@ -4151,65 +4262,71 @@ def print_help():
     for group, items in TOP_HELP_GROUPS:
         print(f"{group}:")
         for tok, desc in items:
-            print(f"  {tok:<10} {desc}")
+            print(f"  {tok:<11} {desc}")
         print()
     print("Run `mcc <command> -h` for detailed help.")
 
 
-def print_help_for(tokens):
-    """Print detailed help for a command path like ['session', 'set'] or ['vscode']."""
-    key = " ".join(tokens)
-    if key in HELP:
-        print(HELP[key])
-        return
-    # Maybe they asked for a noun that we have but with a verb suffix typo
-    if len(tokens) >= 2 and tokens[0] in HELP:
-        print(f"Unknown subcommand for `mcc {tokens[0]}`. Showing top-level help for `mcc {tokens[0]}`:")
-        print()
-        print(HELP[tokens[0]])
-        return
-    die(f"no help for: mcc {key}")
-
-
-def _is_help_flag(s):
-    return s in ("-h", "--help")
-
+# ----------------------------- Dispatch -----------------------------
 
 def main():
     argv = sys.argv[1:]
+
     # Fast path for shell tab-completion. Must stay cheap — invoked on every
-    # Tab keypress that hits a dynamic slot. Avoids `claude` calls, plugin
-    # scans, and any other heavy work below.
+    # Tab keypress that hits a dynamic slot.
     if argv and argv[0] == "complete":
-        cmd_complete(argv[1:])
-        return
-    # Top-level: no args, or `help`/`-h`/`--help` as the first token
+        # Build a minimal parser just for this subcommand
+        parser = build_parser()
+        args = parser.parse_args(argv)
+        return args.func(args)
+
+    # Top-level help / version shortcuts (categorical print_help)
     if not argv or argv[0] in ("help", "-h", "--help"):
         print_help()
         return
     if argv[0] in ("--version", "-v"):
-        cmd_version(argv[1:])
+        cmd_version(None)
         return
 
-    # Help requests anywhere in the argv: `mcc <cmd> -h`, `mcc <noun> <verb> -h`
-    if any(_is_help_flag(a) for a in argv):
-        # Strip help flags and treat the remainder as the command path
-        path = [a for a in argv if not _is_help_flag(a)]
-        if not path:
-            print_help()
-            return
-        print_help_for(path)
+    parser = build_parser()
+    known_cmds = set()
+    for act in parser._actions:
+        if isinstance(act, argparse._SubParsersAction):
+            known_cmds.update(act.choices.keys())
+            break
+
+    # Bareword resume: if argv[0] isn't a known command and isn't a flag,
+    # treat as `mcc session resume <name>`.
+    if argv[0] not in known_cmds and not argv[0].startswith("-"):
+        if len(argv) > 1:
+            die(f"unknown command '{argv[0]}' (and bareword resume takes only a name)")
+        # Build a fake args namespace
+        ns = argparse.Namespace(name=argv[0])
+        return cmd_resume(ns)
+
+    args = parser.parse_args(argv)
+
+    # Each leaf subparser sets `func` via set_defaults. Nouns without a verb
+    # fall through here with no `func`.
+    func = getattr(args, "func", None)
+    if func is None:
+        # Identify which noun was given and emit its help
+        if args.cmd in ("team", "session", "reflect", "completions"):
+            # Find the corresponding subparser and print its help
+            for act in parser._actions:
+                if isinstance(act, argparse._SubParsersAction):
+                    sp = act.choices.get(args.cmd)
+                    if sp is not None:
+                        sp.print_help()
+                        return
+        die(f"missing subcommand for `mcc {args.cmd}` (try `mcc {args.cmd} -h`)")
+
+    # Top-level --version handling (when argparse did parse it)
+    if getattr(args, "version", False):
+        cmd_version(None)
         return
 
-    cmd = argv[0]
-    rest = argv[1:]
-
-    handler = HANDLERS.get(cmd)
-    if handler is not None:
-        handler(rest)
-    else:
-        # Anything not a known subcommand is treated as a session name
-        cmd_resume([cmd])
+    func(args)
 
 
 if __name__ == "__main__":
@@ -4218,3 +4335,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print()
         sys.exit(130)
+
