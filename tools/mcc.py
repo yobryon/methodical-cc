@@ -18,7 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.14.0"
+MCC_VERSION = "1.15.0"
 
 import json
 import time
@@ -1374,207 +1374,93 @@ def _select_live_branch(entries):
     return chain
 
 
-def _categorize_leaf(leaf):
-    """Classify a terminal main-thread entry as 'endpoint' (real conversational
-    end) or 'noise' (tool-flow artifact, harness-injected, slash command, etc.).
+def _select_walk_back(entries):
+    """Walk back from the latest-timestamp eligible leaf via
+    parentUuid → logicalParentUuid (the compact-bridge field).
 
-    The default through-line selection only considers 'endpoint' leaves —
-    avoids producing transcript files that end mid-tool-call or on harness
-    plumbing. --include-incomplete-branches restores noise leaves for
-    forensic work."""
-    t = leaf.get("type")
-    msg = leaf.get("message") or {}
-    content = msg.get("content")
-
-    if t == "assistant":
-        if not isinstance(content, list):
-            return "noise"
-        block_types = [b.get("type") for b in content if isinstance(b, dict)]
-        # Last block being tool_use means Claude was about to call a tool but
-        # the tool_result never came back — interrupted mid-flight.
-        if block_types and block_types[-1] == "tool_use":
-            return "noise"
-        has_text = any(
-            isinstance(b, dict) and b.get("type") == "text"
-            and (b.get("text") or "").strip()
-            for b in content
-        )
-        return "endpoint" if has_text else "noise"
-
-    if t == "user":
-        if leaf.get("isMeta") or leaf.get("isCompactSummary"):
-            return "noise"
-        if isinstance(content, str):
-            return "endpoint" if content.strip() else "noise"
-        if not isinstance(content, list):
-            return "noise"
-        block_types = [b.get("type") for b in content if isinstance(b, dict)]
-        has_text = any(
-            isinstance(b, dict) and b.get("type") == "text"
-            and (b.get("text") or "").strip()
-            for b in content
-        )
-        # tool_result with no real text = orphaned tool_result, not a real msg
-        if "tool_result" in block_types and not has_text:
-            return "noise"
-        if has_text:
-            text = next(
-                (b["text"] for b in content
-                 if isinstance(b, dict) and b.get("type") == "text"),
-                "",
-            )
-            stripped = text.lstrip()
-            if stripped.startswith("<command-name>"):
-                return "noise"
-            if stripped.startswith(("<local-command-", "<ide_opened_file>",
-                                    "<system-reminder>")):
-                return "noise"
-            return "endpoint"
-        return "noise"
-
-    return "noise"
-
-
-def _walk_chain(leaf, msgs):
-    """Walk parentUuid+logicalParentUuid back from leaf. Returns ordered list
-    (root-first), with cycle protection."""
-    chain = []
-    cur = leaf
-    seen = set()
-    while cur is not None:
-        u = cur.get("uuid")
-        if not u or u in seen:
-            break
-        seen.add(u)
-        chain.append(cur)
-        pid = cur.get("parentUuid") or cur.get("logicalParentUuid")
-        cur = msgs.get(pid) if pid else None
-    chain.reverse()
-    return chain
-
-
-def _select_through_lines(entries, min_divergence=10, include_incomplete=False):
-    """Identify significant through-lines: each one is a complete chain from a
-    real-endpoint leaf back to the file's earliest reachable root, where the
-    chain has at least `min_divergence` entries that don't appear in any other
-    selected through-line.
-
-    Returns a list of dicts:
-      {leaf, chain (root-first), chain_set, unique_count, fork_points}
-
-    Sorted by leaf timestamp DESCENDING — most recent through-line is index 0
-    (and gets the smallest filename number).
-
-    Fork points are nodes along the chain whose parents have other children
-    leading to OTHER selected through-lines. Annotated as
-      [(uuid_of_first_child_after_fork, sorted_list_of_other_through_line_indices)]
-    in the order they appear when walking root-to-leaf.
+    Returns (chain_root_first, leaf, bridges_followed, dead_bridge_or_None).
+    `dead_bridge` is a dict describing where the walk terminated when a
+    parent/logical link couldn't be resolved in-file — used by the
+    verification step to surface negative findings.
     """
     msgs = {}
     for e in entries:
         if not isinstance(e, dict):
-            continue
-        if e.get("type") not in TRANSCRIPT_TYPES:
             continue
         u = e.get("uuid")
         if not u:
             continue
         msgs[u] = e
 
-    # Children-set check (parentUuid + logicalParentUuid) — same logic as
-    # _select_live_branch's leaf detection.
-    children_set = set()
-    for e in msgs.values():
-        for k in ("parentUuid", "logicalParentUuid"):
-            pid = e.get(k)
-            if pid:
-                children_set.add(pid)
-
-    candidates = [
-        m for m in msgs.values()
-        if m["uuid"] not in children_set
-        and m.get("type") in ("user", "assistant")
-        and not m.get("isSidechain", False)
+    eligible = [
+        e for e in msgs.values()
+        if e.get("type") in ("user", "assistant")
+        and not e.get("isSidechain", False)
+        and e.get("timestamp")
     ]
-    if not include_incomplete:
-        candidates = [c for c in candidates if _categorize_leaf(c) == "endpoint"]
-    if not candidates:
+    if not eligible:
+        return [], None, 0, None
+
+    leaf = max(eligible, key=lambda e: e.get("timestamp", ""))
+
+    chain = []
+    seen = set()
+    cur = leaf
+    bridges = 0
+    dead_bridge = None
+    while cur is not None and cur.get("uuid") not in seen:
+        seen.add(cur.get("uuid"))
+        chain.append(cur)
+        parent_id = cur.get("parentUuid")
+        nxt = msgs.get(parent_id) if parent_id else None
+        if nxt is None:
+            logical_id = cur.get("logicalParentUuid")
+            nxt = msgs.get(logical_id) if logical_id else None
+            if nxt is not None:
+                bridges += 1
+            elif parent_id or logical_id:
+                dead_bridge = {
+                    "at_uuid": cur.get("uuid"),
+                    "type": cur.get("type"),
+                    "subtype": cur.get("subtype"),
+                    "ts": cur.get("timestamp"),
+                    "wanted_parent": parent_id,
+                    "wanted_logical": logical_id,
+                }
+                break
+        cur = nxt
+
+    chain.reverse()
+    return chain, leaf, bridges, dead_bridge
+
+
+def _verify_walk_chain(entries, chain):
+    """Check whether the file's first/last eligible (user/assistant non-sidechain)
+    entries by timestamp both appear in the produced chain. Returns a list of
+    (which, entry) tuples for any missing endpoints — empty list = PASS."""
+    eligible = [
+        e for e in entries
+        if isinstance(e, dict)
+        and e.get("type") in ("user", "assistant")
+        and not e.get("isSidechain", False)
+        and e.get("timestamp")
+    ]
+    if not eligible:
         return []
+    eligible.sort(key=lambda e: e.get("timestamp", ""))
+    chain_uuids = {e.get("uuid") for e in chain}
+    findings = []
+    if eligible[0].get("uuid") not in chain_uuids:
+        findings.append(("first", eligible[0]))
+    if eligible[-1].get("uuid") not in chain_uuids:
+        findings.append(("last", eligible[-1]))
+    return findings
 
-    # Walk each candidate back to root (uses + cycle protection)
-    chain_lists = {}
-    chain_sets = {}
-    for leaf in candidates:
-        chain_list = _walk_chain(leaf, msgs)
-        chain_lists[leaf["uuid"]] = chain_list
-        chain_sets[leaf["uuid"]] = {e["uuid"] for e in chain_list}
 
-    # Refcount: how many candidate chains include each uuid
-    import collections as _c
-    refcount = _c.Counter()
-    for s in chain_sets.values():
-        for u in s:
-            refcount[u] += 1
-
-    # Apply divergence filter
-    selected = []
-    for leaf in candidates:
-        chain_set = chain_sets[leaf["uuid"]]
-        unique = sum(1 for u in chain_set if refcount[u] == 1)
-        if unique < min_divergence:
-            continue
-        selected.append({
-            "leaf": leaf,
-            "chain": chain_lists[leaf["uuid"]],
-            "chain_set": chain_set,
-            "unique_count": unique,
-        })
-
-    # Sort by leaf timestamp DESCENDING (most recent through-line = index 0)
-    selected.sort(
-        key=lambda d: d["leaf"].get("timestamp", ""),
-        reverse=True,
-    )
-
-    # Refcount over SELECTED chains only (for fork-point cross-references)
-    refcount_selected = _c.Counter()
-    uuid_to_tl_idxs = _c.defaultdict(list)
-    for i, tl in enumerate(selected):
-        for u in tl["chain_set"]:
-            refcount_selected[u] += 1
-            uuid_to_tl_idxs[u].append(i)
-
-    # Full children map across all msgs (used for sibling lookup at fork points)
-    full_children = _c.defaultdict(list)
-    for u, e in msgs.items():
-        for k in ("parentUuid", "logicalParentUuid"):
-            pid = e.get(k)
-            if pid:
-                full_children[pid].append(u)
-
-    # Identify fork points per through-line
-    for i, tl in enumerate(selected):
-        forks = []
-        for entry in tl["chain"]:
-            pid = entry.get("parentUuid") or entry.get("logicalParentUuid")
-            if not pid:
-                continue
-            sibs = full_children.get(pid, ())
-            if len(sibs) <= 1:
-                continue  # no fork
-            # Find OTHER through-lines that pass through any sibling
-            others = set()
-            my_uuid = entry["uuid"]
-            for sib in sibs:
-                if sib == my_uuid:
-                    continue
-                others.update(uuid_to_tl_idxs.get(sib, ()))
-            others.discard(i)
-            if others:
-                forks.append((my_uuid, sorted(others)))
-        tl["fork_points"] = forks
-
-    return selected
+def _excerpt_for_diag(entry, n=120):
+    text = _entry_text(entry)
+    text = " ".join(text.split())
+    return (text[:n] + "…") if len(text) > n else text
 
 
 def _tool_slug(block):
@@ -1802,151 +1688,6 @@ def _render_chain(chain, opts):
         if rendered:
             out_parts.append(rendered)
     return "\n\n".join(out_parts) + "\n"
-
-
-def _through_line_filename(idx, total):
-    """Stable filename like through-line-01.md, padded to width of total count."""
-    width = max(2, len(str(total)))
-    return f"through-line-{idx + 1:0{width}d}.md"
-
-
-def _through_line_title(tl, max_len=80):
-    """Best-effort title for a through-line: last user message preview."""
-    for e in reversed(tl["chain"]):
-        if e.get("type") != "user":
-            continue
-        if e.get("isMeta") or e.get("isCompactSummary"):
-            continue
-        text = _entry_text(e).strip()
-        if not text:
-            continue
-        if "<command-name>" in text:
-            continue
-        if text.lstrip().startswith(("<local-command-", "<ide_opened_file>",
-                                     "<system-reminder>")):
-            continue
-        if _COMPACT_SUMMARY_OPENING in text:
-            continue
-        text = " ".join(text.split())
-        return text if len(text) <= max_len else text[:max_len - 1] + "…"
-    # Fallback: last assistant message preview
-    for e in reversed(tl["chain"]):
-        if e.get("type") != "assistant":
-            continue
-        text = _entry_text(e).strip()
-        if text:
-            text = " ".join(text.split())
-            return text if len(text) <= max_len else text[:max_len - 1] + "…"
-    return "(no preview)"
-
-
-def _render_through_line_files(through_lines, sid, label, jsonl_path, opts, out_dir,
-                                fork_origin=None):
-    """Render an index.md plus one through-line-NN.md per through-line.
-    Returns list of (filename, num_entries_rendered) tuples."""
-    total = len(through_lines)
-    # Pre-compute filenames for cross-referencing in fork markers
-    filenames = [_through_line_filename(i, total) for i in range(total)]
-    titles = [_through_line_title(tl) for tl in through_lines]
-
-    # Index
-    now = time.strftime("%Y-%m-%d %H:%M:%S")
-    idx_lines = [
-        f"# Transcript: {label}",
-        "",
-        f"- Session ID: `{sid}`",
-        f"- Source: `{jsonl_path}`",
-        f"- Generated: {now}",
-        f"- Through-lines: **{total}**",
-        f"- Min divergence threshold: {opts.get('min_divergence')}",
-        f"- Mode: per-through-line (one file per significant branch)",
-    ]
-    if fork_origin and fork_origin[0]:
-        parent_sid, fork_msg = fork_origin
-        if fork_msg:
-            idx_lines.append(
-                f"- **Forked from**: session `{parent_sid}` at message `{fork_msg}`"
-            )
-        else:
-            idx_lines.append(f"- **Forked from**: session `{parent_sid}`")
-    idx_lines.extend([
-        "",
-        "## Through-lines",
-        "",
-        "| # | File | Leaf time | Chain length | Unique entries | Forks | Title / preview |",
-        "|---|------|-----------|--------------|----------------|-------|-----------------|",
-    ])
-    for i, tl in enumerate(through_lines):
-        leaf = tl["leaf"]
-        ts = leaf.get("timestamp", "")[:16].replace("T", " ")
-        chain_len = len(tl["chain"])
-        unique = tl["unique_count"]
-        forks = len(tl.get("fork_points", []))
-        title = titles[i].replace("|", "\\|")
-        idx_lines.append(
-            f"| {i + 1} | [{filenames[i]}](./{filenames[i]}) | {ts} | "
-            f"{chain_len} | {unique} | {forks} | {title} |"
-        )
-    idx_lines.append("")
-    idx_lines.append(
-        "Through-lines are numbered by leaf timestamp, most-recent first. "
-        "The unique-entries count reflects entries that don't appear in any "
-        "other through-line — a measure of how much this branch diverges."
-    )
-    idx_lines.append("")
-    (out_dir / "index.md").write_text("\n".join(idx_lines))
-
-    results = []
-    for i, tl in enumerate(through_lines):
-        # Build fork-marker map for this through-line
-        fork_markers = {}
-        for uuid, other_idxs in tl.get("fork_points", []):
-            files = [filenames[oi] for oi in other_idxs]
-            fork_markers[uuid] = files
-
-        chain_opts = dict(opts)
-        chain_opts["fork_markers"] = fork_markers
-        body = _render_chain(tl["chain"], chain_opts)
-
-        leaf = tl["leaf"]
-        ts = leaf.get("timestamp", "")[:16].replace("T", " ")
-
-        # Per-file header
-        header_lines = [
-            f"# Through-line {i + 1} of {total}: {ts}",
-            "",
-            f"- Session ID: `{sid}`",
-            f"- Leaf UUID: `{leaf.get('uuid')}`",
-            f"- Leaf timestamp: `{leaf.get('timestamp', '')}`",
-            f"- Chain length: {len(tl['chain'])} entries",
-            f"- Unique to this branch: {tl['unique_count']}",
-            f"- Fork points on this path: {len(tl.get('fork_points', []))}",
-            f"- Index: [index.md](./index.md)",
-        ]
-        if fork_origin and fork_origin[0]:
-            parent_sid, fork_msg = fork_origin
-            if fork_msg:
-                header_lines.append(
-                    f"- Forked from: session `{parent_sid}` at message `{fork_msg}`"
-                )
-            else:
-                header_lines.append(f"- Forked from: session `{parent_sid}`")
-        if tl.get("fork_points"):
-            related = sorted({fi for _, ois in tl["fork_points"] for fi in ois})
-            related_files = [f"[{filenames[ri]}](./{filenames[ri]})"
-                             for ri in related]
-            header_lines.append(
-                f"- Related (sibling branches): {', '.join(related_files)}"
-            )
-        header_lines.append("")
-        header_lines.append("---")
-        header_lines.append("")
-
-        (out_dir / filenames[i]).write_text(
-            "\n".join(header_lines) + "\n" + body
-        )
-        results.append((filenames[i], len(tl["chain"])))
-    return results
 
 
 # cmd_session was a manual subverb dispatcher; argparse subparsers now route
@@ -2623,27 +2364,30 @@ def cmd_session_set(args):
 
 
 def cmd_session_transcript(args):
-    """Dump a session's transcript to markdown.
+    """Dump a session's transcript to a single markdown file.
 
-    Default: per-through-line — one file per significant branch in a
-    subdirectory, plus an index.md summarizing the fork structure.
-    --single-file: classic single-file output (chronological by default).
-    --live-branch-only: implies --single-file; renders just the deepest chain.
+    Default: walk-back from the latest-eligible leaf via parentUuid →
+    logicalParentUuid (the compact-bridge field). Verifies that the file's
+    first/last eligible messages both made it into the chain; on a negative
+    finding, emits a diagnostic to stderr.
+
+    Alt modes:
+      --chronological: dump every eligible entry by timestamp (covers
+        disjoint subtrees that the walk-back can't reach via parent links).
+      --live-branch: longest-chain leaf-pick instead of latest-by-timestamp;
+        an escape hatch for cases where the natural leaf is on a stub.
     """
     target = args.target
     output = args.output
-    min_divergence = args.min_divergence
-    if min_divergence < 1:
-        die("--min-divergence must be >= 1")
     include_thinking = bool(args.include_thinking)
     include_compact_summaries = bool(args.include_compact_summaries)
     include_meta = bool(args.include_meta)
     include_harness_commands = bool(args.include_harness_commands)
-    include_incomplete_branches = bool(args.include_incomplete_branches)
     post_compact_only = bool(args.post_compact_only)
-    live_branch_only = bool(args.live_branch_only)
-    # --live-branch-only is inherently a single chain
-    single_file = bool(args.single_file) or live_branch_only
+    chronological = bool(args.chronological)
+    live_branch = bool(args.live_branch)
+    if chronological and live_branch:
+        die("--chronological and --live-branch are mutually exclusive")
 
     # Resolve session id
     if _looks_like_uuid(target):
@@ -2683,85 +2427,123 @@ def cmd_session_transcript(args):
         "post_compact_only": post_compact_only,
     }
 
+    # ---- Pick chain ----
+    leaf = None
+    bridges = 0
+    dead_bridge = None
+    if chronological:
+        chain = _select_chronological(entries)
+        mode = "chronological (all eligible entries by timestamp)"
+    elif live_branch:
+        chain = _select_live_branch(entries)
+        mode = "live-branch (longest reachable chain)"
+    else:
+        chain, leaf, bridges, dead_bridge = _select_walk_back(entries)
+        mode = "walk-back (latest-eligible leaf, parentUuid + logicalParentUuid bridge)"
+    if not chain:
+        die(f"no transcript entries found in {jsonl_path}")
+
+    body = _render_chain(chain, base_opts)
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    fork_line = ""
+    if fork_origin and fork_origin[0]:
+        parent_sid, fork_msg = fork_origin
+        if fork_msg:
+            fork_line = (
+                f"- **Forked from**: session `{parent_sid}` "
+                f"at message `{fork_msg}`\n"
+            )
+        else:
+            fork_line = f"- **Forked from**: session `{parent_sid}`\n"
+
+    walk_meta = ""
+    if not chronological and not live_branch:
+        walk_meta = f"- Logical bridges followed: {bridges}\n"
+        if leaf is not None:
+            walk_meta += (
+                f"- Leaf: `{leaf.get('uuid')}` "
+                f"(`{leaf.get('type')}` at `{leaf.get('timestamp')}`)\n"
+            )
+
+    header = (
+        f"# Transcript: {label}\n\n"
+        f"- Session ID: `{sid}`\n"
+        f"- Source: `{jsonl_path}`\n"
+        f"- Generated: {now}\n"
+        f"- Mode: {mode}\n"
+        f"- Entries selected: {len(chain)}\n"
+        f"{walk_meta}"
+        f"{fork_line}"
+        f"- Options: thinking={include_thinking} "
+        f"compact_summaries={include_compact_summaries} "
+        f"meta={include_meta} "
+        f"harness_commands={include_harness_commands} "
+        f"post_compact_only={post_compact_only}\n\n"
+        f"---\n\n"
+    )
+
     short_sid = sid[:8]
     ts_label = time.strftime("%Y%m%d-%H%M%S")
+    if output:
+        out_path = Path(output)
+    else:
+        out_path = Path("tmp") / f"transcript_{label}_{short_sid}_{ts_label}.md"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(header + body)
+    print(f"Wrote {out_path}")
+    print(f"  {len(chain)} entries from {jsonl_path}")
 
-    # ---- Single-file modes ----
-    if single_file:
-        if live_branch_only:
-            chain = _select_live_branch(entries)
-            mode = "live-branch (depth-first tree walk)"
-        else:
-            chain = _select_chronological(entries)
-            mode = "chronological (all entries by timestamp)"
-        if not chain:
-            die(f"no transcript entries found in {jsonl_path}")
-
-        body = _render_chain(chain, base_opts)
-        now = time.strftime("%Y-%m-%d %H:%M:%S")
-        fork_line = ""
-        if fork_origin and fork_origin[0]:
-            parent_sid, fork_msg = fork_origin
-            if fork_msg:
-                fork_line = (
-                    f"- **Forked from**: session `{parent_sid}` "
-                    f"at message `{fork_msg}`\n"
-                )
-            else:
-                fork_line = f"- **Forked from**: session `{parent_sid}`\n"
-        header = (
-            f"# Transcript: {label}\n\n"
-            f"- Session ID: `{sid}`\n"
-            f"- Source: `{jsonl_path}`\n"
-            f"- Generated: {now}\n"
-            f"- Mode: {mode}\n"
-            f"- Entries selected: {len(chain)}\n"
-            f"{fork_line}"
-            f"- Options: thinking={include_thinking} "
-            f"compact_summaries={include_compact_summaries} "
-            f"meta={include_meta} "
-            f"harness_commands={include_harness_commands} "
-            f"post_compact_only={post_compact_only}\n\n"
-            f"---\n\n"
-        )
-        if output:
-            out_path = Path(output)
-        else:
-            out_path = Path("tmp") / f"transcript_{label}_{short_sid}_{ts_label}.md"
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(header + body)
-        print(f"Wrote {out_path}")
-        print(f"  {len(chain)} entries from {jsonl_path}")
+    # ---- Verification (walk-back mode only) ----
+    if chronological or live_branch:
         return
 
-    # ---- Default: per-through-line ----
-    through_lines = _select_through_lines(
-        entries,
-        min_divergence=min_divergence,
-        include_incomplete=include_incomplete_branches,
+    findings = _verify_walk_chain(entries, chain)
+    eligible_count = sum(
+        1 for e in entries
+        if isinstance(e, dict)
+        and e.get("type") in ("user", "assistant")
+        and not e.get("isSidechain", False)
+        and e.get("timestamp")
     )
-    if not through_lines:
-        die(
-            f"no through-lines met the threshold (min_divergence={min_divergence}). "
-            f"Try a lower --min-divergence, or use --single-file."
+    print(
+        f"  verification: file eligible={eligible_count} "
+        f"chain={len(chain)} bridges={bridges}",
+        file=sys.stderr,
+    )
+    if not findings:
+        print("  verification: PASS — first and last eligible messages in chain", file=sys.stderr)
+        return
+
+    print("  verification: NEGATIVE FINDINGS", file=sys.stderr)
+    for which, entry in findings:
+        print(
+            f"    {which} eligible NOT in chain: "
+            f"uuid={(entry.get('uuid') or '')[:8]} "
+            f"ts={entry.get('timestamp')} "
+            f"type={entry.get('type')}",
+            file=sys.stderr,
         )
-
-    if output:
-        out_dir = Path(output)
-    else:
-        out_dir = Path("tmp") / f"transcript_{label}_{short_sid}_{ts_label}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    base_opts["min_divergence"] = min_divergence
-    results = _render_through_line_files(
-        through_lines, sid, label, jsonl_path, base_opts, out_dir,
-        fork_origin=fork_origin,
+        print(f"      content: {_excerpt_for_diag(entry)}", file=sys.stderr)
+    if dead_bridge:
+        print(
+            f"    walk terminated at uuid={(dead_bridge['at_uuid'] or '')[:8]} "
+            f"({dead_bridge['type']}/{dead_bridge['subtype']}) ts={dead_bridge['ts']}",
+            file=sys.stderr,
+        )
+        if dead_bridge["wanted_parent"]:
+            print(
+                f"      wanted parentUuid={dead_bridge['wanted_parent'][:8]} (unresolved)",
+                file=sys.stderr,
+            )
+        if dead_bridge["wanted_logical"]:
+            print(
+                f"      wanted logicalParentUuid={dead_bridge['wanted_logical'][:8]} (unresolved)",
+                file=sys.stderr,
+            )
+    print(
+        "  share this diagnostic + the offending session file so we can refine the algorithm.",
+        file=sys.stderr,
     )
-
-    print(f"Wrote {len(results)} through-line file(s) to {out_dir}/")
-    print(f"  index: {out_dir}/index.md")
-    print(f"  threshold: --min-divergence {min_divergence}")
-    print(f"  source: {jsonl_path}")
 
 
 # ----------------------------- Commands -----------------------------
@@ -4130,21 +3912,18 @@ def build_parser():
     psresume.set_defaults(func=cmd_resume)
 
     pst = psess_sub.add_parser(
-        "transcript", help="dump a session transcript to markdown",
+        "transcript", help="dump a session transcript to a single markdown file",
     )
     _arg(pst, "target", help="session name or session-id UUID", complete="session")
-    _arg(pst, "--output", help="output dir or file", complete="file")
-    _arg(pst, "--min-divergence", type=int, default=10,
-         help="min unique entries for a branch to count as significant (default 10)")
+    _arg(pst, "--output", help="output file path", complete="file")
     _arg(pst, "--include-thinking", action="store_true")
     _arg(pst, "--include-compact-summaries", action="store_true")
     _arg(pst, "--include-meta", action="store_true")
     _arg(pst, "--include-harness-commands", action="store_true")
-    _arg(pst, "--include-incomplete-branches", action="store_true")
-    _arg(pst, "--single-file", action="store_true",
-         help="emit one combined markdown file (chronological by default)")
-    _arg(pst, "--live-branch-only", action="store_true",
-         help="implies --single-file; render only the deepest single chain")
+    _arg(pst, "--chronological", action="store_true",
+         help="alt mode: dump every eligible entry by timestamp")
+    _arg(pst, "--live-branch", action="store_true",
+         help="alt mode: longest-chain leaf-pick instead of latest-by-timestamp")
     _arg(pst, "--post-compact-only", action="store_true",
          help="skip pre-compact history")
     pst.set_defaults(func=cmd_session_transcript)

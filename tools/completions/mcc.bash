@@ -107,7 +107,7 @@ _mcc_complete() {
         --shell)
             COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
             return ;;
-        --kind|--min-divergence|--name|--repo)
+        --kind|--name|--repo)
             return ;;
     esac
 
@@ -124,7 +124,7 @@ _mcc_complete() {
             reflect:submit)  flags="--no-confirm --no-scan --repo" ;;
             session:list)  flags="--all --paths --show-path" ;;
             session:set)  flags="--scope" ;;
-            session:transcript)  flags="--include-compact-summaries --include-harness-commands --include-incomplete-branches --include-meta --include-thinking --live-branch-only --min-divergence --output --post-compact-only --single-file" ;;
+            session:transcript)  flags="--chronological --include-compact-summaries --include-harness-commands --include-meta --include-thinking --live-branch --output --post-compact-only" ;;
             team:setup)  flags="--name" ;;
             vscode:)  flags="--group --group-by --no-folder-open" ;;
         esac
@@ -137,7 +137,7 @@ _mcc_complete() {
     for ((i=args_start; i<cword; i++)); do
         w="${words[$i]}"
         case "$w" in
-            --group|--group-by|--kind|--min-divergence|--name|--output|--persona|--plugin|--rc-file|--repo|--scope|--shell)
+            --group|--group-by|--kind|--name|--output|--persona|--plugin|--rc-file|--repo|--scope|--shell)
                 ((i++)) ;;
             --*)
                 ;;
