@@ -89,7 +89,6 @@ scan_one() {
   #
   # The agent is reduced to a pure text-in-text-out function.
   if ! claude -p \
-      --bare \
       --tools "" \
       --disable-slash-commands \
       --strict-mcp-config \
