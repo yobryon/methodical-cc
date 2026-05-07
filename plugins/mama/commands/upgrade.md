@@ -164,6 +164,30 @@ If this project ran for many sprints under earlier mama versions, you almost cer
 - No code action required. The agent re-reads this transition section, recalibrates, and applies the new defaults going forward.
 - Optional: run `/mama:reflect` at the next sprint close as a one-time deep-clean pass over accumulated memory surfaces. The audit catches what muscle-memory drift has already accreted.
 
+#### Transition: pre-3.3.0 → 3.3.0 — shrink counterweight, move-not-strike, cadence prompt, plan-component check
+
+**Conditions**: Apply this transition for any project that ran on mama < 3.3.0. Methodology brief; no on-disk migration.
+
+**What changed in v3.3.0.**
+
+1. **Shrink-counterweight prompt at `arch-sprint-complete`.** The reconciliation flow now pairs every additive verb (apply deltas, capture discoveries, update success criteria) with an explicit **What Shrank?** question — for each delta merged or criterion updated, ask whether the sprint rendered any rule, debt entry, doc section, or pattern obsolete. Default is *additive*; the prompt counters it.
+2. **Tech-debt MOVE-not-strike rule.** When tech-debt items resolve, the reconciliation moves the item to `sprint_log.md` under the resolving sprint and **deletes** the entry from CLAUDE.md. Strikethrough is no longer a terminal state — it auto-loaded into every future session as archaeology.
+3. **Reflection cadence prompt at `arch-sprint-complete`.** Architects in long-running projects are demonstrably bad at self-prompting `/mama:reflect`. `arch-sprint-complete` now reads sprints-since-last-reflection (from `architect_state.md` or by detecting the most recent reflection artifact) and emits a graduated prompt at ≥5 (soft), ≥8 (louder), ≥10 (overdue). The architect can defer; making the question visible every sprint is what closes the cadence loop.
+4. **Plan-component reality check at `arch-sprint-prep`.** Before kickoff goes out, the architect grep-verifies filenames, symbols, and components named in the plan. Mismatches mean the plan is wrong about its own scope; new components get marked as such so impl knows they're expected to be absent.
+
+**Behaviors to unlearn (you've probably built muscle memory on these).**
+
+- **Don't strikethrough resolved tech debt in CLAUDE.md.** The new rule is *move* the entry to `sprint_log.md` under the resolving sprint with provenance (e.g., `Resolved S{N}: {original} → {resolution}`) and *delete* from CLAUDE.md. If you find prior strikethroughs accumulated from earlier sprints, prune them as part of the next reflection — keep the provenance in `sprint_log.md`, remove from CLAUDE.md.
+- **Don't wait for the user to invoke `/mama:reflect`.** The cadence prompt fires automatically at sprint-complete now; respect it. If it fires soft and you think the timing is wrong, say so explicitly in your summary — don't silently skip.
+- **Don't treat `arch-sprint-complete` as additive-only.** The "Apply Implemented Deltas / Capture Discoveries / Update Success Criteria" verbs all add. The new posture explicitly asks "what shrank?" alongside every addition. If nothing shrank this sprint, say so — make the question visible in your summary.
+- **Don't ship plans with un-grep'd component names.** If your plan names files, symbols, or function references, verify them before kickoff. The "I think this lives in X" assumption costs impl reaction time at sprint open and signals plan sloppiness. New components being created in this sprint are a special case — call them out as new in the plan.
+- **Don't bury the prune in the summary.** When you delete tech debt, retire a doc section, or supersede a pattern, surface it in the sprint completion summary. Removals are quiet by default; making them visible is part of the discipline.
+
+**Action items for the user.**
+
+- No code action required. The agent re-reads this transition section, recalibrates, and applies the new defaults going forward.
+- Optional: run `/mama:reflect` at the next sprint close — even if cadence isn't due — to do a one-time deep clean of any strikethrough accumulator that's already in `CLAUDE.md`. After this pass, the move-not-strike rule prevents regrowth.
+
 ---
 
 *Future transitions will be added here as the methodology evolves.*

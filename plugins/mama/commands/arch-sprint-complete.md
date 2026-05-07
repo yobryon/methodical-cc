@@ -44,6 +44,15 @@ Update product documentation based on what actually happened:
 - Mark deltas as MERGED (or IMPLEMENTED if partially done)
 - Update version/date in product docs
 
+**What Shrank?** (counterweight to the additive verbs in this section)
+
+For each delta merged, success criterion updated, or tech-debt item resolved this sprint, ask explicitly:
+
+- Did this sprint render any rule, debt entry, doc section, or pattern obsolete?
+- Did the merge create redundancy in the destination doc that the older description should retire?
+
+If yes, prune now. If no, say so explicitly in the summary so the question is visible. The default is *additive*; this prompt exists to counter it.
+
 **Capture Discoveries:**
 - Any technical discoveries worth preserving?
 - Any architectural insights that emerged?
@@ -56,6 +65,16 @@ Update product documentation based on what actually happened:
 **Note Deviations:**
 - If implementation differed from design, update docs to reflect reality
 - Don't hide deviations -- document them with rationale
+
+**Resolve Tech Debt: move, don't strike.**
+
+When a tech-debt item carried in `CLAUDE.md` resolves this sprint:
+
+- **Move** the item to `sprint_log.md` under the resolving sprint, preserving provenance (e.g., `Resolved S{N}: {original description} → {how it was resolved}`).
+- **Delete** the entry from `CLAUDE.md`.
+- **Strikethrough is not a terminal state.** Strikethrough entries auto-load into every future session as archaeology; the sprint log is the durable record.
+
+Same rule applies when a delta merge supersedes an older doc section: replace, don't append-with-strikethrough.
 
 **Memorialization ownership** (who writes what, where):
 
@@ -110,15 +129,35 @@ Prepare an initial proposal for the next sprint:
 - Rationale
 - Open questions
 
-### 7. Present Summary
+### 7. Reflection Cadence Check
+
+The reflection ritual (`/mama:reflect`) is recommended every 5–10 sprints, but architects in long-running projects are demonstrably bad at self-prompting — drift accumulates between reflections. `arch-sprint-complete` is the natural cadence beat; surface the prompt here so it triggers itself.
+
+Determine sprints since last reflection. Two ways:
+- Read `architect_state.md` for a `last_reflection_sprint:` field if present.
+- Otherwise check the most recent `tmp/mama_reflection*.md` (or `tmp/pdt_reflection*.md`) artifact and infer sprint distance from sprint history.
+
+Emit the prompt graduating by distance:
+
+| Sprints since last | Tone | Message shape |
+|---|---|---|
+| 0–4 | (silent) | No prompt — within cadence |
+| 5–7 | soft | "Sprint N since last reflection. Worth running `/mama:reflect` before next sprint planning?" |
+| 8–9 | louder | "It's been N sprints since last reflection. Running `/mama:reflect` before continuing is recommended." |
+| 10+ | overdue | "**Overdue: N sprints since last reflection.** Run `/mama:reflect` now — drift may have accumulated past the point of easy catch." |
+
+The prompt belongs in your summary (next step), not as a blocker. The architect can defer; making the question visible every sprint is what closes the cadence loop.
+
+### 8. Present Summary
 
 Provide a clear summary:
 - Sprint X Completion Summary
 - What was accomplished
-- Documentation updates made
+- Documentation updates made (and what was *pruned* — make removals visible)
 - MAMA state updates made
 - Key learnings
 - Questions addressed
+- Reflection cadence note (if any prompt fired in step 7)
 - Initial proposal for Sprint X+1
 - Invitation for user feedback (which will flow into `/mama:arch-discuss`)
 
@@ -127,11 +166,14 @@ Provide a clear summary:
 - [ ] Read implementation log thoroughly
 - [ ] Updated product docs with implemented changes
 - [ ] Applied/merged relevant deltas
+- [ ] Asked "what shrank?" — pruned obsolete rules / docs / patterns where applicable
+- [ ] Resolved tech debt by moving (not striking through) entries to `sprint_log.md`
 - [ ] Captured discoveries worth preserving
 - [ ] Addressed Implementor questions
 - [ ] Noted any process improvements
 - [ ] Updated `.mcc*/architect_state.md` with sprint history
 - [ ] Updated `.mcc*/sprint_log.md` with sprint entry
+- [ ] Checked reflection cadence — emitted prompt if 5+ sprints since last
 - [ ] Prepared next sprint proposal
 
 ## Before You Begin

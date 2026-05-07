@@ -46,7 +46,24 @@ This command kicks off the sprint planning cycle:
 - Note any dependencies or prerequisites
 - Flag any open questions that might affect scope
 
-### 5. Present for Feedback
+### 5. Plan-Component Reality Check
+
+**Before the proposal goes to the user (and well before kickoff goes to impl), verify the plan's named components against the codebase.**
+
+Architect plans regularly cite filenames, symbols, function names, or component locations that don't match reality on disk. Each mismatch costs impl reaction time at sprint open and signals that arch-side planning isn't carrying its weight.
+
+For each filename, symbol, function, or component named in the proposed scope:
+
+- Confirm it exists on disk (`Glob` for paths, `Grep` for symbols).
+- If a named element doesn't exist, either:
+  - The plan is wrong about its own scope — fix the plan before proceeding, **or**
+  - The element is being newly created in this sprint — note this explicitly in the plan ("new file", "new export", etc.) so impl knows it's expected to be absent.
+
+Flag any "I think this lives in X" assumptions. If you're not certain, grep before you commit the plan to text.
+
+This is a discipline pass, not tooling — but if the named-element list is large enough that grepping each by hand is tedious, the friction is itself a signal that the plan may be over-specified.
+
+### 6. Present for Feedback
 
 - Share your proposal clearly
 - Invite the user to provide their feedback, ideas, and thoughts
