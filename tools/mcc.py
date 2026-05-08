@@ -4093,6 +4093,28 @@ def build_parser():
     _arg(prsub, "--no-confirm", action="store_true", help="skip confirmation prompts")
     prsub.set_defaults(func=cmd_reflect_submit)
 
+    # --- docs ---
+    from mcc_docs import (
+        cmd_docs_setup, cmd_docs_publish, cmd_docs_pull, cmd_docs_status,
+    )
+    pdocs = sub.add_parser("docs", help="docs publish/pull (stakeholder docs sharing)")
+    pdocs_sub = pdocs.add_subparsers(dest="docs_cmd", metavar="<verb>")
+
+    pdocs_setup = pdocs_sub.add_parser("setup", help="interactive: write manifest, set up gitignore")
+    pdocs_setup.set_defaults(func=cmd_docs_setup)
+
+    pdocs_pub = pdocs_sub.add_parser("publish", help="convert markdown sources to docx in publish_path")
+    _arg(pdocs_pub, "patterns", nargs="*",
+         help="optional patterns to narrow the manifest's docs list (paths, dirs, or globs)",
+         complete="file")
+    pdocs_pub.set_defaults(func=cmd_docs_publish)
+
+    pdocs_pull = pdocs_sub.add_parser("pull", help="parse Word comments in publish_path → feedback files")
+    pdocs_pull.set_defaults(func=cmd_docs_pull)
+
+    pdocs_status = pdocs_sub.add_parser("status", help="show docs config and pending-feedback count")
+    pdocs_status.set_defaults(func=cmd_docs_status)
+
     # --- completions ---
     pcomp = sub.add_parser("completions", help="shell tab-completion: install/emit")
     pcomp_sub = pcomp.add_subparsers(dest="completions_cmd", metavar="<verb>")

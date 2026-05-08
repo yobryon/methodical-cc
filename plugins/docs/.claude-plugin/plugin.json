@@ -1,0 +1,8 @@
+{
+  "name": "docs",
+  "description": "Stakeholder docs sharing and feedback ingest - publish markdown as docx to a synced folder, pull anchored comments back as repo-local feedback files",
+  "version": "1.0.0",
+  "author": {
+    "name": "Bryon Williams"
+  }
+}
