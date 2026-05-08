@@ -23,7 +23,7 @@ MCC_VERSION = "1.15.1"
 import json
 import time
 
-PLUGINS = ("pdt", "mam", "mama", "bus")
+PLUGINS = ("pdt", "mam", "mama", "bus", "docs")
 MARKETPLACE = "methodical-cc"
 STATE_DIR_GLOBS = (".mcc", ".mcc-*")
 
@@ -3050,7 +3050,7 @@ def cmd_setup(args):
     print("Methodical-CC setup")
     print("===================")
     print()
-    print("This installs pdt, mam, mama, and bus at user scope, then asks which (if")
+    print("This installs pdt, mam, mama, bus, and docs at user scope, then asks which (if")
     print("any) should be enabled user-wide. Any combination is valid — including")
     print("all-off (you can enable per-project later).")
     print()
