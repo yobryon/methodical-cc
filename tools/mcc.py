@@ -3801,7 +3801,7 @@ def _generate_bash_from_parser(parser):
     for flag in value_flags_all:
         by_kind.setdefault(flag_kinds[flag], []).append(flag)
     fixed_lists = {
-        "plugin": "pdt mam mama bus",
+        "plugin": " ".join(PLUGINS),
         "shell": "bash zsh",
         "group_by_mode": "scope none custom",
         "switch_target": "mam mama off",
@@ -3911,7 +3911,7 @@ def _generate_bash_from_parser(parser):
 def _emit_positional_case(o, kind, guard):
     """Emit the right bash bit for a positional kind, behind the guard."""
     fixed_lists = {
-        "plugin": "pdt mam mama bus",
+        "plugin": " ".join(PLUGINS),
         "switch_target": "mam mama off",
     }
     if kind in fixed_lists:

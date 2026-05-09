@@ -225,8 +225,16 @@ Key commands prompt Claude to read relevant files before proceeding:
 ## Development Notes
 
 - The `docs/` directory contains the original design documents from the design session (kept for reference)
-- Plugin names are `pdt`, `mam`, `mama`, and `bus` for brevity, so commands are invoked as `/pdt:init`, `/mam:arch-init`, `/mama:arch-init`, `/bus:status`, etc.
+- Plugin names are `pdt`, `mam`, `mama`, `bus`, and `docs` for brevity, so commands are invoked as `/pdt:init`, `/mam:arch-init`, `/mama:arch-init`, `/bus:status`, `/docs:publish`, etc.
 - To test changes, restart Claude Code with `claude --plugin-dir ./`
+
+### Adding a new plugin — checklist
+
+When introducing a new plugin (or renaming one), three places need to stay in sync or surfaces silently rot:
+
+1. **`tools/mcc.py`** — add the name to the `PLUGINS` tuple. This drives `mcc setup`, `mcc update`, `mcc enable/disable`, and the `--plugin` value in tab-completion.
+2. **`.claude-plugin/marketplace.json`** — add the plugin entry so `claude plugin install` can find it.
+3. **`tools/completions/mcc.bash`** — regenerate via `python3 tools/mcc.py completions emit` and commit the result. The verify step (`mcc completions verify`) is what catches drift; run it after any parser change. Hardcoded plugin lists in the emitter are derived from `PLUGINS` — don't reintroduce literals.
 
 ## Contributing
 

@@ -12,7 +12,7 @@ _mcc_complete() {
 
     # ---- Top level: subcommands ∪ registered session names ----
     if (( cword == 1 )); then
-        local subs="completions create disable enable list migrate reflect session setup status switch team update version vscode help"
+        local subs="completions create disable docs enable list migrate reflect session setup status switch team update version vscode help"
         local sessions
         sessions=$(mcc complete --kind session 2>/dev/null)
         COMPREPLY=( $(compgen -W "${subs} ${sessions}" -- "${cur}") )
@@ -28,6 +28,14 @@ _mcc_complete() {
         completions)
             if (( cword == 2 )); then
                 COMPREPLY=( $(compgen -W "bash emit install print uninstall verify zsh" -- "$cur") )
+                return
+            fi
+            cmd2="${words[2]}"
+            args_start=3
+            ;;
+        docs)
+            if (( cword == 2 )); then
+                COMPREPLY=( $(compgen -W "publish pull setup status" -- "$cur") )
                 return
             fi
             cmd2="${words[2]}"
@@ -97,7 +105,7 @@ _mcc_complete() {
             COMPREPLY=( $(compgen -W "$items" -- "$cur") )
             return ;;
         --plugin)
-            COMPREPLY=( $(compgen -W "pdt mam mama bus" -- "$cur") )
+            COMPREPLY=( $(compgen -W "pdt mam mama bus docs" -- "$cur") )
             return ;;
         --scope)
             local items
@@ -156,10 +164,14 @@ _mcc_complete() {
             }
             return ;;
         disable:)
-            (( pos_idx == 0 )) && COMPREPLY=( $(compgen -W "pdt mam mama bus" -- "$cur") )
+            (( pos_idx == 0 )) && COMPREPLY=( $(compgen -W "pdt mam mama bus docs" -- "$cur") )
+            return ;;
+        docs:publish)
+            compopt -o default 2>/dev/null
+            COMPREPLY=()
             return ;;
         enable:)
-            (( pos_idx == 0 )) && COMPREPLY=( $(compgen -W "pdt mam mama bus" -- "$cur") )
+            (( pos_idx == 0 )) && COMPREPLY=( $(compgen -W "pdt mam mama bus docs" -- "$cur") )
             return ;;
         reflect:scan)
             (( pos_idx == 0 )) && compopt -o default 2>/dev/null
