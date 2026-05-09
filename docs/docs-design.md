@@ -75,6 +75,8 @@ structure: mirror                     # mirror (default) | flat
 publish_path: .mcc/publish            # default
 feedback_path: docs/feedback          # default
 pandoc_args: []                       # escape hatch
+from_extensions: []                   # markdown read-side ext (e.g. [lists_without_preceding_blankline])
+to_extensions: []                     # output write-side ext
 docs:
   - docs/pdt                          # directory → docs/pdt/**/*.md
   - docs/**/design*.md                # explicit glob
@@ -83,7 +85,11 @@ docs:
     structure: flat
   - pattern: docs/product/roadmap.md
     publish_as: roadmap-2026.docx
+  - pattern: docs/legacy/notes.md
+    from_extensions: [lists_without_preceding_blankline, hard_line_breaks]
 ```
+
+**Pandoc format extensions.** `from_extensions` toggles read-side parsing (e.g., `lists_without_preceding_blankline` lets you write tighter markdown without forcing a blank line before each list); `to_extensions` toggles output-side behavior. Both compose with the inferred input/output formats: `--from markdown+ext1+ext2` and `--to <output_format>+ext1+ext2`. Per-pattern overrides replace (don't merge with) the top-level value, so a pattern with `from_extensions: []` truly disables them for that file.
 
 **Resolution rules:**
 

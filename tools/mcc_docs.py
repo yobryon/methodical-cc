@@ -11,7 +11,9 @@ Manifest format (`.mcc/docs-publish.yml`):
     structure: mirror                     # mirror | flat
     publish_path: .mcc/publish            # output dir
     feedback_path: docs/feedback          # ingest dir
-    pandoc_args: []                       # extra args
+    pandoc_args: []                       # extra args (escape hatch)
+    from_extensions: []                   # markdown read-side ext (e.g. lists_without_preceding_blankline)
+    to_extensions: []                     # output-format write-side ext
     docs:
       - docs/pdt                          # directory → <dir>/**/*.md
       - docs/**/design*.md                # explicit glob
@@ -116,6 +118,24 @@ def _parse_scalar(value: str):
     return v
 
 
+def _parse_inline_list(rest: str, key: str) -> list:
+    """Parse `[a, b, c]` form into a list of strings. Empty → []."""
+    if not (rest.startswith("[") and rest.endswith("]")):
+        _die(f"{key} must be a list (e.g. [] or [\"a\", \"b\"])")
+    inner = rest[1:-1].strip()
+    if not inner:
+        return []
+    return [_strip_quotes(p.strip()) for p in inner.split(",") if p.strip()]
+
+
+def _parse_mapping_value(value: str):
+    """Used inside a doc-mapping. Inline-list form supported; otherwise scalar."""
+    v = value.strip()
+    if v.startswith("[") and v.endswith("]"):
+        return _parse_inline_list(v, "value")
+    return _parse_scalar(v)
+
+
 def load_manifest(repo_root: Path) -> dict:
     """Read `.mcc/docs-publish.yml` and return a normalized dict.
 
@@ -134,6 +154,8 @@ def load_manifest(repo_root: Path) -> dict:
         "publish_path": DEFAULT_PUBLISH_PATH,
         "feedback_path": DEFAULT_FEEDBACK_PATH,
         "pandoc_args": [],
+        "from_extensions": [],
+        "to_extensions": [],
         "docs": [],
     }
 
@@ -170,20 +192,11 @@ def load_manifest(repo_root: Path) -> dict:
                 state = "docs_list"
                 continue
 
-            if key == "pandoc_args":
-                if rest.startswith("[") and rest.endswith("]"):
-                    inner = rest[1:-1].strip()
-                    if not inner:
-                        out["pandoc_args"] = []
-                    else:
-                        out["pandoc_args"] = [
-                            _strip_quotes(p.strip()) for p in inner.split(",") if p.strip()
-                        ]
-                    pandoc_args_inline = True
-                elif rest:
-                    _die(f"pandoc_args must be a list (e.g. [] or [\"--toc\"])")
+            if key in ("pandoc_args", "from_extensions", "to_extensions"):
+                if rest:
+                    out[key] = _parse_inline_list(rest, key)
                 else:
-                    pandoc_args_inline = False
+                    out[key] = []
                 state = "top"
                 continue
 
@@ -204,7 +217,7 @@ def load_manifest(repo_root: Path) -> dict:
                         out["docs"].append(current_mapping)
                     current_mapping = {}
                     k, _, v = item.partition(":")
-                    current_mapping[k.strip()] = _parse_scalar(v.strip())
+                    current_mapping[k.strip()] = _parse_mapping_value(v)
                     state = "doc_mapping"
                 else:
                     if current_mapping is not None:
@@ -217,7 +230,7 @@ def load_manifest(repo_root: Path) -> dict:
                 k, _, v = stripped.partition(":")
                 if not _:
                     _die(f"can't parse mapping line: {raw_line!r}")
-                current_mapping[k.strip()] = _parse_scalar(v.strip())
+                current_mapping[k.strip()] = _parse_mapping_value(v)
                 continue
 
         if state == "doc_mapping":
@@ -232,7 +245,7 @@ def load_manifest(repo_root: Path) -> dict:
                 if ":" in item and not item.startswith(("'", '"')):
                     current_mapping = {}
                     k, _, v = item.partition(":")
-                    current_mapping[k.strip()] = _parse_scalar(v.strip())
+                    current_mapping[k.strip()] = _parse_mapping_value(v)
                     state = "doc_mapping"
                 else:
                     out["docs"].append(_strip_quotes(item))
@@ -241,7 +254,7 @@ def load_manifest(repo_root: Path) -> dict:
                 k, _, v = stripped.partition(":")
                 if not _:
                     _die(f"can't parse mapping line: {raw_line!r}")
-                current_mapping[k.strip()] = _parse_scalar(v.strip())
+                current_mapping[k.strip()] = _parse_mapping_value(v)
                 continue
 
     if state == "doc_mapping" and current_mapping is not None:
@@ -296,6 +309,8 @@ def resolve_publish_targets(manifest: dict, repo_root: Path, cli_patterns=None):
     output_default = manifest["output"]
     template_default = manifest.get("template")
     pandoc_args_default = list(manifest.get("pandoc_args") or [])
+    from_ext_default = list(manifest.get("from_extensions") or [])
+    to_ext_default = list(manifest.get("to_extensions") or [])
 
     targets = []
     seen_outputs = {}  # output_path -> source_path (collision detection)
@@ -336,12 +351,16 @@ def resolve_publish_targets(manifest: dict, repo_root: Path, cli_patterns=None):
                 _die(f"output collision: both `{existing.relative_to(repo_root)}` and `{rel}` resolve to `{output_rel}`")
             seen_outputs[str(output_path)] = source
 
+            from_ext = overrides.get("from_extensions")
+            to_ext = overrides.get("to_extensions")
             targets.append({
                 "source": source,
                 "output_path": output_path,
                 "output_format": output_format,
                 "template": (repo_root / template).resolve() if template else None,
                 "pandoc_args": pandoc_args_default,
+                "from_extensions": list(from_ext) if from_ext is not None else from_ext_default,
+                "to_extensions": list(to_ext) if to_ext is not None else to_ext_default,
             })
 
     return targets
@@ -379,6 +398,13 @@ def _publish_one(target: dict) -> tuple[bool, str]:
     out.parent.mkdir(parents=True, exist_ok=True)
 
     cmd = ["pandoc", str(src), "-o", str(out)]
+    from_ext = target.get("from_extensions") or []
+    to_ext = target.get("to_extensions") or []
+    # v1 input is always markdown; output_format is per-target.
+    if from_ext:
+        cmd.extend(["--from", "markdown" + "".join(f"+{e}" for e in from_ext)])
+    if to_ext:
+        cmd.extend(["--to", target["output_format"] + "".join(f"+{e}" for e in to_ext)])
     if target.get("template"):
         cmd.extend(["--reference-doc", str(target["template"])])
     if target.get("pandoc_args"):
@@ -642,6 +668,11 @@ def cmd_docs_setup(args):
     lines.append(f"publish_path: {publish_path}")
     lines.append(f"feedback_path: {feedback_path}")
     lines.append("pandoc_args: []")
+    lines.append("# Pandoc format extensions. Examples:")
+    lines.append("#   from_extensions: [lists_without_preceding_blankline]")
+    lines.append("#   to_extensions: []")
+    lines.append("from_extensions: []")
+    lines.append("to_extensions: []")
     lines.append("")
     lines.append("# What to publish. Each entry can be:")
     lines.append("#   - a directory (publishes all *.md beneath it)")
