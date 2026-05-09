@@ -401,10 +401,14 @@ def _publish_one(target: dict) -> tuple[bool, str]:
     from_ext = target.get("from_extensions") or []
     to_ext = target.get("to_extensions") or []
     # v1 input is always markdown; output_format is per-target.
+    def _join_ext(base, exts):
+        # Pandoc syntax: `markdown+ext1-ext2`. Accept entries with explicit
+        # `+`/`-` prefix; default to `+` for bare names.
+        return base + "".join(e if e[:1] in ("+", "-") else f"+{e}" for e in exts)
     if from_ext:
-        cmd.extend(["--from", "markdown" + "".join(f"+{e}" for e in from_ext)])
+        cmd.extend(["--from", _join_ext("markdown", from_ext)])
     if to_ext:
-        cmd.extend(["--to", target["output_format"] + "".join(f"+{e}" for e in to_ext)])
+        cmd.extend(["--to", _join_ext(target["output_format"], to_ext)])
     if target.get("template"):
         cmd.extend(["--reference-doc", str(target["template"])])
     if target.get("pandoc_args"):
