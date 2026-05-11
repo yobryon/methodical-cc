@@ -411,6 +411,19 @@ def _publish_one(target: dict) -> tuple[bool, str]:
         cmd.extend(["--to", _join_ext(target["output_format"], to_ext)])
     if target.get("template"):
         cmd.extend(["--reference-doc", str(target["template"])])
+
+    # Resolve relative paths in the source (images, includes) against the
+    # source's containing directory, not the invoking CWD. Pandoc defaults
+    # to CWD, which breaks when mcc is run from repo root but the markdown
+    # lives in a subdirectory and references images via relative paths.
+    # Include CWD as a fallback for paths authored relative to the repo.
+    src_parent = src.parent.resolve()
+    cwd = Path.cwd().resolve()
+    resource_dirs = [str(src_parent)]
+    if cwd != src_parent:
+        resource_dirs.append(str(cwd))
+    cmd.extend(["--resource-path", os.pathsep.join(resource_dirs)])
+
     if target.get("pandoc_args"):
         cmd.extend(target["pandoc_args"])
 

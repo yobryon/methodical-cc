@@ -18,7 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.15.1"
+MCC_VERSION = "1.15.2"
 
 import json
 import time
@@ -4177,6 +4177,7 @@ TOP_HELP_GROUPS = [
         ("status",  "Show plugin state and registered sessions"),
         ("vscode",  "Bootstrap .vscode/tasks.json with session tasks"),
         ("team",    "Bus team setup/status (`mcc team -h`)"),
+        ("docs",    "Stakeholder docs publish/pull (`mcc docs -h`)"),
         ("migrate", "Migrate legacy .mam/.mama/.pdt[-scope]/ state dirs"),
     ]),
     ("Plugins", [
