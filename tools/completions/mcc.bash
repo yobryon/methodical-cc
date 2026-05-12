@@ -51,7 +51,7 @@ _mcc_complete() {
             ;;
         session)
             if (( cword == 2 )); then
-                COMPREPLY=( $(compgen -W "list resume set transcript" -- "$cur") )
+                COMPREPLY=( $(compgen -W "args list resume set transcript" -- "$cur") )
                 return
             fi
             cmd2="${words[2]}"
@@ -130,6 +130,7 @@ _mcc_complete() {
             completions:uninstall)  flags="--rc-file --shell" ;;
             create:)  flags="--persona --plugin --scope" ;;
             reflect:submit)  flags="--no-confirm --no-scan --repo" ;;
+            session:args)  flags="--clear --scope" ;;
             session:list)  flags="--all --paths --show-path" ;;
             session:set)  flags="--scope" ;;
             session:transcript)  flags="--chronological --include-compact-summaries --include-harness-commands --include-meta --include-thinking --live-branch --output --post-compact-only" ;;
@@ -181,8 +182,15 @@ _mcc_complete() {
             (( pos_idx == 0 )) && compopt -o default 2>/dev/null
             (( pos_idx == 0 )) && COMPREPLY=()
             return ;;
+        session:args)
+            {
+                local items
+                items=$(mcc complete --kind session 2>/dev/null)
+                COMPREPLY=( $(compgen -W "$items" -- "$cur") )
+            }
+            return ;;
         session:resume)
-            (( pos_idx == 0 )) && {
+            {
                 local items
                 items=$(mcc complete --kind session 2>/dev/null)
                 COMPREPLY=( $(compgen -W "$items" -- "$cur") )

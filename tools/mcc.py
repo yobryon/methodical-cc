@@ -12,13 +12,14 @@ operates on the user scope. Per-project always wins over user when both are set.
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.16.0"
+MCC_VERSION = "1.17.0"
 
 import json
 import time
@@ -74,6 +75,28 @@ def find_session(name):
             if n.strip() == name:
                 return sid.strip(), sessions_file
     return None, None
+
+
+def find_session_args(name):
+    """Look up per-session launch args declared as `<name>:args=<string>` in the
+    sessions file. Returns the raw string (suitable for `shlex.split`) or None.
+
+    Co-located with the session id by design: one source of truth, viewable in
+    one file, no separate index to keep in sync.
+    """
+    key = f"{name}:args"
+    for d in find_state_dirs():
+        sessions_file = d / "sessions"
+        if not sessions_file.exists():
+            continue
+        for line in sessions_file.read_text().splitlines():
+            line = line.strip()
+            if not line or "=" not in line:
+                continue
+            n, val = line.split("=", 1)
+            if n.strip() == key:
+                return val.strip()
+    return None
 
 
 def detect_version(state_file):
@@ -335,7 +358,10 @@ def collect_registered_identities():
             if not line or line.startswith("#") or "=" not in line:
                 continue
             n, sid = line.split("=", 1)
-            out.append((n.strip(), sid.strip()))
+            n = n.strip()
+            if ":" in n:
+                continue  # namespaced metadata (e.g. `<name>:args`); not a session id
+            out.append((n, sid.strip()))
     return out
 
 
@@ -663,6 +689,8 @@ def collect_sessions_by_scope():
             if not line or "=" not in line:
                 continue
             n = line.split("=", 1)[0].strip()
+            if ":" in n:
+                continue  # namespaced metadata (e.g. `<name>:args`)
             if n and n not in seen:
                 seen.add(n)
                 names.append(n)
@@ -2066,7 +2094,10 @@ def _registered_names_by_sid():
             if not line or "=" not in line:
                 continue
             n, sid = line.split("=", 1)
-            out[sid.strip()] = {"name": n.strip(), "scope": scope}
+            n = n.strip()
+            if ":" in n:
+                continue  # namespaced metadata (e.g. `<name>:args`)
+            out[sid.strip()] = {"name": n, "scope": scope}
     return out
 
 
@@ -2371,6 +2402,83 @@ def _write_session_registration(name, sid, cwd=None, scope=None):
         out.append(f"{name}={sid}")
     target.write_text("\n".join(out) + "\n")
     return target
+
+
+def _write_session_args(name, value, scope=None, cwd=None):
+    """Set or clear the `<name>:args=...` line in the appropriate sessions file.
+
+    Locates the file by scope (or single-scope shortcut, same logic as session
+    registration). value=None means clear. Returns (target_path, action) where
+    action is one of: 'set', 'cleared', 'noop' (cleared but nothing was there).
+    """
+    cwd = cwd or Path.cwd()
+    sid, existing_path = find_session(name)
+    if sid is None and scope is None:
+        die(f"no session registered as '{name}'. "
+            f"Run `mcc session set {name} <sid>` first, or pass --scope explicitly.")
+    if existing_path is not None:
+        target = existing_path
+    else:
+        # No session yet, but explicit scope given — write into that scope's file.
+        target = cwd / _scope_dir_name(scope) / "sessions"
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+    key = f"{name}:args"
+    existing_lines = target.read_text().splitlines() if target.exists() else []
+    out = []
+    found = False
+    for line in existing_lines:
+        s = line.strip()
+        if not s or "=" not in s:
+            out.append(line)
+            continue
+        n, _ = s.split("=", 1)
+        if n.strip() == key:
+            found = True
+            if value is None:
+                continue  # drop the line (clear)
+            out.append(f"{key}={value}")
+        else:
+            out.append(line)
+    if not found and value is not None:
+        out.append(f"{key}={value}")
+    target.write_text("\n".join(out) + "\n")
+    if value is None:
+        return target, ("cleared" if found else "noop")
+    return target, "set"
+
+
+def cmd_session_args(args):
+    """Get, set, or clear per-session launch args."""
+    name = args.name
+    explicit_scope = args.scope if args.scope is not None else None
+    if args.clear:
+        if args.value:
+            die("--clear and a value are mutually exclusive")
+        target, action = _write_session_args(name, None, scope=explicit_scope)
+        if action == "cleared":
+            print(f"Cleared {name}:args from {target}")
+        else:
+            print(f"No saved args for '{name}' (nothing to clear)")
+        return
+    if not args.value:
+        # Show current
+        current = find_session_args(name)
+        if current is None:
+            print(f"No saved args for '{name}'.")
+            print(f"Set with: mcc session args {name} \"<args>\"")
+        else:
+            print(f"{name}:args = {current}")
+        return
+    # Set
+    value = " ".join(args.value)
+    # Validate that it tokenizes — fail fast on quote mismatch etc.
+    try:
+        shlex.split(value)
+    except ValueError as e:
+        die(f"value does not parse as shell tokens: {e}")
+    target, _action = _write_session_args(name, value, scope=explicit_scope)
+    print(f"Set {name}:args = {value} (in {target})")
 
 
 def cmd_session_set(args):
@@ -2866,16 +2974,34 @@ def cmd_resume(args):
     # Team-mode-aware launch: only attach team flags if the project has opted
     # into team mode (`mcc team setup` writes .mcc/team-name as the marker).
     # Otherwise mcc is plain session-naming sugar over `claude -r`.
+    team_name = None
     if _team_mode_enabled():
         team_name = ensure_team_setup(verbose=False)
-        args = _team_launch_args(name, sid, team_name)
-        print(f"Resuming '{name}' from {src} on team '{team_name}' → "
-              f"claude -r {sid} (+team flags)", file=sys.stderr)
+        argv = _team_launch_args(name, sid, team_name)
+        launch_note = f"claude -r {sid} (+team flags)"
     else:
-        args = ["claude", "-r", sid]
-        print(f"Resuming '{name}' from {src} → claude -r {sid}",
-              file=sys.stderr)
-    os.execvp(args[0], args)
+        argv = ["claude", "-r", sid]
+        launch_note = f"claude -r {sid}"
+
+    # Append per-session args from `<name>:args=...` in sessions file.
+    saved_args_raw = find_session_args(name)
+    if saved_args_raw:
+        try:
+            saved_args = shlex.split(saved_args_raw)
+        except ValueError as e:
+            die(f"could not parse '{name}:args' value as shell tokens: {e}")
+        argv.extend(saved_args)
+        launch_note += f" +saved-args ({saved_args_raw})"
+
+    # Append CLI passthrough (everything after `--` on the mcc invocation).
+    passthrough = getattr(args, "extra", None) or []
+    if passthrough:
+        argv.extend(passthrough)
+        launch_note += f" +passthrough ({' '.join(passthrough)})"
+
+    on_team = f" on team '{team_name}'" if team_name else ""
+    print(f"Resuming '{name}' from {src}{on_team} → {launch_note}", file=sys.stderr)
+    os.execvp(argv[0], argv)
 
 
 def cmd_list(args):
@@ -2885,13 +3011,26 @@ def cmd_list(args):
         sessions_file = d / "sessions"
         if not sessions_file.exists():
             continue
-        print(f"{sessions_file}:")
+        # First pass: collect args metadata so we can render it next to its session.
+        args_by_name = {}
+        sessions = []
         for line in sessions_file.read_text().splitlines():
             line = line.strip()
             if not line or "=" not in line:
                 continue
-            n, sid = line.split("=", 1)
-            print(f"  {n.strip():<12}  →  claude -r {sid.strip()}")
+            n, val = line.split("=", 1)
+            n = n.strip()
+            val = val.strip()
+            if ":args" in n and n.endswith(":args"):
+                args_by_name[n[:-len(":args")]] = val
+            elif ":" not in n:
+                sessions.append((n, val))
+        print(f"{sessions_file}:")
+        for n, sid in sessions:
+            line = f"  {n:<12}  →  claude -r {sid}"
+            if n in args_by_name:
+                line += f"  (+args: {args_by_name[n]})"
+            print(line)
         found_any = True
     if not found_any:
         print("No sessions registered. Use /pdt:session, /mam:session, or /mama:session to register.")
@@ -4055,7 +4194,20 @@ def build_parser():
 
     psresume = psess_sub.add_parser("resume", help="formal verb for `mcc <name>`")
     _arg(psresume, "name", help="registered session name", complete="session")
+    _arg(psresume, "extra", nargs=argparse.REMAINDER,
+         help="args after `--` are passed through to claude")
     psresume.set_defaults(func=cmd_resume)
+
+    pargs = psess_sub.add_parser(
+        "args", help="get/set/clear per-session launch args (forwarded to claude on resume)",
+    )
+    _arg(pargs, "--clear", action="store_true",
+         help="remove any saved args for this session")
+    _arg(pargs, "--scope", help="state scope; '' for default .mcc/", complete="scope")
+    _arg(pargs, "name", help="registered session name", complete="session")
+    _arg(pargs, "value", nargs=argparse.REMAINDER,
+         help="new args (e.g. --chrome); omit to show current; --clear to delete")
+    pargs.set_defaults(func=cmd_session_args)
 
     pst = psess_sub.add_parser(
         "transcript", help="dump a session transcript to a single markdown file",
@@ -4244,12 +4396,18 @@ def main():
             break
 
     # Bareword resume: if argv[0] isn't a known command and isn't a flag,
-    # treat as `mcc session resume <name>`.
+    # treat as `mcc session resume <name>`. Optional `--` separator forwards
+    # the rest of argv to the launched claude as passthrough args.
     if argv[0] not in known_cmds and not argv[0].startswith("-"):
+        name = argv[0]
+        extra = []
         if len(argv) > 1:
-            die(f"unknown command '{argv[0]}' (and bareword resume takes only a name)")
-        # Build a fake args namespace
-        ns = argparse.Namespace(name=argv[0])
+            if argv[1] == "--":
+                extra = argv[2:]
+            else:
+                die(f"unknown command '{name}' (bareword resume takes a name; "
+                    f"use `mcc {name} -- <args>` to pass args through to claude)")
+        ns = argparse.Namespace(name=name, extra=extra)
         return cmd_resume(ns)
 
     args = parser.parse_args(argv)
