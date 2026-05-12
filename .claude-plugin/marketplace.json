@@ -33,7 +33,7 @@
       "name": "docs",
       "source": "./plugins/docs",
       "description": "Stakeholder documentation sharing - publish selected markdown as docx to a synced folder, pull Word inline comments back as anchored, repo-local feedback files for Claude to triage",
-      "version": "1.0.0"
+      "version": "1.1.0"
     }
   ]
 }

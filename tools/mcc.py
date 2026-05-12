@@ -18,7 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.15.2"
+MCC_VERSION = "1.16.0"
 
 import json
 import time

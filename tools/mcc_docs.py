@@ -14,6 +14,8 @@ Manifest format (`.mcc/docs-publish.yml`):
     pandoc_args: []                       # extra args (escape hatch)
     from_extensions: []                   # markdown read-side ext (e.g. lists_without_preceding_blankline)
     to_extensions: []                     # output-format write-side ext
+    pre_publish:                          # optional shell command run before publish (e.g. rasterize SVGs)
+    post_publish:                         # optional shell command run after publish
     docs:
       - docs/pdt                          # directory → <dir>/**/*.md
       - docs/**/design*.md                # explicit glob
@@ -156,6 +158,8 @@ def load_manifest(repo_root: Path) -> dict:
         "pandoc_args": [],
         "from_extensions": [],
         "to_extensions": [],
+        "pre_publish": None,
+        "post_publish": None,
         "docs": [],
     }
 
@@ -202,6 +206,13 @@ def load_manifest(repo_root: Path) -> dict:
 
             if key in ("output", "template", "structure", "publish_path", "feedback_path"):
                 out[key] = _parse_scalar(rest)
+                state = "top"
+                continue
+
+            if key in ("pre_publish", "post_publish"):
+                # Shell command string. Empty → None (no hook).
+                v = _parse_scalar(rest)
+                out[key] = v if v else None
                 state = "top"
                 continue
 
@@ -691,6 +702,12 @@ def cmd_docs_setup(args):
     lines.append("from_extensions: []")
     lines.append("to_extensions: []")
     lines.append("")
+    lines.append("# Optional pre/post hooks — shell command run before/after publish.")
+    lines.append("# Pre-hook failure aborts the publish; post-hook failure surfaces but")
+    lines.append("# doesn't roll back. Useful for image rasterization, syncing, etc.")
+    lines.append("# pre_publish: scripts/rasterize-svgs.sh")
+    lines.append("# post_publish: echo \"done\"")
+    lines.append("")
     lines.append("# What to publish. Each entry can be:")
     lines.append("#   - a directory (publishes all *.md beneath it)")
     lines.append("#   - a glob pattern (e.g. docs/**/design*.md)")
@@ -740,6 +757,23 @@ def _ensure_gitignore_entries(repo_root: Path, entries: list):
     _ok(f"updated .gitignore with: {', '.join(to_add)}")
 
 
+def _run_hook(name: str, command: str | None, cwd: Path) -> bool:
+    """Run a shell hook command. Returns True on success (or absence).
+
+    Streams the hook's stdout/stderr through to the user — useful progress
+    info from rasterizers or other pre-flight scripts shouldn't be hidden.
+    Runs with cwd = manifest's repo root so paths resolve consistently.
+    """
+    if not command:
+        return True
+    _info(f"Running {name} hook: {command}")
+    proc = subprocess.run(command, shell=True, cwd=str(cwd))
+    if proc.returncode != 0:
+        _warn(f"{name} hook failed (exit {proc.returncode})")
+        return False
+    return True
+
+
 def cmd_docs_publish(args):
     if not _have_pandoc():
         _die("pandoc not found on PATH. Install pandoc and retry.")
@@ -752,6 +786,12 @@ def cmd_docs_publish(args):
     if not targets:
         _info("No targets resolved. Check your manifest's `docs:` list.")
         return
+
+    # Pre-publish hook: if configured, run before publishing. Abort on failure —
+    # the user's script is doing pre-flight work (image rasterization, etc.)
+    # that downstream pandoc steps may depend on.
+    if not _run_hook("pre_publish", manifest.get("pre_publish"), repo_root):
+        _die("aborting publish — pre_publish hook failed")
 
     _info(f"Publishing {len(targets)} document(s) → {manifest['publish_path']}/")
     ok_count = 0
@@ -767,6 +807,10 @@ def cmd_docs_publish(args):
 
     _info("")
     _info(f"Done: {ok_count}/{len(targets)} published.")
+
+    # Post-publish hook: runs after publishing regardless of per-doc failures.
+    # Failures surface but don't undo work already written.
+    _run_hook("post_publish", manifest.get("post_publish"), repo_root)
 
 
 def cmd_docs_pull(args):
