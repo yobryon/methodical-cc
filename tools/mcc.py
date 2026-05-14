@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.17.0"
+MCC_VERSION = "1.17.1"
 
 import json
 import time
@@ -1895,7 +1895,7 @@ def _run_privacy_scan(path):
     full_prompt = f"{prompt_text}\n\n{artifact_text}\n"
     try:
         result = subprocess.run(
-            ["claude", "-p", full_prompt],
+            ["claude", "-p", "--no-session-persistence", full_prompt],
             capture_output=True, text=True, check=False,
             timeout=180,
         )
@@ -2930,7 +2930,7 @@ def cmd_create(args):
     print(f"  (claude -p will run; this may take a few seconds)", file=sys.stderr)
     print(file=sys.stderr)
 
-    rc = subprocess.run(["claude", "-p", prompt_text]).returncode
+    rc = subprocess.run(["claude", "-p", "--no-session-persistence", prompt_text]).returncode
     if rc != 0:
         die(f"claude -p exited with rc={rc}; session may not have been created")
 
