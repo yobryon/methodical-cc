@@ -129,6 +129,8 @@ _mcc_complete() {
             completions:print)  flags="--shell" ;;
             completions:uninstall)  flags="--rc-file --shell" ;;
             create:)  flags="--persona --plugin --scope" ;;
+            docs:publish)  flags="--include-pending --skip-pending" ;;
+            docs:pull)  flags="--resync" ;;
             reflect:submit)  flags="--no-confirm --no-scan --repo" ;;
             session:args)  flags="--clear --scope" ;;
             session:list)  flags="--all --paths --show-path" ;;

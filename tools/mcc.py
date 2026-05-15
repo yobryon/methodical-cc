@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.17.1"
+MCC_VERSION = "1.18.0"
 
 import json
 import time
@@ -4259,9 +4259,15 @@ def build_parser():
     _arg(pdocs_pub, "patterns", nargs="*",
          help="optional patterns to narrow the manifest's docs list (paths, dirs, or globs)",
          complete="file")
+    _arg(pdocs_pub, "--skip-pending", action="store_true",
+         help="publish only docs whose feedback is fully addressed; skip the rest")
+    _arg(pdocs_pub, "--include-pending", action="store_true",
+         help="publish everything, accepting unresolved feedback")
     pdocs_pub.set_defaults(func=cmd_docs_publish)
 
     pdocs_pull = pdocs_sub.add_parser("pull", help="parse Word comments in publish_path → feedback files")
+    _arg(pdocs_pull, "--resync", action="store_true",
+         help="clear seen-comment state and re-pull every comment (existing feedback files preserved)")
     pdocs_pull.set_defaults(func=cmd_docs_pull)
 
     pdocs_status = pdocs_sub.add_parser("status", help="show docs config and pending-feedback count")

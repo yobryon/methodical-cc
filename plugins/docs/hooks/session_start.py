@@ -40,13 +40,42 @@ def parse_feedback_path(manifest_text: str) -> str:
 
 
 def count_unaddressed(feedback_dir: Path) -> int:
+    """Count feedback files whose frontmatter status is anything other than
+    `addressed`. Legacy files (no frontmatter / no `status:` field) are
+    treated as pending so the user gets a nag until they migrate."""
     if not feedback_dir.is_dir():
         return 0
     n = 0
     for entry in feedback_dir.iterdir():
-        if entry.is_file() and entry.suffix == ".md":
+        if not (entry.is_file() and entry.suffix == ".md"):
+            continue
+        try:
+            text = entry.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        status = _read_status_from_frontmatter(text)
+        if status != "addressed":
             n += 1
     return n
+
+
+def _read_status_from_frontmatter(text: str) -> str:
+    """Return the `status:` value from the YAML frontmatter, or 'pending' if
+    absent. Tolerates absent/malformed frontmatter (treats as pending)."""
+    if not text.startswith("---"):
+        return "pending"
+    lines = text.splitlines()
+    for i in range(1, min(len(lines), 50)):
+        line = lines[i].rstrip()
+        if line == "---":
+            break
+        if ":" not in line:
+            continue
+        key, _, val = line.partition(":")
+        if key.strip() == "status":
+            v = val.strip().strip("\"'")
+            return v or "pending"
+    return "pending"
 
 
 def main() -> int:

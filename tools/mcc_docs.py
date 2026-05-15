@@ -578,50 +578,203 @@ def _now_compact():
     return _dt.datetime.now().strftime("%Y%m%dT%H%M%S")
 
 
-def render_feedback_file(
-    source_md: Path, docx_path: Path, parsed: dict, repo_root: Path
+DISPOSITION_STUB = "*Pending — write the author's response here, then flip `status: pending` → `status: addressed` in the frontmatter above.*"
+
+
+def render_feedback_comment_file(
+    source_md: Path, docx_path: Path, comment: dict, repo_root: Path
 ) -> str:
-    comments = parsed["comments"]
+    """Render ONE comment as a standalone feedback file.
+
+    Frontmatter carries lifecycle status (`status: pending|addressed`) and
+    enough context to render the response sidecar without re-parsing the
+    docx later. Body has two sections: the reviewer's comment (verbatim)
+    and the author's disposition (initially a stub).
+    """
     rel_source = source_md.relative_to(repo_root) if source_md.is_absolute() else source_md
     rel_docx = docx_path.relative_to(repo_root) if docx_path.is_absolute() else docx_path
-    reviewers = sorted({c["author"] for c in comments if c.get("author")})
+    author = comment.get("author") or "(unknown)"
+    date = comment.get("date") or ""
+    section = comment.get("section") or "(unanchored)"
+    excerpt = comment.get("anchored_text") or ""
+    body = comment.get("body") or "(empty comment)"
+    cid = comment.get("id") or "0"
 
-    lines = []
-    lines.append("---")
-    lines.append(f"source: {rel_source}")
-    lines.append(f"published_as: {rel_docx}")
-    lines.append(f"pulled_at: {_now_local_iso()}")
-    lines.append(f"reviewers: [{', '.join(reviewers)}]")
-    lines.append(f"comment_count: {len(comments)}")
-    lines.append("---")
-    lines.append("")
-    lines.append(f"# Feedback on {rel_source}")
-    lines.append("")
-    if not comments:
-        lines.append("_No comments found._")
+    excerpt_short = excerpt if len(excerpt) <= 240 else excerpt[:237] + "..."
+    lines = [
+        "---",
+        f"source: {rel_source}",
+        f"published_as: {rel_docx}",
+        f"comment_id: \"{cid}\"",
+        f"author: {author}",
+        f"date: {date}",
+        f"pulled_at: {_now_local_iso()}",
+        f"section: \"{section}\"",
+        "status: pending",
+        "---",
+        "",
+        f"# Feedback on {rel_source} — Comment {cid}",
+        "",
+        f"**Anchored to:** Section \"{section}\"",
+    ]
+    if excerpt_short:
+        lines.append(f"**Excerpt:** \"{excerpt_short}\"")
+    lines.extend([
+        "",
+        "## Comment",
+        "",
+        *body.splitlines(),
+        "",
+        "## Disposition",
+        "",
+        DISPOSITION_STUB,
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def _parse_frontmatter(text: str) -> tuple[dict, str]:
+    """Parse a YAML-frontmatter header off a markdown file. Returns (meta, body).
+    Tolerates absent frontmatter (meta={}, body=text). Handles only the narrow
+    `key: value` shape we ship — no nested mappings or block scalars.
+    """
+    if not text.startswith("---"):
+        return {}, text
+    lines = text.splitlines()
+    if len(lines) < 2:
+        return {}, text
+    end = None
+    for i in range(1, len(lines)):
+        if lines[i].rstrip() == "---":
+            end = i
+            break
+    if end is None:
+        return {}, text
+    meta = {}
+    for raw in lines[1:end]:
+        line = raw.strip()
+        if not line or ":" not in line:
+            continue
+        key, _, val = line.partition(":")
+        key = key.strip()
+        val = val.strip()
+        # Strip matching surrounding quotes
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in ("\"", "'"):
+            val = val[1:-1]
+        meta[key] = val
+    body = "\n".join(lines[end + 1:])
+    return meta, body
+
+
+def _extract_section(body: str, heading: str) -> str:
+    """Pull the content under `## <heading>` up to the next `##` (or EOF).
+    Returns the stripped section text (without the heading line itself)."""
+    pattern = re.compile(
+        rf"^##\s+{re.escape(heading)}\s*$(.*?)(?=^##\s|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    m = pattern.search(body)
+    if not m:
+        return ""
+    return m.group(1).strip()
+
+
+def _scan_feedback_files(repo_root: Path, feedback_root: Path) -> list[dict]:
+    """Walk the feedback directory and return one dict per parseable per-comment
+    feedback file. Skips legacy timestamp-named files (no `comment_id` in
+    frontmatter) — they're tracked separately for migration.
+
+    Returned dicts: {path, source (Path, relative to repo_root), comment_id,
+    author, date, pulled_at, section, status, comment_body, disposition_body,
+    disposition_is_stub}.
+    """
+    out = []
+    if not feedback_root.is_dir():
+        return out
+    for p in sorted(feedback_root.glob("*.md")):
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        meta, body = _parse_frontmatter(text)
+        if "comment_id" not in meta or "source" not in meta:
+            continue  # legacy file or non-feedback md; ignore here
+        comment_section = _extract_section(body, "Comment")
+        disposition_section = _extract_section(body, "Disposition")
+        is_stub = disposition_section.strip() == DISPOSITION_STUB.strip() or not disposition_section.strip()
+        out.append({
+            "path": p,
+            "source": Path(meta["source"]),
+            "comment_id": meta.get("comment_id", ""),
+            "author": meta.get("author", "(unknown)"),
+            "date": meta.get("date", ""),
+            "pulled_at": meta.get("pulled_at", ""),
+            "section": meta.get("section", ""),
+            "status": meta.get("status", "pending"),
+            "comment_body": comment_section,
+            "disposition_body": disposition_section,
+            "disposition_is_stub": is_stub,
+        })
+    return out
+
+
+def _is_pending(entry: dict) -> bool:
+    """A feedback entry is pending if its frontmatter `status` isn't addressed.
+    The disposition-section content is informational only — frontmatter is canonical."""
+    return entry.get("status", "pending").strip().lower() != "addressed"
+
+
+def render_response_sidecar(source: Path, entries: list[dict], repo_root: Path) -> str:
+    """Build the markdown for the response-companion docx: comprehensive,
+    chronological readout of every comment and its disposition for one source."""
+    rel_source = source.relative_to(repo_root) if source.is_absolute() else source
+    addressed = sum(1 for e in entries if not _is_pending(e))
+    pending = sum(1 for e in entries if _is_pending(e))
+    lines = [
+        "---",
+        f"source: {rel_source}",
+        f"generated_at: {_now_local_iso()}",
+        f"total_comments: {len(entries)}",
+        f"addressed: {addressed}",
+        f"pending: {pending}",
+        "---",
+        "",
+        f"# Feedback dispositions for {rel_source}",
+        "",
+        f"*Generated {_dt.datetime.now().strftime('%Y-%m-%d')}. "
+        f"Covers all reviewer feedback received and how it shaped this version.*",
+        "",
+    ]
+    if not entries:
+        lines.append("_No feedback has been received for this document._")
         lines.append("")
         return "\n".join(lines)
 
-    for i, c in enumerate(comments, 1):
-        when = c.get("date") or "(no date)"
-        author = c.get("author") or "(unknown)"
-        section = c.get("section") or "(unanchored)"
-        excerpt = c.get("anchored_text") or "(no text anchored)"
-        body = c.get("body") or "(empty comment)"
-
-        lines.append(f"## Comment {i} — {author}, {when}")
+    sorted_entries = sorted(entries, key=lambda e: (e.get("pulled_at") or "", e.get("comment_id") or ""))
+    for e in sorted_entries:
+        section = e.get("section") or "(unanchored)"
+        author = e.get("author") or "(unknown)"
+        pulled = (e.get("pulled_at") or "")[:10] or "(unknown date)"
+        status = "addressed" if not _is_pending(e) else "PENDING"
+        lines.append(f"## Comment in \"{section}\" — {author} · pulled {pulled}  *[{status}]*")
         lines.append("")
-        lines.append(f"**Anchored to:** Section \"{section}\"")
-        if excerpt:
-            short = excerpt if len(excerpt) <= 240 else excerpt[:237] + "..."
-            lines.append(f"**Excerpt:** \"{short}\"")
+        lines.append("**Comment**")
         lines.append("")
-        for line in body.splitlines():
-            lines.append(line)
+        if e["comment_body"]:
+            for ln in e["comment_body"].splitlines():
+                lines.append(f"> {ln}" if ln.strip() else ">")
+        else:
+            lines.append("> _(empty)_")
+        lines.append("")
+        lines.append("**Disposition**")
+        lines.append("")
+        if _is_pending(e):
+            lines.append("_Pending — author has not yet written a response._")
+        else:
+            lines.append(e["disposition_body"] or "_(empty disposition)_")
         lines.append("")
         lines.append("---")
         lines.append("")
-
     return "\n".join(lines)
 
 
@@ -787,6 +940,51 @@ def cmd_docs_publish(args):
         _info("No targets resolved. Check your manifest's `docs:` list.")
         return
 
+    include_pending = bool(getattr(args, "include_pending", False))
+    skip_pending = bool(getattr(args, "skip_pending", False))
+    if include_pending and skip_pending:
+        _die("--include-pending and --skip-pending are mutually exclusive")
+
+    # ---- Preflight: scan feedback for pending dispositions ----
+    feedback_root = repo_root / manifest["feedback_path"]
+    feedback_entries = _scan_feedback_files(repo_root, feedback_root)
+    pending_by_source: dict[str, int] = {}
+    for e in feedback_entries:
+        if _is_pending(e):
+            key = str(e["source"])
+            pending_by_source[key] = pending_by_source.get(key, 0) + 1
+
+    target_source_keys = {str(t["source"].relative_to(repo_root)) for t in targets}
+    affected_pending = {s: n for s, n in pending_by_source.items() if s in target_source_keys}
+
+    if affected_pending and not include_pending and not skip_pending:
+        _info("Pending dispositions found in the targets you asked to publish:")
+        for src, n in sorted(affected_pending.items()):
+            _info(f"  {src}    {n} pending")
+        _info("")
+        _info("Resolve them (edit feedback files and flip `status: pending` → `status: addressed`), or:")
+        _info("  mcc docs publish --skip-pending      # publish only docs with no pending feedback")
+        _info("  mcc docs publish --include-pending   # publish everything, accepting unresolved feedback")
+        sys.exit(1)
+
+    if affected_pending and skip_pending:
+        skipped_srcs = set(affected_pending)
+        before = len(targets)
+        targets = [t for t in targets if str(t["source"].relative_to(repo_root)) not in skipped_srcs]
+        _info(f"--skip-pending: excluding {before - len(targets)} doc(s) with pending feedback:")
+        for s in sorted(skipped_srcs):
+            _info(f"  {s}")
+        _info("")
+        if not targets:
+            _info("Nothing left to publish.")
+            return
+
+    if affected_pending and include_pending:
+        _warn("--include-pending: publishing the following with PENDING dispositions:")
+        for src, n in sorted(affected_pending.items()):
+            _warn(f"  {src}  ({n} pending)")
+        _info("")
+
     # Pre-publish hook: if configured, run before publishing. Abort on failure —
     # the user's script is doing pre-flight work (image rasterization, etc.)
     # that downstream pandoc steps may depend on.
@@ -795,6 +993,7 @@ def cmd_docs_publish(args):
 
     _info(f"Publishing {len(targets)} document(s) → {manifest['publish_path']}/")
     ok_count = 0
+    sidecar_count = 0
     for t in targets:
         rel_src = t["source"].relative_to(repo_root)
         rel_out = t["output_path"].relative_to(repo_root)
@@ -804,13 +1003,64 @@ def cmd_docs_publish(args):
             ok_count += 1
         else:
             _warn(f"{rel_src} → {rel_out}\n      {err}")
+            continue
+
+        # Generate the response sidecar (full disposition history for this source)
+        source_key = str(rel_src)
+        entries_for_source = [e for e in feedback_entries if str(e["source"]) == source_key]
+        if not entries_for_source:
+            continue
+        sidecar_ok, sidecar_err = _publish_response_sidecar(
+            t, entries_for_source, repo_root, manifest,
+        )
+        if sidecar_ok:
+            sidecar_count += 1
+        else:
+            _warn(f"      response sidecar failed: {sidecar_err}")
 
     _info("")
-    _info(f"Done: {ok_count}/{len(targets)} published.")
+    _info(f"Done: {ok_count}/{len(targets)} published, {sidecar_count} response sidecar(s).")
 
     # Post-publish hook: runs after publishing regardless of per-doc failures.
     # Failures surface but don't undo work already written.
     _run_hook("post_publish", manifest.get("post_publish"), repo_root)
+
+
+def _publish_response_sidecar(
+    target: dict, entries: list, repo_root: Path, manifest: dict
+) -> tuple[bool, str]:
+    """Render the response companion markdown for one source and pandoc-convert
+    it to docx, written as a sibling to the source's published file with a
+    `-responses` suffix (e.g. `spec.docx` → `spec-responses.docx`).
+    """
+    source = target["source"]
+    md_body = render_response_sidecar(source, entries, repo_root)
+    out_docx = target["output_path"].with_name(
+        target["output_path"].stem + "-responses" + target["output_path"].suffix
+    )
+    out_docx.parent.mkdir(parents=True, exist_ok=True)
+
+    # Stage the md in a tmp file under the publish root so pandoc has a path to
+    # read. It's transient — regenerated on next publish — and never checked in.
+    staging_dir = repo_root / ".mcc" / "publish-staging"
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    staging_md = staging_dir / (target["output_path"].stem + "-responses.md")
+    staging_md.write_text(md_body, encoding="utf-8")
+
+    sidecar_target = {
+        "source": staging_md,
+        "output_path": out_docx,
+        "output_format": target.get("output_format", "docx"),
+        "from_extensions": target.get("from_extensions") or [],
+        "to_extensions": target.get("to_extensions") or [],
+        "template": target.get("template"),
+        "pandoc_args": target.get("pandoc_args") or [],
+    }
+    ok, err = _publish_one(sidecar_target)
+    if ok:
+        rel = out_docx.relative_to(repo_root) if out_docx.is_absolute() else out_docx
+        _ok(f"  ↳ {rel} ({len(entries)} comment(s))")
+    return ok, err
 
 
 def cmd_docs_pull(args):
@@ -824,6 +1074,13 @@ def cmd_docs_pull(args):
     feedback_root.mkdir(parents=True, exist_ok=True)
     state = _load_publish_state(repo_root)
 
+    if getattr(args, "resync", False):
+        # Forget prior pull state so EVERY comment gets re-pulled. Existing
+        # per-comment feedback files are preserved on disk — re-pull skips
+        # those (by file existence) so author-written dispositions survive.
+        _info("--resync: clearing pull state; will re-pull every comment.")
+        state = {}
+
     docx_files = sorted(publish_root.rglob("*.docx"))
     if not docx_files:
         _info(f"No .docx files under {manifest['publish_path']}/.")
@@ -832,13 +1089,18 @@ def cmd_docs_pull(args):
     targets = resolve_publish_targets(manifest, repo_root)
     output_to_source = {str(t["output_path"].resolve()): t["source"] for t in targets}
 
-    pulled = 0
+    pulled_files = 0
+    skipped_existing = 0
     skipped_no_new = 0
     for docx in docx_files:
         key = str(docx.resolve())
         source = output_to_source.get(key)
         if source is None:
             _warn(f"skipping {docx.relative_to(publish_root)} (no manifest match)")
+            continue
+
+        # Skip response sidecars — they're our own output, not source docs.
+        if docx.stem.endswith("-responses"):
             continue
 
         parsed = parse_docx_comments(docx)
@@ -852,16 +1114,29 @@ def cmd_docs_pull(args):
             continue
 
         slug = _doc_slug(source, repo_root)
-        stamp = _now_compact()
-        out_name = f"{slug}-{stamp}.md"
-        out_path = feedback_root / out_name
-        out_path.write_text(
-            render_feedback_file(source, docx, parsed, repo_root),
-            encoding="utf-8",
-        )
-        _ok(f"{docx.relative_to(publish_root)} → {out_path.relative_to(repo_root)} "
-            f"({len(new_ids)} new of {len(parsed['comments'])} total)")
-        pulled += 1
+        # Re-pull only the NEW comments; existing files preserved verbatim.
+        new_ids_set = set(new_ids)
+        emitted_this_doc = 0
+        for c in parsed["comments"]:
+            if c["id"] not in new_ids_set:
+                continue
+            out_path = feedback_root / f"{slug}__c{c['id']}.md"
+            if out_path.exists():
+                # Defensive: if a per-comment file already exists (e.g. from
+                # an earlier --resync), leave it alone so any disposition
+                # the author has already written isn't clobbered.
+                skipped_existing += 1
+                continue
+            out_path.write_text(
+                render_feedback_comment_file(source, docx, c, repo_root),
+                encoding="utf-8",
+            )
+            emitted_this_doc += 1
+
+        if emitted_this_doc:
+            pulled_files += emitted_this_doc
+            _ok(f"{docx.relative_to(publish_root)} → {emitted_this_doc} new file(s) "
+                f"in {feedback_root.relative_to(repo_root)}/")
 
         state[key] = {
             "last_pull": _now_local_iso(),
@@ -872,10 +1147,13 @@ def cmd_docs_pull(args):
     _save_publish_state(repo_root, state)
 
     _info("")
-    if pulled == 0 and skipped_no_new == 0:
+    if pulled_files == 0 and skipped_no_new == 0 and skipped_existing == 0:
         _info("No docs had comments.")
     else:
-        _info(f"Pulled: {pulled}; up-to-date: {skipped_no_new}.")
+        msg = f"Pulled: {pulled_files} new comment file(s); up-to-date docs: {skipped_no_new}."
+        if skipped_existing:
+            msg += f" (skipped {skipped_existing} existing file(s) to preserve dispositions.)"
+        _info(msg)
 
 
 def cmd_docs_status(args):
@@ -896,9 +1174,42 @@ def cmd_docs_status(args):
     targets = resolve_publish_targets(manifest, repo_root)
     _info(f"declared docs: {len(targets)}")
 
-    pending = 0
-    if feedback_root.is_dir():
-        pending = sum(1 for p in feedback_root.iterdir() if p.is_file() and p.suffix == ".md")
-    _info(f"pending feedback (unaddressed): {pending}")
-    if pending:
-        _info("  Run /docs:address in any active Claude session to triage.")
+    entries = _scan_feedback_files(repo_root, feedback_root)
+    if not entries:
+        # Maybe legacy files still around — surface their count for visibility.
+        legacy_count = 0
+        if feedback_root.is_dir():
+            for p in feedback_root.glob("*.md"):
+                try:
+                    text = p.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                meta, _ = _parse_frontmatter(text)
+                if "comment_id" not in meta and "source" in meta:
+                    legacy_count += 1
+        if legacy_count:
+            _info(f"feedback: 0 per-comment files (but {legacy_count} legacy file(s) found — "
+                  f"run `mcc docs pull --resync` to re-pull under per-comment structure)")
+        else:
+            _info("feedback: none recorded yet")
+        return
+
+    total = len(entries)
+    pending = sum(1 for e in entries if _is_pending(e))
+    addressed = total - pending
+    _info(f"feedback: {total} comment(s) — {addressed} addressed, {pending} pending")
+
+    # Per-source breakdown for any source with pending feedback
+    pending_by_source: dict[str, int] = {}
+    for e in entries:
+        if _is_pending(e):
+            key = str(e["source"])
+            pending_by_source[key] = pending_by_source.get(key, 0) + 1
+    if pending_by_source:
+        _info("")
+        _info("Pending dispositions by source:")
+        for src, n in sorted(pending_by_source.items()):
+            _info(f"  {src}    {n} pending")
+        _info("")
+        _info("  Edit each feedback file's `## Disposition` section and flip")
+        _info("  `status: pending` → `status: addressed` in the frontmatter.")

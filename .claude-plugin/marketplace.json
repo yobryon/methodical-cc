@@ -32,8 +32,8 @@
     {
       "name": "docs",
       "source": "./plugins/docs",
-      "description": "Stakeholder documentation sharing - publish selected markdown as docx to a synced folder, pull Word inline comments back as anchored, repo-local feedback files for Claude to triage",
-      "version": "1.1.0"
+      "description": "Stakeholder documentation sharing - publish selected markdown as docx to a synced folder, pull Word inline comments back as per-comment feedback files, ship response companion docx with full disposition history on each publish",
+      "version": "1.2.0"
     }
   ]
 }
