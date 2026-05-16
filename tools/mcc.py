@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.18.0"
+MCC_VERSION = "1.18.1"
 
 import json
 import time
@@ -2930,7 +2930,7 @@ def cmd_create(args):
     print(f"  (claude -p will run; this may take a few seconds)", file=sys.stderr)
     print(file=sys.stderr)
 
-    rc = subprocess.run(["claude", "-p", "--no-session-persistence", prompt_text]).returncode
+    rc = subprocess.run(["claude", "-p", prompt_text]).returncode
     if rc != 0:
         die(f"claude -p exited with rc={rc}; session may not have been created")
 
