@@ -2738,7 +2738,7 @@ def cmd_session_transcript(args):
     else:
         out_path = Path("tmp") / f"transcript_{label}_{short_sid}_{ts_label}.md"
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(header + body)
+    out_path.write_text(header + body, encoding="utf-8")
     print(f"Wrote {out_path}")
     print(f"  {entries_summary} entries from {jsonl_path}")
 
