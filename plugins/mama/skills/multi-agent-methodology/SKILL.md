@@ -227,6 +227,35 @@ The `implementor_state.md` file captures the Implementor's **tacit knowledge** -
 
 **Size discipline:** Aim for a document readable in under 5 minutes. Each rewrite should be the same size or smaller, not growing. This is compaction, not accumulation.
 
+### Methodology Holds
+
+The `methodology_holds.md` file is an opt-in registry for two kinds of held items that the methodology asks the Architect to track over many sprints — pattern-instance counts approaching rule-of-three promotion, and structural-fix candidates flagged in CLAUDE.md rules but not yet scheduled. Without a first-class surface these accumulate as narrative paragraphs across state docs and rule bodies and become invisible.
+
+**Shape** (one file, two sections):
+
+```markdown
+## Pattern-instance counts
+
+| Pattern name | Count | First sighting | Most recent | Threshold | Notes |
+|---|---|---|---|---|---|
+| cross-platform-hook | 3 | Sprint 64 | Sprint 66 | 3 (promoted CLAUDE.md S66) | retired |
+| pre-sprint UX consult | 2 | Sprint 56 | Sprint 57 | 3 | active |
+
+## Structural-fix candidates
+
+| Candidate | Filed | Originating rule(s) | Trigger condition | Status |
+|---|---|---|---|---|
+| Schema-form unhandled-construct test fixture | Sprint 62 reflect | 6 schema-renderer rules in CLAUDE.md | Cluster reaches 6+ rules | pending |
+```
+
+**Lifecycle:**
+
+- **Append at sprint close** (`arch-sprint-complete` Step 5): increment any pattern-instance counts observed this sprint; file any structural-fix candidates emerging from the cluster-check; mark items retired if this sprint resolved them.
+- **Walk at sprint prep** (`arch-sprint-prep` Step 5): for each entry, decide promote / defer / retire. Items earning this sprint's slot get added to scope before plan is locked.
+- **Audit at reflection** (`/mama:reflect`): cross-reference against current CLAUDE.md and architect_state — anything in the registry that no longer holds, or anything not in the registry that should be?
+
+**When to introduce it:** the registry pays for itself once a project has accumulated 2+ pattern-instance counts or 1+ structural-fix candidate; for new or short projects it can stay absent. Existing projects that want the structure but don't want the artifact can use a labeled section in `architect_state.md` instead.
+
 ## Document Types
 
 ### Product Documentation

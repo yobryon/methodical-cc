@@ -46,7 +46,20 @@ This command kicks off the sprint planning cycle:
 - Note any dependencies or prerequisites
 - Flag any open questions that might affect scope
 
-### 5. Plan-Component Reality Check
+### 5. Methodology-Holds Walk
+
+**Before locking the proposal**, walk `.mcc*/methodology_holds.md` (if the project uses it; see the `multi-agent-methodology` skill for the artifact's shape). The registry carries two kinds of held items: pattern-instance counts approaching rule-of-three promotion, and structural-fix candidates flagged in CLAUDE.md rules but not yet scheduled.
+
+For each entry:
+
+- **Pattern-instance counts at threshold (typically 3)**: this is the moment to evaluate promotion to CLAUDE.md against the four pattern-add gates. Promote, defer to a later reflect with rationale, or retire if the pattern no longer holds.
+- **Structural-fix candidates whose trigger condition now fires**: lift to this sprint's scope, re-justify as carried (with reason — what's gating it), or retire as no-longer-relevant. A candidate that has been "deferred" for many sprints without a movement justification is itself a flag: either commit or drop.
+
+Items earning this sprint's slot get added to the proposed scope before plan is locked. Items being carried get their carry-justification updated in the registry.
+
+If `.mcc*/methodology_holds.md` doesn't exist yet, this step is a no-op for now — but consider whether the project would benefit from introducing it (the artifact pays for itself once pattern-counts or structural-fix candidates start accumulating across sprints).
+
+### 6. Plan-Component Reality Check
 
 **Before the proposal goes to the user (and well before kickoff goes to impl), verify the plan's named components against the codebase.**
 
@@ -63,7 +76,7 @@ Flag any "I think this lives in X" assumptions. If you're not certain, grep befo
 
 This is a discipline pass, not tooling — but if the named-element list is large enough that grepping each by hand is tedious, the friction is itself a signal that the plan may be over-specified.
 
-### 6. Present for Feedback
+### 7. Present for Feedback
 
 - Share your proposal clearly
 - Invite the user to provide their feedback, ideas, and thoughts

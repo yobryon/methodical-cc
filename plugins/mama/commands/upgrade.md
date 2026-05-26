@@ -188,6 +188,37 @@ If this project ran for many sprints under earlier mama versions, you almost cer
 - No code action required. The agent re-reads this transition section, recalibrates, and applies the new defaults going forward.
 - Optional: run `/mama:reflect` at the next sprint close — even if cadence isn't due — to do a one-time deep clean of any strikethrough accumulator that's already in `CLAUDE.md`. After this pass, the move-not-strike rule prevents regrowth.
 
+#### Transition: pre-3.4.0 → 3.4.0 — per-sprint counterweights to cadence-based audit (cluster-check, compaction, verification gate, arc-close trigger, methodology-holds registry)
+
+**Conditions**: Apply this transition for any project that ran on mama < 3.4.0. Methodology brief; no on-disk migration (the optional `methodology_holds.md` artifact is opt-in and gets introduced when the project starts accumulating tracked items).
+
+**What changed in v3.4.0.**
+
+3.3.0 added per-sprint counter-additive prompts (shrink question, move-not-strike, cadence ladder, plan-component reality check). 3.4.0 extends the same direction: more of `/mama:reflect`'s cadence-based audit moves into the per-sprint workflow so accumulators get caught the moment they form, not 5–10 sprints later.
+
+1. **Cluster-check sub-prompt at memory-add time (`arch-sprint-complete` Step 2).** Before landing any CLAUDE.md rule, scan for related rules in the same topic. If this would make the topic carry 3+ rules, choose: open a structural-fix backlog item that obviates the cluster, demote the topic to a reference doc with a one-line pointer, or explicitly justify the addition. The four pattern-add gates catch individual rules; this catches the pile.
+2. **`architect_state.md` compaction sub-pass (`arch-sprint-complete` Step 5).** When writing the new sprint's state, demote the prior Last Updated paragraph to a one-line band; compress older Sprint History rows to one-line per band or per arc. State-doc carries *current state + active-arc detail*; older detail lives in `sprint_log.md`. Same shape as move-not-strike for CLAUDE.md, applied to state-doc.
+3. **Handoff-review verification gate (`arch-sprint-complete` Step 1).** Symmetric to the plan-component reality check at prep time. For each impl decision-note explaining a divergence, walk three lenses: (a) **intent** — does the divergence still satisfy the user's articulated intent, not just the technical constraint? (b) **hypothesis evidence** — for recurring/carryover bug fixes, is the evidence direct or inferred? (c) **felt-state framing** — does status/lifecycle copy match the data model semantics, or does it imply gates the code doesn't enforce? If any lens flags a concern, the sprint isn't ready to close.
+4. **Arc-close inflection trigger for `/mama:reflect` (`arch-sprint-complete` Step 7).** Alongside the existing sprint-count cadence ladder, an arc-close at this sprint surfaces a "consider reflecting now, regardless of count" prompt. Arc-close is the natural reflection beat — accumulated lessons are freshest right then.
+5. **Optional `methodology_holds.md` registry.** First-class flat-file surface for two kinds of held items: pattern-instance counts approaching rule-of-three promotion, and structural-fix candidates filed in CLAUDE.md rules but not yet scheduled. Walked at `arch-sprint-prep` Step 5 (decide promote/defer/retire per entry); updated at `arch-sprint-complete` Step 5. Opt-in: introduce when accumulation makes it pay.
+
+**Behaviors to unlearn.**
+
+- **Don't wait for `/mama:reflect` to catch CLAUDE.md cluster drift.** The cluster-check now fires at memory-add time. If you're about to add a third rule on the same topic, that's the moment to ask whether a structural fix obviates the cluster — not 5 sprints later.
+- **Don't append to `architect_state.md` Sprint History without compacting.** The state-doc grew as append-only in pre-3.4.0 practice. The new posture: every sprint close also compacts (or at least re-evaluates) prior content. Sprint History rows older than the current arc compress to one-line bands; PRIOR-paragraph chains demote to history rows.
+- **Don't validate impl decision-notes only against the technical constraint.** The handoff-review verification gate explicitly asks about *user intent*, not just *whether the divergence makes technical sense*. Sound technical rationale can still abandon what the user articulated; the gate catches that gap before sprint-close ceremony fires.
+- **Don't defer hypothesis verification to post-fix dogfood.** For fixes to recurring or carryover bugs, ask before designing the fix whether the evidence is direct or inferred. Wrong-cause fixes look identical to right-cause fixes until they ship; 30 minutes of direct evidence is cheaper than a wrong-fix sprint.
+- **Don't treat status copy as polish.** Status / lifecycle copy creates felt gates in the user's head. The gate explicitly asks whether copy framing matches data model semantics; a mismatch is a load-bearing audit, not stylistic.
+- **Don't wait for the count ladder when an arc closes.** Arc-close is its own reflection beat. The methodology now blesses it explicitly.
+- **Don't let pattern-instance counts or structural-fix candidates scatter across state docs.** If accumulation has started, introduce `methodology_holds.md` (or a labeled section in `architect_state.md`); walk it at sprint-prep, update it at sprint-complete.
+
+**Action items for the user.**
+
+- No code action required. The agent re-reads this transition section, recalibrates, and applies the new defaults going forward.
+- **If the project has accumulated 3+ rules in any one CLAUDE.md topic**: surface the cluster at the next reflection — the cluster-check at memory-add time prevents regrowth, but existing clusters need a one-time pass to either land their structural fix or demote to a reference doc.
+- **If `architect_state.md` Sprint History has bands you haven't touched in 5+ sprints**: compact them at the next sprint close. The pre-3.4.0 append-only practice produces archaeology; the new compaction sub-pass prevents recurrence.
+- **If you have pattern-instance counts or structural-fix candidates scattered across state docs or rule bodies**: introduce `methodology_holds.md` (see `multi-agent-methodology` skill for the shape). Migrate held items into the table format; clear from their prior homes.
+
 ---
 
 *Future transitions will be added here as the methodology evolves.*
