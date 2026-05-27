@@ -1035,6 +1035,32 @@ def _baseline_path_for(output_path: Path, repo_root: Path, manifest: dict) -> Pa
     return repo_root / PUBLISH_BASELINE_PATH / rel
 
 
+def _synthesize_baseline_from_source(target: dict) -> Path | None:
+    """Re-render `target["source"]` to a tempfile docx using the same pandoc
+    settings as publish. Returns the temp path or None on failure. Caller
+    must `unlink()` the file when done.
+
+    Used as a fallback when no on-disk baseline exists (e.g., the source was
+    published before baseline-snapshot landed). If the source markdown is
+    unchanged since publish, this synthesis is equivalent to the snapshot.
+    If the source has drifted, the diff will include both reviewer edits
+    and source-drift — suboptimal but better than no signal.
+    """
+    import tempfile
+    fd, tmp_path = tempfile.mkstemp(suffix=".docx")
+    os.close(fd)
+    synth_target = dict(target)
+    synth_target["output_path"] = Path(tmp_path)
+    ok, _err = _publish_one(synth_target)
+    if not ok:
+        try:
+            Path(tmp_path).unlink()
+        except OSError:
+            pass
+        return None
+    return Path(tmp_path)
+
+
 def _snapshot_baseline(output_path: Path, repo_root: Path, manifest: dict) -> None:
     """Copy a freshly-published docx into the baseline directory so pull
     can diff against it later. Errors are non-fatal — baseline is best-effort.
@@ -1340,19 +1366,21 @@ def cmd_docs_pull(args):
 
     targets = resolve_publish_targets(manifest, repo_root)
     output_to_source = {str(t["output_path"].resolve()): t["source"] for t in targets}
+    output_to_target = {str(t["output_path"].resolve()): t for t in targets}
 
     pulled_files = 0
     skipped_existing = 0
     docs_with_no_new_signal = 0
     for docx in docx_files:
+        # Skip response sidecars first — they're our own output, not source
+        # docs, and they wouldn't match the manifest anyway.
+        if docx.stem.endswith("-responses"):
+            continue
+
         key = str(docx.resolve())
         source = output_to_source.get(key)
         if source is None:
             _warn(f"skipping {docx.relative_to(publish_root)} (no manifest match)")
-            continue
-
-        # Skip response sidecars — they're our own output, not source docs.
-        if docx.stem.endswith("-responses"):
             continue
 
         slug = _doc_slug(source, repo_root)
@@ -1397,14 +1425,28 @@ def cmd_docs_pull(args):
             emitted_this_doc += 1
 
         # ----- Signal 3: body edits (roundtrip-diff vs baseline) -----
+        # Prefer the on-disk baseline (snapshotted at publish). Fall back to
+        # synthesizing one from the current source markdown if missing —
+        # makes pull work for docs published before baseline-snapshot landed.
         baseline = _baseline_path_for(docx, repo_root, manifest)
+        synth_baseline: Path | None = None
         diff_text = ""
         diff_hash = ""
         if baseline.is_file():
-            diff_text = compute_body_edit_diff(baseline, docx)
+            baseline_to_use = baseline
+        else:
+            synth_baseline = _synthesize_baseline_from_source(output_to_target[key])
+            baseline_to_use = synth_baseline
+        if baseline_to_use is not None:
+            diff_text = compute_body_edit_diff(baseline_to_use, docx)
             if diff_text:
                 import hashlib
                 diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()[:8]
+        if synth_baseline is not None:
+            try:
+                synth_baseline.unlink()
+            except OSError:
+                pass
         prior_hash = doc_state.get("body_edits_hash", "")
         if diff_hash and diff_hash != prior_hash:
             out_path = feedback_root / f"{slug}__b{diff_hash}.md"
