@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.18.1"
+MCC_VERSION = "1.19.0"
 
 import json
 import time

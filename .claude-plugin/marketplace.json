@@ -32,8 +32,8 @@
     {
       "name": "docs",
       "source": "./plugins/docs",
-      "description": "Stakeholder documentation sharing - publish selected markdown as docx to a synced folder, pull Word inline comments back as per-comment feedback files, ship response companion docx with full disposition history on each publish",
-      "version": "1.2.0"
+      "description": "Stakeholder documentation sharing - publish selected markdown as docx to a synced folder, pull comments + tracked changes + untracked body edits back as per-signal feedback files, ship response companion docx with full disposition history on each publish",
+      "version": "1.3.0"
     }
   ]
 }
