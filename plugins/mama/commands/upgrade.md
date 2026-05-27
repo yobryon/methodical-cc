@@ -219,6 +219,33 @@ If this project ran for many sprints under earlier mama versions, you almost cer
 - **If `architect_state.md` Sprint History has bands you haven't touched in 5+ sprints**: compact them at the next sprint close. The pre-3.4.0 append-only practice produces archaeology; the new compaction sub-pass prevents recurrence.
 - **If you have pattern-instance counts or structural-fix candidates scattered across state docs or rule bodies**: introduce `methodology_holds.md` (see `multi-agent-methodology` skill for the shape). Migrate held items into the table format; clear from their prior homes.
 
+#### Transition: pre-3.5.0 → 3.5.0 — `/mama:reflect --apply` mode (opt-in non-interactive variant)
+
+**Conditions**: Apply this transition for any project that ran on mama < 3.5.0. Methodology brief; no on-disk migration; opt-in feature.
+
+**What changed in v3.5.0.**
+
+`/mama:reflect` now accepts a `--apply` argument. Default behavior (no flag) is unchanged — surface findings, wait for the user per item, *offer* the feedback artifact.
+
+When invoked as `/mama:reflect --apply`:
+
+- Walk all three sections non-interactively.
+- Apply mechanical findings as you go: rule prunes, doc compactions, archive moves, demotions, cross-reference adds, methodology-holds updates.
+- *Always* produce the feedback artifact at `tmp/mama_reflection_{date}.md`.
+- *Surface but do not apply* findings that require net-new design judgment (structural-fix backlog items, methodology-change proposals).
+- End with a single consolidated summary: what was applied, what was surfaced for follow-up, where the feedback artifact landed.
+
+The four pattern-add gates, move-not-strike rule, cluster-check, and all other disciplines **still apply** — the flag pre-authorizes the per-item confirmation step, not the discipline. Nothing gets auto-committed to git; the bundle of edits warrants human eyeball before landing.
+
+**Behaviors to unlearn.**
+
+- Nothing. `--apply` is purely additive. The default interactive behavior is unchanged. Architects who prefer per-item interaction don't need to do anything.
+
+**Action items for the user.**
+
+- No code action required.
+- If you frequently invoke reflect by typing "go ahead and apply all your findings and write the feedback document" (or equivalent), you can now use `/mama:reflect --apply` to encapsulate that pattern.
+
 ---
 
 *Future transitions will be added here as the methodology evolves.*

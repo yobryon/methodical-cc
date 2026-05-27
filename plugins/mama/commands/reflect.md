@@ -11,13 +11,26 @@ Recommended cadence: every 5–10 sprints, or when something feels off. Not ever
 
 This command has three sections. Walk them in order. The first two are for *this* project; the third is the (optional) feedback channel back to the methodology owners.
 
+## Mode
+
+Check `$ARGUMENTS` for the literal token `--apply`:
+
+- **Default mode** (no flag): walk all three sections **interactively**. Surface findings, wait for user direction per item before applying anything. The third section's feedback artifact is *offered*; the user decides.
+- **`--apply` mode** (`$ARGUMENTS` contains `--apply`): walk all three sections **non-interactively**. **Apply** clearly-mechanical findings as you go (rule prunes, doc compactions, archive moves, methodology-holds updates, demotions, cross-references). **Always produce** the feedback artifact in Section 3. End with a single consolidated summary naming everything that landed and everything that was surfaced-but-not-applied (because it needs net-new design judgment — structural-fix backlog items, methodology-change proposals, etc.).
+
+The four pattern-add gates, the move-not-strike rule, the cluster-check, and all other disciplines **still apply** in `--apply` mode. The flag pre-authorizes the *confirmation step*, not the discipline. Anything you would have declined to do interactively, you still decline in `--apply` mode.
+
+Do **not** commit anything in `--apply` mode. The user reads diffs and commits manually — the apply-mode bundle is intentionally not auto-committed because the bundle of edits warrants human eyeball before landing in git history.
+
+If `$ARGUMENTS` is empty or doesn't contain `--apply`, run in default mode.
+
 ---
 
 ## Section 1 — Memory Audit
 
 Project memory accumulates monotonically without an explicit prune step. Models are good at adding and bad at noticing accumulation. This section is the explicit prune.
 
-For each surface below, walk it and ask the load-bearing question. Surface candidates for pruning to the user; do **not** delete anything without their approval.
+For each surface below, walk it and ask the load-bearing question. Surface candidates for pruning to the user; do **not** delete anything without their approval — **unless `--apply` mode is active**, in which case apply clearly-mechanical changes directly and record them for the final summary.
 
 ### CLAUDE.md
 
@@ -66,7 +79,9 @@ Chronological history. Generally don't prune (it's the historical record). Spot-
 
 ### Audit output
 
-Present findings to the user as a categorized list of *proposed* changes. Each item: where it lives, what's wrong, what you'd do. Wait for the user to approve, modify, or reject before applying anything.
+**Default mode**: Present findings to the user as a categorized list of *proposed* changes. Each item: where it lives, what's wrong, what you'd do. Wait for the user to approve, modify, or reject before applying anything.
+
+**`--apply` mode**: Apply mechanical changes directly (prunes, compactions, demotions, archive moves, cross-reference adds, methodology-holds updates). Track each change for the consolidated final summary. *Surface but do not apply* findings that require net-new design judgment — opening a new structural-fix backlog item, proposing a methodology change, anything where the right move isn't a transformation of existing content. Those land in the summary as "surfaced for follow-up."
 
 ---
 
@@ -92,9 +107,11 @@ Discuss with the user. They may have observations from outside your context wind
 
 If Section 2 surfaced material the user wants to share with the methodology maintainers (the people who own the mama/pdt/bus plugins — could be the user themselves, could be upstream), offer to produce a feedback artifact.
 
-Ask the user: **"Want me to write this up as a feedback artifact for the methodology owners?"**
+**Default mode**: Ask the user: **"Want me to write this up as a feedback artifact for the methodology owners?"**
 
-If yes, write `tmp/mama_reflection_{YYYY-MM-DD}.md` (or `tmp/mama_reflection_{YYYY-MM-DD}_{topic}.md` if there's a clear focus topic). Structure it as:
+**`--apply` mode**: Always produce the feedback artifact. Don't ask. The user has pre-authorized.
+
+Write `tmp/mama_reflection_{YYYY-MM-DD}.md` (or `tmp/mama_reflection_{YYYY-MM-DD}_{topic}.md` if there's a clear focus topic). Structure it as:
 
 ```markdown
 # MAMA Reflection: {topic or "general"}
@@ -134,5 +151,21 @@ The user can share the artifact with whoever maintains the methodology — typic
 ## Begin
 
 Walk Section 1 (memory audit), then Section 2 (open reflection), then offer Section 3 (feedback artifact). Take it as a deliberate ritual — not a checklist to rush through. The output is better thinking about the project and the methodology, not a completed command.
+
+**If `--apply` mode is active**, end with a single consolidated summary structured as:
+
+```
+Applied (mechanical):
+  - <change 1>: <file> — <one-line description>
+  - <change 2>: ...
+
+Surfaced for follow-up (needs your judgment):
+  - <item 1>: <what needs deciding>
+  - <item 2>: ...
+
+Feedback artifact: tmp/mama_reflection_{date}.md (written)
+```
+
+This single summary replaces the back-and-forth that default mode would have produced. The user reads it, eyeballs the diff, and commits when ready.
 
 $ARGUMENTS
