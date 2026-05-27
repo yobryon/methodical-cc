@@ -46,6 +46,7 @@ DEFAULT_OUTPUT = "docx"
 DEFAULT_STRUCTURE = "mirror"
 MANIFEST_PATH = ".mcc/docs-publish.yml"
 PUBLISH_STATE_PATH = ".mcc/docs-publish-state.json"
+PUBLISH_BASELINE_PATH = ".mcc/publish-baseline"
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 ET.register_namespace("w", W_NS)
@@ -558,6 +559,136 @@ def parse_docx_comments(docx_path: Path) -> dict:
     return {"comments": comments_sorted, "doc_meta": {}}
 
 
+# ----------------------------- tracked-changes parser ----------------
+
+def parse_docx_tracked_changes(docx_path: Path) -> list:
+    """Return list of {id, kind, author, date, text, section}.
+
+    `kind` is `"ins"` (insertion) or `"del"` (deletion). `section` is the
+    nearest preceding heading. The pair is treated as the editorial unit;
+    we don't try to coalesce adjacent ins/del runs from the same author.
+    """
+    if not docx_path.is_file():
+        return []
+    with zipfile.ZipFile(docx_path) as z:
+        if "word/document.xml" not in z.namelist():
+            return []
+        document_xml = z.read("word/document.xml").decode("utf-8")
+    body_root = ET.fromstring(document_xml)
+    body_elem = body_root.find(_w("body"))
+    if body_elem is None:
+        return []
+
+    out = []
+    current_heading = None
+    seen_ids = set()
+    for p in body_elem.iter(_w("p")):
+        pStyle = None
+        ppr = p.find(_w("pPr"))
+        if ppr is not None:
+            ps = ppr.find(_w("pStyle"))
+            if ps is not None:
+                pStyle = ps.get(_w("val")) or ""
+        if pStyle and pStyle.startswith("Heading"):
+            current_heading = _extract_text(p).strip()
+
+        for change in p.iter():
+            tag = change.tag
+            if tag == _w("ins"):
+                kind = "ins"
+            elif tag == _w("del"):
+                kind = "del"
+            else:
+                continue
+            cid = change.get(_w("id")) or ""
+            # Same id can appear in both ins and del; namespace by kind.
+            uid = f"{kind}:{cid}"
+            if uid in seen_ids:
+                continue
+            seen_ids.add(uid)
+            # Pull text: <w:t> for ins, <w:delText> for del
+            if kind == "ins":
+                text_parts = [t.text or "" for t in change.iter(_w("t"))]
+            else:
+                text_parts = [t.text or "" for t in change.iter(_w("delText"))]
+            out.append({
+                "id": cid,
+                "kind": kind,
+                "author": change.get(_w("author")) or "(unknown)",
+                "date": change.get(_w("date")) or "",
+                "text": "".join(text_parts),
+                "section": current_heading or "(top of document)",
+            })
+
+    def _sort_key(m):
+        return (m.get("date", ""), m.get("kind", ""), int(m.get("id", "0") or 0))
+    return sorted(out, key=_sort_key)
+
+
+# ----------------------------- roundtrip-diff (body edits) -----------
+
+def _pandoc_docx_to_md(docx_path: Path, track_changes: str = "reject") -> str | None:
+    """Convert a docx to markdown via pandoc. Returns markdown text or None.
+
+    `track_changes`: passed through as pandoc's --track-changes flag. We
+    default to `reject` for body-edits comparison so tracked insertions
+    don't surface again as body edits (the tracked-changes parser already
+    surfaced them as their own feedback files).
+    """
+    if not _have_pandoc():
+        return None
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        cmd = ["pandoc", str(docx_path), "-t", "markdown",
+               f"--track-changes={track_changes}", "-o", str(tmp_path)]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            return None
+        return tmp_path.read_text(encoding="utf-8")
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+
+
+def compute_body_edit_diff(baseline_docx: Path, reviewer_docx: Path) -> str:
+    """Return a unified diff (heading-anchored) of reviewer vs baseline,
+    after roundtripping both through pandoc to cancel formatting noise.
+    Tracked changes in the reviewer doc are *rejected* during conversion so
+    they don't double-surface as body edits.
+
+    Returns empty string if no diff or if pandoc is unavailable.
+    """
+    baseline_md = _pandoc_docx_to_md(baseline_docx)
+    reviewer_md = _pandoc_docx_to_md(reviewer_docx)
+    if baseline_md is None or reviewer_md is None:
+        return ""
+    if baseline_md == reviewer_md:
+        return ""
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        bp = Path(td) / "baseline.md"
+        rp = Path(td) / "reviewer.md"
+        bp.write_text(baseline_md, encoding="utf-8")
+        rp.write_text(reviewer_md, encoding="utf-8")
+        # -F '^#' makes hunk headers carry the nearest preceding heading.
+        # Labels show as "baseline" / "reviewer" rather than tmp paths.
+        proc = subprocess.run(
+            ["diff", "-u", "-F", "^#",
+             "--label", "baseline", "--label", "reviewer",
+             str(bp), str(rp)],
+            capture_output=True, text=True,
+        )
+        # diff exit 1 = files differ (expected); 2 = error
+        if proc.returncode >= 2:
+            return ""
+        return proc.stdout
+
+
 # ----------------------------- feedback rendering --------------------
 
 def _doc_slug(source: Path, repo_root: Path) -> str:
@@ -630,6 +761,102 @@ def render_feedback_comment_file(
         DISPOSITION_STUB,
         "",
     ])
+    return "\n".join(lines)
+
+
+def render_feedback_tracked_change_file(
+    source_md: Path, docx_path: Path, change: dict, repo_root: Path
+) -> str:
+    """Render ONE tracked change (w:ins or w:del) as a standalone feedback file.
+
+    Same frontmatter/lifecycle shape as a comment file, plus `kind`. The body
+    presents the inserted or deleted text verbatim, then a disposition stub.
+    """
+    rel_source = source_md.relative_to(repo_root) if source_md.is_absolute() else source_md
+    rel_docx = docx_path.relative_to(repo_root) if docx_path.is_absolute() else docx_path
+    cid = change.get("id") or "0"
+    kind = change.get("kind") or "ins"
+    author = change.get("author") or "(unknown)"
+    date = change.get("date") or ""
+    section = change.get("section") or "(unanchored)"
+    text = change.get("text") or ""
+    text_short = text if len(text) <= 240 else text[:237] + "..."
+    verb = "Insertion" if kind == "ins" else "Deletion"
+
+    lines = [
+        "---",
+        f"source: {rel_source}",
+        f"published_as: {rel_docx}",
+        f"tracked_change_id: \"{cid}\"",
+        f"kind: {kind}",
+        f"author: {author}",
+        f"date: {date}",
+        f"pulled_at: {_now_local_iso()}",
+        f"section: \"{section}\"",
+        "status: pending",
+        "---",
+        "",
+        f"# Feedback on {rel_source} — Tracked {verb} {cid}",
+        "",
+        f"**Anchored to:** Section \"{section}\"",
+        "",
+        f"## {verb} (verbatim)",
+        "",
+    ]
+    if text_short:
+        lines.append(f"> {text_short}")
+    else:
+        lines.append("_(empty)_")
+    lines.extend([
+        "",
+        "## Disposition",
+        "",
+        DISPOSITION_STUB,
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def render_feedback_body_edits_file(
+    source_md: Path, docx_path: Path, diff_text: str, repo_root: Path
+) -> str:
+    """Render the body-edits diff as a standalone feedback file.
+
+    Body edits are surfaced as a single disposition unit per pull cycle —
+    the whole-doc diff is the editorial review. Heading-anchored hunks let
+    the author scan section-by-section.
+    """
+    rel_source = source_md.relative_to(repo_root) if source_md.is_absolute() else source_md
+    rel_docx = docx_path.relative_to(repo_root) if docx_path.is_absolute() else docx_path
+    lines = [
+        "---",
+        f"source: {rel_source}",
+        f"published_as: {rel_docx}",
+        "kind: body_edits",
+        "author: (untracked)",
+        f"pulled_at: {_now_local_iso()}",
+        "status: pending",
+        "---",
+        "",
+        f"# Feedback on {rel_source} — Body Edits (untracked)",
+        "",
+        "Reviewer(s) edited the document body without using Word comments or",
+        "Track Changes. Author attribution is unavailable; what follows is the",
+        "diff between the as-published baseline and the returned docx, after",
+        "pandoc-roundtripping both to markdown to cancel formatting noise.",
+        "Hunk headers carry the nearest preceding heading.",
+        "",
+        "## Diff",
+        "",
+        "```diff",
+        diff_text.rstrip(),
+        "```",
+        "",
+        "## Disposition",
+        "",
+        DISPOSITION_STUB,
+        "",
+    ]
     return "\n".join(lines)
 
 
@@ -801,6 +1028,25 @@ def _new_comment_ids(parsed: dict, prior_seen: list) -> list:
     return [c["id"] for c in parsed["comments"] if c["id"] not in seen]
 
 
+def _baseline_path_for(output_path: Path, repo_root: Path, manifest: dict) -> Path:
+    """Map an output docx path to its baseline-snapshot location."""
+    publish_root = (repo_root / manifest["publish_path"]).resolve()
+    rel = output_path.resolve().relative_to(publish_root)
+    return repo_root / PUBLISH_BASELINE_PATH / rel
+
+
+def _snapshot_baseline(output_path: Path, repo_root: Path, manifest: dict) -> None:
+    """Copy a freshly-published docx into the baseline directory so pull
+    can diff against it later. Errors are non-fatal — baseline is best-effort.
+    """
+    try:
+        baseline = _baseline_path_for(output_path, repo_root, manifest)
+        baseline.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(output_path, baseline)
+    except Exception:
+        pass
+
+
 # ----------------------------- output→source mapping -----------------
 
 def _source_for_output(output_path: Path, manifest: dict, repo_root: Path) -> Path | None:
@@ -880,6 +1126,8 @@ def cmd_docs_setup(args):
     _ensure_gitignore_entries(repo_root, [
         f"{publish_path.rstrip('/')}/",
         ".mcc/docs-publish-state.json",
+        f"{PUBLISH_BASELINE_PATH}/",
+        ".mcc/publish-staging/",
     ])
 
     _info("")
@@ -1001,6 +1249,10 @@ def cmd_docs_publish(args):
         if ok:
             _ok(f"{rel_src} → {rel_out}")
             ok_count += 1
+            # Snapshot the as-published output for later roundtrip-diff. Body
+            # edits are detected by diffing this snapshot against the reviewer's
+            # returned docx (after pandoc-normalizing both to md).
+            _snapshot_baseline(t["output_path"], repo_root, manifest)
         else:
             _warn(f"{rel_src} → {rel_out}\n      {err}")
             continue
@@ -1091,7 +1343,7 @@ def cmd_docs_pull(args):
 
     pulled_files = 0
     skipped_existing = 0
-    skipped_no_new = 0
+    docs_with_no_new_signal = 0
     for docx in docx_files:
         key = str(docx.resolve())
         source = output_to_source.get(key)
@@ -1103,54 +1355,91 @@ def cmd_docs_pull(args):
         if docx.stem.endswith("-responses"):
             continue
 
-        parsed = parse_docx_comments(docx)
-        if not parsed["comments"]:
-            continue
-
-        prior = state.get(key, {}).get("seen_comment_ids", [])
-        new_ids = _new_comment_ids(parsed, prior)
-        if not new_ids:
-            skipped_no_new += 1
-            continue
-
         slug = _doc_slug(source, repo_root)
-        # Re-pull only the NEW comments; existing files preserved verbatim.
-        new_ids_set = set(new_ids)
+        rel_docx = docx.relative_to(publish_root)
+        doc_state = state.get(key, {})
         emitted_this_doc = 0
-        for c in parsed["comments"]:
-            if c["id"] not in new_ids_set:
+
+        # ----- Signal 1: comments -----
+        parsed = parse_docx_comments(docx)
+        prior_comments = doc_state.get("seen_comment_ids", [])
+        new_comment_ids = _new_comment_ids(parsed, prior_comments)
+        if new_comment_ids:
+            new_ids_set = set(new_comment_ids)
+            for c in parsed["comments"]:
+                if c["id"] not in new_ids_set:
+                    continue
+                out_path = feedback_root / f"{slug}__c{c['id']}.md"
+                if out_path.exists():
+                    skipped_existing += 1
+                    continue
+                out_path.write_text(
+                    render_feedback_comment_file(source, docx, c, repo_root),
+                    encoding="utf-8",
+                )
+                emitted_this_doc += 1
+
+        # ----- Signal 2: tracked changes -----
+        tracked = parse_docx_tracked_changes(docx)
+        prior_tracked = set(doc_state.get("seen_tracked_change_uids", []))
+        for t in tracked:
+            uid = f"{t['kind']}:{t['id']}"
+            if uid in prior_tracked:
                 continue
-            out_path = feedback_root / f"{slug}__c{c['id']}.md"
+            out_path = feedback_root / f"{slug}__t{t['kind']}-{t['id']}.md"
             if out_path.exists():
-                # Defensive: if a per-comment file already exists (e.g. from
-                # an earlier --resync), leave it alone so any disposition
-                # the author has already written isn't clobbered.
                 skipped_existing += 1
                 continue
             out_path.write_text(
-                render_feedback_comment_file(source, docx, c, repo_root),
+                render_feedback_tracked_change_file(source, docx, t, repo_root),
                 encoding="utf-8",
             )
             emitted_this_doc += 1
 
+        # ----- Signal 3: body edits (roundtrip-diff vs baseline) -----
+        baseline = _baseline_path_for(docx, repo_root, manifest)
+        diff_text = ""
+        diff_hash = ""
+        if baseline.is_file():
+            diff_text = compute_body_edit_diff(baseline, docx)
+            if diff_text:
+                import hashlib
+                diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()[:8]
+        prior_hash = doc_state.get("body_edits_hash", "")
+        if diff_hash and diff_hash != prior_hash:
+            out_path = feedback_root / f"{slug}__b{diff_hash}.md"
+            if out_path.exists():
+                skipped_existing += 1
+            else:
+                out_path.write_text(
+                    render_feedback_body_edits_file(source, docx, diff_text, repo_root),
+                    encoding="utf-8",
+                )
+                emitted_this_doc += 1
+
         if emitted_this_doc:
             pulled_files += emitted_this_doc
-            _ok(f"{docx.relative_to(publish_root)} → {emitted_this_doc} new file(s) "
+            _ok(f"{rel_docx} → {emitted_this_doc} new file(s) "
                 f"in {feedback_root.relative_to(repo_root)}/")
+        else:
+            docs_with_no_new_signal += 1
 
+        # Update state for all three signal sources
         state[key] = {
             "last_pull": _now_local_iso(),
             "seen_comment_ids": [c["id"] for c in parsed["comments"]],
+            "seen_tracked_change_uids": [f"{t['kind']}:{t['id']}" for t in tracked],
+            "body_edits_hash": diff_hash or prior_hash,
             "source": str(source.relative_to(repo_root)),
         }
 
     _save_publish_state(repo_root, state)
 
     _info("")
-    if pulled_files == 0 and skipped_no_new == 0 and skipped_existing == 0:
-        _info("No docs had comments.")
+    if pulled_files == 0 and docs_with_no_new_signal == 0 and skipped_existing == 0:
+        _info("No docs had feedback.")
     else:
-        msg = f"Pulled: {pulled_files} new comment file(s); up-to-date docs: {skipped_no_new}."
+        msg = f"Pulled: {pulled_files} new feedback file(s); docs with no new signal: {docs_with_no_new_signal}."
         if skipped_existing:
             msg += f" (skipped {skipped_existing} existing file(s) to preserve dispositions.)"
         _info(msg)

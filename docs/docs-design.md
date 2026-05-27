@@ -108,6 +108,47 @@ docs:
 
 Mirror is the default because it makes filename collisions impossible without explicit configuration, and SharePoint folder browsers handle the depth fine.
 
+### Three feedback signals
+
+Reviewers don't always use Word's inline-comment affordance. They may also
+turn on Track Changes, or — more commonly with non-technical reviewers —
+just edit the document body and write their thoughts inline. `mcc docs pull`
+extracts all three signal types from each returned docx and emits separate
+feedback files per signal so each can be dispositioned independently.
+
+**1. Comments** (`<slug>__c<N>.md`). Word inline comments. Parsed from
+`word/comments.xml` plus body anchor markers. Carries author, date, and
+anchored excerpt. The canonical, highest-fidelity feedback path.
+
+**2. Tracked changes** (`<slug>__t<kind>-<N>.md`). Insertions and deletions
+recorded with Word's Review → Track Changes. Parsed from `<w:ins>` and
+`<w:del>` elements in `word/document.xml`. Carries author, date, kind
+(ins/del), and the inserted-or-deleted text, anchored to the nearest
+preceding heading.
+
+**3. Body edits** (`<slug>__b<hash>.md`). Free-form edits to the document
+text without comments or Track Changes. Detected by **roundtrip-diff**: at
+publish time, the docx is snapshotted into `.mcc/publish-baseline/`; at
+pull time, both the baseline and the reviewer's returned docx are converted
+back to markdown via pandoc and diffed with `diff -u -F '^#'`. Round-tripping
+both sides through pandoc cancels its own formatting noise, so what's left
+is reviewer changes only. Hunk headers carry the nearest preceding heading.
+
+**Body edits lose attribution.** Free-form edits in docx body have no
+author/date metadata — we get *what changed* but not *who*. A single
+body-edits feedback file is emitted per pull cycle per source; the diff
+hash de-duplicates across pulls. If reviewers need attributable feedback,
+ask them to use comments or Track Changes.
+
+### The baseline directory
+
+`.mcc/publish-baseline/<rel_output>.docx` is a snapshot of every successfully
+published docx, taken at publish time. It's gitignored (machine-specific
+state) and exists solely to support roundtrip-diff. If the baseline for a
+particular doc is missing (e.g., the user pulls before ever publishing),
+the body-edits signal is skipped for that doc and a warning is suppressed —
+comments and tracked changes still work fine.
+
 ### Feedback file format
 
 One file per pulled docx per pull cycle. Filename: `<doc-slug>-<YYYYMMDD>T<HHMMSS>.md`. Slug derived from the doc's source path (e.g., `docs/product/spec.md` → `spec` or `product-spec` for collision avoidance).
