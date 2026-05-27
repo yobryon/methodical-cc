@@ -654,14 +654,48 @@ def _pandoc_docx_to_md(docx_path: Path, track_changes: str = "reject") -> str | 
             pass
 
 
+_HEADING_RE = re.compile(r"^#")
+
+
+def _annotate_hunks_with_heading(diff_lines: list, baseline_lines: list) -> list:
+    """Mimic GNU diff's `-F '^#'`: for each hunk, scan baseline upward from
+    the hunk's start line and append the nearest preceding heading line to
+    the `@@ ... @@` header.
+    """
+    out = []
+    hunk_re = re.compile(r"^@@ -(\d+)(?:,\d+)? \+\d+(?:,\d+)? @@(.*)$")
+    for line in diff_lines:
+        m = hunk_re.match(line.rstrip("\n"))
+        if m:
+            start = int(m.group(1))  # 1-indexed first changed baseline line
+            existing_tail = m.group(2)
+            # Search backwards from start-1 (0-indexed) for a heading line
+            idx = max(0, start - 1)
+            anchor = ""
+            while idx >= 0:
+                if idx < len(baseline_lines) and _HEADING_RE.match(baseline_lines[idx]):
+                    anchor = " " + baseline_lines[idx].rstrip("\n")
+                    break
+                idx -= 1
+            if anchor and not existing_tail.strip():
+                line = line.rstrip("\n").rstrip() + anchor + "\n"
+        out.append(line)
+    return out
+
+
 def compute_body_edit_diff(baseline_docx: Path, reviewer_docx: Path) -> str:
     """Return a unified diff (heading-anchored) of reviewer vs baseline,
     after roundtripping both through pandoc to cancel formatting noise.
     Tracked changes in the reviewer doc are *rejected* during conversion so
     they don't double-surface as body edits.
 
+    Uses stdlib `difflib` rather than the `diff` CLI (which isn't on Windows
+    by default). Hunk headers get the nearest preceding heading appended,
+    mimicking GNU diff's `-F '^#'` behavior.
+
     Returns empty string if no diff or if pandoc is unavailable.
     """
+    import difflib
     baseline_md = _pandoc_docx_to_md(baseline_docx)
     reviewer_md = _pandoc_docx_to_md(reviewer_docx)
     if baseline_md is None or reviewer_md is None:
@@ -669,24 +703,19 @@ def compute_body_edit_diff(baseline_docx: Path, reviewer_docx: Path) -> str:
     if baseline_md == reviewer_md:
         return ""
 
-    import tempfile
-    with tempfile.TemporaryDirectory() as td:
-        bp = Path(td) / "baseline.md"
-        rp = Path(td) / "reviewer.md"
-        bp.write_text(baseline_md, encoding="utf-8")
-        rp.write_text(reviewer_md, encoding="utf-8")
-        # -F '^#' makes hunk headers carry the nearest preceding heading.
-        # Labels show as "baseline" / "reviewer" rather than tmp paths.
-        proc = subprocess.run(
-            ["diff", "-u", "-F", "^#",
-             "--label", "baseline", "--label", "reviewer",
-             str(bp), str(rp)],
-            capture_output=True, text=True,
-        )
-        # diff exit 1 = files differ (expected); 2 = error
-        if proc.returncode >= 2:
-            return ""
-        return proc.stdout
+    baseline_lines = baseline_md.splitlines(keepends=True)
+    reviewer_lines = reviewer_md.splitlines(keepends=True)
+    diff_iter = difflib.unified_diff(
+        baseline_lines, reviewer_lines,
+        fromfile="baseline", tofile="reviewer", n=3,
+    )
+    diff_lines = list(diff_iter)
+    if not diff_lines:
+        return ""
+    # Ensure trailing newlines on every line for consistent rendering.
+    diff_lines = [ln if ln.endswith("\n") else ln + "\n" for ln in diff_lines]
+    diff_lines = _annotate_hunks_with_heading(diff_lines, baseline_lines)
+    return "".join(diff_lines)
 
 
 # ----------------------------- feedback rendering --------------------
