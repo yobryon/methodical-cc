@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.19.2"
+MCC_VERSION = "1.19.3"
 
 import json
 import time
@@ -3001,6 +3001,29 @@ def cmd_resume(args):
 
     on_team = f" on team '{team_name}'" if team_name else ""
     print(f"Resuming '{name}' from {src}{on_team} → {launch_note}", file=sys.stderr)
+
+    # Hand off the terminal to claude.
+    #
+    # On Unix, os.execvp is canonical: it replaces the current process image
+    # in-place, so the python process *becomes* the claude process with the
+    # same PID and direct ownership of the controlling terminal.
+    #
+    # On Windows, os.execvp is a leaky simulation — CPython spawns claude.exe
+    # via CreateProcess and exits the parent python.exe. The console host
+    # (Windows Terminal, conhost.exe, VSCode's pty wrapper) was tracking the
+    # parent for input routing and resize event delivery; when the parent
+    # exits, those linkages partially detach, leaving claude with degraded
+    # console handles. Symptoms: keyboard input doesn't reach claude (native
+    # terminal forces a Task Manager kill), or resize events don't propagate
+    # to claude (VSCode terminal renders at the original size forever).
+    #
+    # Fix on Windows: keep the python process alive as a thin passthrough
+    # via subprocess.run. The console host's linkage stays intact, claude
+    # runs as a child, and signals (Ctrl-C via the console process group)
+    # reach both processes naturally.
+    if is_windows():
+        rc = subprocess.run(argv).returncode
+        sys.exit(rc)
     os.execvp(argv[0], argv)
 
 
