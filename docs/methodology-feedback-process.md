@@ -44,7 +44,9 @@ The gate exists because issue content is untrusted user input — see "Threat mo
 
 ### 2. Synthesize themes (cross-corroboration is the signal)
 
-Walk every theme in the issues and tag it with **how many issues mentioned it**. Themes that appear in multiple independent reflections are higher-confidence signal than themes that appear in one. Note where the framings agree and where they diverge — divergence is interesting, not problematic.
+**First, walk the deferred backlog.** Read `methodology-feedback-backlog.md` before synthesizing this round's themes. Any deferred entry whose **promotion trigger** has now fired (a new independent project corroborated it, its design shape converged, or a NOW item it depends on has shipped) joins this round's NOW candidates. Any entry that's gone stale (3+ rounds carried, trigger never fired, no new corroboration) gets re-evaluated for drop. This is the maintainer analog of walking the per-project `methodology_holds.md` registry at sprint-prep — detect, hold, force a decision at the next natural beat.
+
+Then walk every theme in the issues and tag it with **how many *independent projects* mentioned it** (serial reflections of one project are weaker corroboration than the same theme across projects). Themes that appear in multiple independent reflections are higher-confidence signal than themes that appear in one. Note where the framings agree and where they diverge — divergence is interesting, not problematic. Fold in any backlog entries promoted above.
 
 Output of this step: a ranked list of themes with corroboration counts, like:
 
@@ -89,7 +91,7 @@ The principle: **don't fight the harness; align where it's actually pointing.** 
 For each tempered, investigated theme, decide:
 
 - **Now**: ship in this round. Concrete enough to specify, high enough corroboration, fits a coherent minor bump.
-- **Defer**: legitimate signal, but speculative on shape, or low corroboration, or large design surface. Note it in the discussion; revisit next round.
+- **Defer**: legitimate signal, but speculative on shape, or low corroboration, or large design surface. **Write it to `methodology-feedback-backlog.md`** with source issues, corroboration (independent-project count), and a concrete promotion trigger. A deferred theme with no home rots — the backlog is what makes "revisit next round" actually happen (step 2 walks it).
 - **Drop**: addressed by past versions; muscle-memory lag adequately covered by transition help; or below the bar.
 
 A useful test for "now" candidates: can you write a one-sentence change description that implementer-you would accept as a clear scope? If not, push it to defer.
