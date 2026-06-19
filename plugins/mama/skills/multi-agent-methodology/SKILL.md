@@ -229,9 +229,9 @@ The `implementor_state.md` file captures the Implementor's **tacit knowledge** -
 
 ### Methodology Holds
 
-The `methodology_holds.md` file is an opt-in registry for two kinds of held items that the methodology asks the Architect to track over many sprints — pattern-instance counts approaching rule-of-three promotion, and structural-fix candidates flagged in CLAUDE.md rules but not yet scheduled. Without a first-class surface these accumulate as narrative paragraphs across state docs and rule bodies and become invisible.
+The `methodology_holds.md` file is an opt-in registry for three kinds of held items that the methodology asks the Architect to track over many sprints — pattern-instance counts approaching rule-of-three promotion, structural-fix candidates flagged in CLAUDE.md rules but not yet scheduled, and reflection follow-ups (findings a `/mama:reflect` surfaced but didn't apply). Without a first-class surface these accumulate as narrative paragraphs across state docs and rule bodies and become invisible.
 
-**Shape** (one file, two sections):
+**Shape** (one file, three sections):
 
 ```markdown
 ## Pattern-instance counts
@@ -246,15 +246,28 @@ The `methodology_holds.md` file is an opt-in registry for two kinds of held item
 | Candidate | Filed | Originating rule(s) | Trigger condition | Status |
 |---|---|---|---|---|
 | Schema-form unhandled-construct test fixture | Sprint 62 reflect | 6 schema-renderer rules in CLAUDE.md | Cluster reaches 6+ rules | pending |
+
+## Reflection follow-ups
+
+| Finding | Surfaced | Age (sprints/reflects) | Owner | Status |
+|---|---|---|---|---|
+| Demote GUI section to docs/gui/development.md | reflect #1 | 6 sprints | arch | open |
 ```
 
 **Lifecycle:**
 
-- **Append at sprint close** (`arch-sprint-complete` Step 5): increment any pattern-instance counts observed this sprint; file any structural-fix candidates emerging from the cluster-check; mark items retired if this sprint resolved them.
-- **Walk at sprint prep** (`arch-sprint-prep` Step 5): for each entry, decide promote / defer / retire. Items earning this sprint's slot get added to scope before plan is locked.
+- **Append at sprint close** (`arch-sprint-complete` Step 5): increment any pattern-instance counts observed this sprint; file any structural-fix candidates emerging from the cluster-check (including section-over-budget demotions); mark items retired if this sprint resolved them.
+- **Append at reflection** (`/mama:reflect`): write each "surfaced for follow-up" finding to the Reflection follow-ups section with its reflection date. This is what keeps reflection outputs from rotting — a surfaced-not-applied finding with no home gets rediscovered, larger, at the next reflection.
+- **Walk at sprint prep** (`arch-sprint-prep` Step 5): for each entry, decide promote / schedule / defer / retire. **The walk forces, it doesn't just review** — see below.
 - **Audit at reflection** (`/mama:reflect`): cross-reference against current CLAUDE.md and architect_state — anything in the registry that no longer holds, or anything not in the registry that should be?
 
-**When to introduce it:** the registry pays for itself once a project has accumulated 2+ pattern-instance counts or 1+ structural-fix candidate; for new or short projects it can stay absent. Existing projects that want the structure but don't want the artifact can use a labeled section in `architect_state.md` instead.
+**The forcing function (the half that makes the registry act, not just remember).** The registry reliably remembers held items and reliably fails to schedule them, because feature work correctly outranks hygiene every sprint. So the sprint-prep walk forces decisions rather than re-reviewing:
+
+- **Stale items** (structural-fix candidate or reflection follow-up carried 3 sprints / 3 reflects without movement) get a forced binary: schedule this sprint, or record the concrete gate keeping it carried — never silent perpetual deferral.
+- **Accumulation** (3+ open structural-fix candidates / follow-ups at once) surfaces a **hygiene sprint as a first-class proposal**. The methodology schedules the hygiene work because the architect won't (and shouldn't, item-by-item) rank it above a real feature.
+- **Cross-lane items** (owned by another teammate) get **commissioned via the bus now**, not re-flagged in the architect's own state every cycle.
+
+**When to introduce it:** the registry pays for itself once a project has accumulated 2+ pattern-instance counts, 1+ structural-fix candidate, or 1+ reflection follow-up; for new or short projects it can stay absent. Existing projects that want the structure but don't want the artifact can use a labeled section in `architect_state.md` instead.
 
 ## Document Types
 

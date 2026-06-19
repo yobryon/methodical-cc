@@ -101,6 +101,7 @@ When both you and the Implementor observe the same lesson at sprint close, both 
 | `decisions_log.md` | **Architect** | First-class resolved decisions with rationale. |
 | `concept_backlog.md` | **Architect** | Deferred items / future-work tracking. |
 | `sprint_log.md` | **Architect** | Chronological sprint history. |
+| Claude Code auto-memory (`MEMORY.md` + per-fact files) | **Architect** | Auto-loaded memory the harness manages. Both agents *can* write it, which is exactly the concurrent-write hazard — so arch owns it, single-writer-at-close. It has a size budget the harness enforces (it loads only partially when over); compaction is arch's job at close, same as the other auto-loaded surfaces. |
 
 When reconciling at sprint close: if the Implementor's handoff proposes CLAUDE.md additions AND you saw similar candidates while reading the log, **dedupe at this point** — pick one canonical wording, write it once, and move on. This is the moment to catch concurrent-write duplication before it lands.
 
@@ -113,6 +114,8 @@ Before landing any new CLAUDE.md rule (or before the moment you would), scan CLA
 - **Open a structural-fix backlog item** that obviates the cluster (a test fixture, a helper, a reference doc, a code-level abstraction). Defer the rule until the structural fix is judged.
 - **Demote the topic to a reference doc** (e.g. `docs/<topic>.md` or `frontend/src/components/<x>/README.md`). Replace the cluster in CLAUDE.md with a one-line pointer. Auto-load surface shrinks; the knowledge stays addressable from the call site.
 - **Explicitly justify adding the Nth rule** (rare). Document why the structural fix isn't the right move yet — typically because the pattern isn't stable enough or the cost-benefit doesn't pencil. The justification is the discipline check; without it, the default is one of the prior two options.
+
+**Check the destination section's size, not just whether this rule clusters.** The per-rule check ("does *this* rule cluster with siblings?") misses the slow-accretion case: a section that's already large, where each new addition individually passes the gate while the section grows unbounded (e.g. a GUI/component section creeping 80 → 110 lines across an arc, one passing rule at a time). Independent of whether the new rule clusters, ask: **is the section I'm adding to already over a soft budget (~40 lines or ~6 rules)?** If so, the move is demote-the-section-to-a-reference-doc, not add-the-Nth-rule — and that demotion is a structural-fix candidate (file it in `methodology_holds.md`; the sprint-prep walk's forcing function will schedule it).
 
 Stale clusters from subsystem retirement (e.g. CLAUDE.md still describes a substrate the sprint just evicted) also surface here: if this sprint operated on a subsystem CLAUDE.md describes as live, the corresponding rules belong in `sprint_log.md` under the retiring sprint, not in auto-loaded context.
 
@@ -141,6 +144,8 @@ The Implementor's retrospective is valuable:
 
 `architect_state.md` is the next CLAUDE.md if you let it accumulate. The state-doc carries *current state + active-arc detail*; older detail belongs in `sprint_log.md`. After writing the new sprint's row and Current Status block:
 
+- **Current Status / Next Steps blocks must describe the sprint that just closed — not an older one.** These are the blocks that go stale-and-*misleading* (a Current Status still naming Sprint N-3 actively lies to the next session). The compaction below handles Sprint History rows; these live-status blocks need their own refresh. **Rewrite them in place** — move-not-strike applies to your own running-status prose, not just to tech debt. Don't append a fresh status block above a stale one.
+- **Write the new Sprint History band tight.** The compaction sub-pass catches *prior* rows, but dense-band gravity is real: once prior bands are 800–2000-char paragraphs, the new band inherits that cadence. Lead the new band with the outcome; expand only where load-bearing. When you compact an older band, also tighten the most-recent band so the cadence the next sprint inherits is the tight one, not the dense one.
 - **Last Updated paragraph from the prior sprint** → demote to a one-line band entry in Sprint History. Don't carry "PRIOR (Sprint N-1 ... PRIOR (Sprint N-2 ..." chains.
 - **Sprint History rows older than the current arc** → compress to one-line per band (or per arc), pointing at the relevant `sprint_log.md` section for detail.
 - **Carried tech debt / open questions** → consolidate; if an item has been "carried" 5+ sprints unchanged, ask whether it's truly active or a candidate for the structural-fix registry (see Step 6).

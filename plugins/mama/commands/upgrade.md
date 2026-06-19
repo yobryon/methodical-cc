@@ -246,6 +246,33 @@ The four pattern-add gates, move-not-strike rule, cluster-check, and all other d
 - No code action required.
 - If you frequently invoke reflect by typing "go ahead and apply all your findings and write the feedback document" (or equivalent), you can now use `/mama:reflect --apply` to encapsulate that pattern.
 
+#### Transition: pre-3.6.0 → 3.6.0 — close the detect→schedule loop (registry forcing function, plan-outcome reachability, memory-discipline sharpening)
+
+**Conditions**: Apply this transition for any project that ran on mama < 3.6.0. Methodology brief; no on-disk migration (the `methodology_holds.md` registry gains a third section, applied next time you write to it).
+
+**What changed in v3.6.0.**
+
+3.4.0 gave the `methodology_holds.md` registry good *detection*. Projects then reported, across many reflections, that detection without *scheduling* just produces a tidy list of debt that never gets paid — feature work correctly outranks hygiene every sprint, so a structural-fix candidate flagged two reflections running still never gets a slot. 3.6.0 closes that loop and sharpens the per-sprint memory passes.
+
+1. **Registry forcing function (`arch-sprint-prep` Step 5).** The Methodology-Holds Walk now *forces decisions* instead of reviewing: stale items (carried 3 sprints / 3 reflects) get a schedule-or-justify binary; 3+ open structural-fix candidates surface a **hygiene sprint as a first-class proposal**; cross-lane items get commissioned via the bus rather than re-flagged in your own state.
+2. **Reflection-findings carry-forward.** The registry gains a third section, **Reflection follow-ups**. `/mama:reflect` writes its "surfaced for follow-up" findings there (with date); the sprint-prep walk carries them with the same forcing function. This fixes reflection outputs rotting between reflections.
+3. **Plan-outcome reachability check (`arch-sprint-prep`).** Symmetric partner to the plan-component reality check: for each success criterion / verification gate, confirm every step to *reach* it is in-scope or already-shipped. A gate that depends on a step the plan defers is a latent inconsistency — reframe it. Catches the "plan promises a result it can't reach with what it's holding" error that hides behind the component check passing.
+4. **arch-sprint-complete memory-discipline sharpening.** (a) Current Status / Next Steps blocks must describe the *just-closed* sprint — rewrite in place (they go stale-and-misleading, not just stale); (b) write the new Sprint History band tight, and tighten the most-recent band when compacting, so dense-band gravity doesn't propagate; (c) the cluster-check is now section-budget-aware (catches the already-huge section, not just the rule that clusters); (d) Claude Code auto-memory (`MEMORY.md` + per-fact files) joins the memorialization-ownership table (arch-owned, single-writer-at-close, compaction is arch's job).
+
+**Behaviors to unlearn.**
+
+- **Don't re-surface a structural-fix candidate every reflection without scheduling it.** The forcing function now makes "carried 3 reflects" a schedule-or-justify decision, and accumulation a hygiene-sprint proposal. Re-flagging without acting is the failure mode the loop closes.
+- **Don't let a `/mama:reflect` "surfaced for follow-up" finding live only in the summary.** Write it to the registry's Reflection follow-ups section; otherwise it evaporates and gets rediscovered (larger) next reflection.
+- **Don't trust a plan because its nouns check out.** Component-existence and outcome-reachability are separate questions; a plan can be component-correct and outcome-incoherent at once. Read each gate against what the plan defers.
+- **Don't append a fresh status block above a stale one.** Current Status / Next Steps get rewritten in place — move-not-strike applies to your own running-status prose, not just tech debt.
+- **Don't add the Nth rule to an already-large CLAUDE.md section just because the rule itself passes the gate.** If the destination section is over budget (~40 lines / ~6 rules), the move is demote-to-reference-doc, filed as a structural-fix candidate.
+- **Don't co-write the Claude Code auto-memory surface with impl uncoordinated.** It's arch-owned now, single-writer-at-close, like the other auto-loaded surfaces.
+
+**Action items for the user.**
+
+- No code action required. The registry's third section appears the next time `/mama:reflect` or `arch-sprint-complete` writes to it.
+- **If you have structural-fix candidates that have sat across multiple reflections** (the schema-form cluster, the Cytoscape pile, etc.): the next `arch-sprint-prep` will now force a schedule-or-justify on them, and propose a hygiene sprint if 3+ are open. Expect it to surface that debt — that's the point.
+
 ---
 
 *Future transitions will be added here as the methodology evolves.*

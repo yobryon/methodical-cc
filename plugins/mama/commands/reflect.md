@@ -168,4 +168,10 @@ Feedback artifact: tmp/mama_reflection_{date}.md (written)
 
 This single summary replaces the back-and-forth that default mode would have produced. The user reads it, eyeballs the diff, and commits when ready.
 
+## Don't let "surfaced for follow-up" rot
+
+Every item in the **Surfaced for follow-up** list (both modes — `--apply` and the default-mode equivalent) must be **written to `methodology_holds.md`** under its **Reflection follow-ups** section before you finish, with the reflection date. A surfaced-not-applied finding with no home evaporates and gets rediscovered, larger, at the next reflection — the exact rot the registry exists to prevent.
+
+If `methodology_holds.md` doesn't exist yet and this reflection surfaced follow-ups, that's the signal to create it (see the `multi-agent-methodology` skill for the shape). The sprint-prep Methodology-Holds Walk then carries these forward with a forcing function — aged items get a schedule-or-justify binary, and accumulation triggers a hygiene-sprint proposal. The reflection surfaces; the registry remembers; sprint-prep forces the decision.
+
 $ARGUMENTS
