@@ -12,7 +12,7 @@ _mcc_complete() {
 
     # ---- Top level: subcommands ∪ registered session names ----
     if (( cword == 1 )); then
-        local subs="completions create disable docs enable list migrate reflect session setup status switch team update version vscode help"
+        local subs="completions create disable docs enable list migrate reflect session setup status switch team term update version vscode help"
         local sessions
         sessions=$(mcc complete --kind session 2>/dev/null)
         COMPREPLY=( $(compgen -W "${subs} ${sessions}" -- "${cur}") )
@@ -60,6 +60,14 @@ _mcc_complete() {
         team)
             if (( cword == 2 )); then
                 COMPREPLY=( $(compgen -W "setup status" -- "$cur") )
+                return
+            fi
+            cmd2="${words[2]}"
+            args_start=3
+            ;;
+        term)
+            if (( cword == 2 )); then
+                COMPREPLY=( $(compgen -W "ls up" -- "$cur") )
                 return
             fi
             cmd2="${words[2]}"
@@ -115,7 +123,7 @@ _mcc_complete() {
         --shell)
             COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
             return ;;
-        --kind|--name|--repo)
+        --kind|--name|--repo|--terminal)
             return ;;
     esac
 
@@ -137,6 +145,7 @@ _mcc_complete() {
             session:set)  flags="--scope" ;;
             session:transcript)  flags="--chronological --include-compact-summaries --include-harness-commands --include-meta --include-thinking --live-branch --output --post-compact-only" ;;
             team:setup)  flags="--name" ;;
+            term:up)  flags="--dry-run --terminal" ;;
             vscode:)  flags="--group --group-by --no-folder-open" ;;
         esac
         COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
@@ -148,7 +157,7 @@ _mcc_complete() {
     for ((i=args_start; i<cword; i++)); do
         w="${words[$i]}"
         case "$w" in
-            --group|--group-by|--kind|--name|--output|--persona|--plugin|--rc-file|--repo|--scope|--shell)
+            --group|--group-by|--kind|--name|--output|--persona|--plugin|--rc-file|--repo|--scope|--shell|--terminal)
                 ((i++)) ;;
             --*)
                 ;;

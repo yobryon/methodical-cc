@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.19.3"
+MCC_VERSION = "1.20.0"
 
 import json
 import time
@@ -1131,6 +1131,338 @@ def cmd_vscode(args):
     print()
     aggregator_hint = "mcc:all" if group_by == "none" else "mcc:all (or mcc:all:<group>)"
     print(f"In VS Code: Cmd/Ctrl+Shift+P → 'Tasks: Run Task' → {aggregator_hint} or any individual mcc:<name>")
+
+
+# ----------------------------- Terminal arrangements (mcc term) ---------------
+#
+# `.mcc/term` declares how this project's sessions are laid out across terminal
+# tabs and panes. It is the single source of truth that `mcc term` renders into
+# a live terminal (Windows Terminal today) and that `mcc vscode` will later
+# render into tasks.json. Each renderer honors what its surface can express and
+# silently degrades the rest (vscode can't place arbitrary grids, so it keeps
+# grouping + autostart and drops geometry).
+#
+# Format (INI, parsed with configparser):
+#
+#   [term]
+#   window  = cc-{dir}            # wt -w target; {dir}=project dir, {slug}=sanitized
+#   default = mcc {name}          # per-pane command template; {name}=leaf name
+#   profile = Ubuntu              # wt profile (-p) panes launch under; inherits
+#                                 # the launching shell's cwd ('distro' alias ok)
+#
+#   [tab.core]
+#   layout = mcc | mcc-docs                #  | columns, / rows, () nesting, name@40 size
+#
+#   [tab.support]
+#   layout    = (mcc / mcc-docs) | mcc-term
+#   autostart = true                       # vscode-only hint; ignored by wt
+#   cmd.mcc-term = mcc mcc-term            # per-pane command override
+#
+# The layout is a small slicing grammar: leaves are session names, `|` splits a
+# region into columns, `/` into rows, parentheses nest, and `name@40` pins a
+# pane to 40% of its split. Any guillotine (X-by-Y) grid is expressible; a
+# non-slicing pinwheel is intentionally not.
+
+class TermError(Exception):
+    """Raised on a malformed .mcc/term layout expression."""
+
+
+_LAYOUT_LEAF_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*")
+_LAYOUT_SIZE_RE = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _lex_layout(expr):
+    """Tokenize a layout expression into '(' ')' '|' '/' and ('NAME', name, size)."""
+    toks = []
+    i = 0
+    while i < len(expr):
+        c = expr[i]
+        if c.isspace():
+            i += 1
+            continue
+        if c in "()|/":
+            toks.append(c)
+            i += 1
+            continue
+        m = _LAYOUT_LEAF_RE.match(expr, i)
+        if not m:
+            raise TermError(f"unexpected character {c!r} in layout {expr!r}")
+        name = m.group(0)
+        i = m.end()
+        size = None
+        if i < len(expr) and expr[i] == "@":
+            sm = _LAYOUT_SIZE_RE.match(expr, i + 1)
+            if not sm:
+                raise TermError(f"expected a number after '@' in layout {expr!r}")
+            size = float(sm.group(0))
+            if size > 1:  # accept either 40 or 0.4
+                size /= 100.0
+            i = sm.end()
+        toks.append(("NAME", name, size))
+    return toks
+
+
+def _parse_layout(expr):
+    """Parse a layout expression into a tree.
+
+    Leaf nodes are {"name": str, "size": float|None}; split nodes are
+    {"op": "|"|"/", "children": [...]}. Operators at one level must match;
+    mix them only via parentheses.
+    """
+    toks = _lex_layout(expr)
+    if not toks:
+        raise TermError("empty layout")
+    pos = [0]
+
+    def peek():
+        return toks[pos[0]] if pos[0] < len(toks) else None
+
+    def advance():
+        t = toks[pos[0]]
+        pos[0] += 1
+        return t
+
+    def parse_operand():
+        t = peek()
+        if t == "(":
+            advance()
+            node = parse_expr()
+            if peek() != ")":
+                raise TermError(f"missing ')' in layout {expr!r}")
+            advance()
+            return node
+        if isinstance(t, tuple) and t[0] == "NAME":
+            advance()
+            return {"name": t[1], "size": t[2]}
+        raise TermError(f"expected a session name or '(' in layout {expr!r}")
+
+    def parse_expr():
+        operands = [parse_operand()]
+        ops = []
+        while peek() in ("|", "/"):
+            ops.append(advance())
+            operands.append(parse_operand())
+        if not ops:
+            return operands[0]
+        if len(set(ops)) > 1:
+            raise TermError(
+                f"mixed '|' and '/' at the same level — parenthesize: {expr!r}")
+        return {"op": ops[0], "children": operands}
+
+    node = parse_expr()
+    if pos[0] != len(toks):
+        raise TermError(f"trailing tokens in layout {expr!r}")
+    return node
+
+
+def _layout_leaves(node):
+    if "name" in node:
+        return [node["name"]]
+    out = []
+    for c in node["children"]:
+        out.extend(_layout_leaves(c))
+    return out
+
+
+def _first_leaf(node):
+    while "name" not in node:
+        node = node["children"][0]
+    return node
+
+
+def _pane_prog(cmd):
+    """Pane commandline: a login-interactive bash so the user's PATH/aliases
+    (incl. `mcc`) resolve. Spawned via wt's `-p <profile>` (see _compile_tab_ops)
+    rather than `wsl.exe -d <distro>` because the profile inherits the launching
+    shell's working directory — so project-relative state (.mcc/sessions) is
+    found, whereas a fresh `wsl.exe` login starts in $HOME and can't see it."""
+    return ["bash", "-lic", cmd]
+
+
+def _compile_tab_ops(tab_title, node, resolve_cmd, profile):
+    """Compile one tab's layout tree into an ordered list of wt subcommand
+    token-lists (`nt ...`, `sp ...`, `mf ...`). resolve_cmd(name) returns the
+    pane program token list for a leaf.
+
+    Geometry is built outer-split-first so spanning panes span: a split carves
+    the full region before either half is subdivided. Focus walks back with
+    `mf` after each subtree so siblings land in the right place.
+    """
+    # --suppressApplicationTitle keeps our --title from being clobbered by the
+    # app running in the pane (e.g. claude rewriting the tab title). Every pane
+    # needs it — any unsuppressed pane can rewrite the shared tab title.
+    ops = [["nt", "--title", tab_title, "--suppressApplicationTitle", "-p", profile]
+           + resolve_cmd(_first_leaf(node)["name"])]
+
+    def render(n):
+        if "name" in n:  # leaf — already spawned by the caller's nt/sp
+            return
+        axis = "-V" if n["op"] == "|" else "-H"
+        back = "left" if n["op"] == "|" else "up"
+        children = n["children"]
+        count = len(children)
+        # Target fraction of the region for each child: pinned leaves take their
+        # @size, everything else shares the remainder evenly. (A parenthesized
+        # group can't be pinned — only leaves carry a size.)
+        fixed = {i: c["size"] for i, c in enumerate(children)
+                 if "name" in c and c.get("size") is not None}
+        used = sum(fixed.values())
+        if used >= 1.0:  # over-pinned — fall back to even rather than degenerate
+            fixed, used = {}, 0.0
+        free = count - len(fixed)
+        even = (1.0 - used) / free if free else 0.0
+        frac = [fixed.get(i, even) for i in range(count)]
+        # Slice the growing tail. wt's --size is the *new* pane's share of the
+        # pane being split, so the split that places child i fixes child i-1's
+        # final region: S_i = 1 - frac[i-1]/P, where P is the running tail size.
+        tail = 1.0
+        for i in range(1, count):
+            size = min(max(1.0 - frac[i - 1] / tail, 0.05), 0.95)
+            ops.append(["sp", axis, "--size", f"{size:.3f}",
+                        "--suppressApplicationTitle", "-p", profile]
+                       + resolve_cmd(_first_leaf(children[i])["name"]))
+            tail *= size
+        # Subdivide right-to-left, stepping focus back toward the first sibling.
+        for i in range(count - 1, -1, -1):
+            render(children[i])
+            if i > 0:
+                ops.append(["mf", back])
+
+    render(node)
+    return ops
+
+
+def _render_term_dryrun(window, ops):
+    """Render the flattened op list as a copy-pasteable WSL bash command line."""
+    lines = [f"wt.exe -w {shlex.quote(window)} \\"]
+    last = len(ops) - 1
+    for i, op in enumerate(ops):
+        body = " ".join(shlex.quote(t) for t in op)
+        lines.append(f"  {body}" + (" \\; \\" if i < last else ""))
+    return "\n".join(lines)
+
+
+def _load_term_config():
+    """Locate and parse .mcc[-scope]/term. Returns (path, ConfigParser)."""
+    import configparser
+    path = None
+    for d in find_state_dirs():
+        p = d / "term"
+        if p.exists():
+            path = p
+            break
+    if path is None:
+        die("no .mcc/term found. Create one (see `mcc term -h`) and try again.")
+    cp = configparser.ConfigParser()
+    cp.optionxform = str  # preserve case in keys (session names, cmd.<name>)
+    try:
+        cp.read(path, encoding="utf-8")
+    except configparser.Error as e:
+        die(f"could not parse {path}: {e}")
+    return path, cp
+
+
+def _build_term_model(cp):
+    """Resolve a parsed .mcc/term into {window, default, distro, tabs[]}."""
+    g = cp["term"] if cp.has_section("term") else {}
+    window_tmpl = g.get("window", "cc-{dir}")
+    default_tmpl = g.get("default", "mcc {name}")
+    # wt profile (-p) the panes launch under; inherits the launching shell's cwd.
+    # `distro` accepted as a back-compat alias.
+    profile = (g.get("profile") or g.get("distro")
+               or os.environ.get("WSL_DISTRO_NAME") or "Ubuntu")
+
+    dirname = Path.cwd().name
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", dirname).strip("-").lower() or "project"
+    window = window_tmpl.replace("{dir}", dirname).replace("{slug}", slug)
+
+    tabs = []
+    for sec in cp.sections():
+        if not sec.startswith("tab."):
+            continue
+        title = sec[len("tab."):]
+        layout = cp[sec].get("layout")
+        if not layout:
+            die(f"[{sec}] in .mcc/term has no 'layout'")
+        try:
+            tree = _parse_layout(layout)
+        except TermError as e:
+            die(f"[{sec}] layout error: {e}")
+        overrides = {k[len("cmd."):]: v for k, v in cp[sec].items()
+                     if k.startswith("cmd.")}
+        autostart = cp[sec].get("autostart", "false").strip().lower() in (
+            "1", "true", "yes", "on")
+        tabs.append({"title": title, "tree": tree, "cmd": overrides,
+                     "autostart": autostart, "layout": layout.strip()})
+    if not tabs:
+        die("no [tab.*] sections in .mcc/term")
+    return {"window": window, "default": default_tmpl, "profile": profile, "tabs": tabs}
+
+
+def _select_term_tabs(model, wanted):
+    if not wanted:
+        return model["tabs"]
+    known = {t["title"] for t in model["tabs"]}
+    unknown = [w for w in wanted if w not in known]
+    if unknown:
+        die(f"unknown tab(s): {', '.join(unknown)}. Known: {', '.join(sorted(known))}")
+    return [t for t in model["tabs"] if t["title"] in wanted]
+
+
+def _compile_term(model, tabs):
+    """Flatten selected tabs into one ordered wt op list."""
+    all_ops = []
+    for t in tabs:
+        def resolve(name, t=t):
+            raw = t["cmd"].get(name) or model["default"].replace("{name}", name)
+            return _pane_prog(raw)
+        all_ops.extend(_compile_tab_ops(t["title"], t["tree"], resolve, model["profile"]))
+    return all_ops
+
+
+def cmd_term_ls(args):
+    path, cp = _load_term_config()
+    model = _build_term_model(cp)
+    print(f"{path}")
+    print(f"  window '{model['window']}'  profile '{model['profile']}'  "
+          f"default '{model['default']}'")
+    for t in model["tabs"]:
+        star = "  *autostart" if t["autostart"] else ""
+        print(f"  [tab.{t['title']}]{star}")
+        print(f"      layout: {t['layout']}")
+        print(f"      panes:  {', '.join(_layout_leaves(t['tree']))}")
+        for name, cmd in t["cmd"].items():
+            print(f"      cmd.{name}: {cmd}")
+
+
+def cmd_term_up(args):
+    path, cp = _load_term_config()
+    model = _build_term_model(cp)
+    tabs = _select_term_tabs(model, list(args.tabs or []))
+    ops = _compile_term(model, tabs)
+
+    if args.dry_run:
+        print(f"# from {path}  -> wt window '{model['window']}', "
+              f"profile '{model['profile']}'")
+        print(f"# tabs: {', '.join(t['title'] for t in tabs)}")
+        print(_render_term_dryrun(model["window"], ops))
+        return
+
+    # Live launch: drive wt.exe directly (no shell, so ';' separators are passed
+    # as literal argv tokens rather than being eaten by bash).
+    argv = ["wt.exe", "-w", model["window"]]
+    for i, op in enumerate(ops):
+        if i:
+            argv.append(";")
+        argv.extend(op)
+    try:
+        rc = subprocess.run(argv).returncode
+    except FileNotFoundError:
+        die("wt.exe not found on PATH. Run from WSL with Windows interop "
+            "enabled, or use `mcc term up --dry-run` to print the command.")
+    if rc != 0:
+        die(f"wt.exe exited {rc}", code=rc)
+    print(f"Launched {len(tabs)} tab(s) into window '{model['window']}'.")
 
 
 # ----------------------------- Session transcript -----------------------------
@@ -4186,6 +4518,28 @@ def build_parser():
          help="don't auto-run anything on folder open")
     pv.set_defaults(func=cmd_vscode)
 
+    # --- term ---
+    pterm = sub.add_parser(
+        "term",
+        help="render .mcc/term into a terminal (wt.exe)",
+        description=(
+            "Render the .mcc/term arrangement into a live terminal.\n"
+            "Currently targets Windows Terminal (wt.exe) from WSL.\n"
+            "Use `up --dry-run` to print the exact command without running it."),
+    )
+    pterm_sub = pterm.add_subparsers(dest="term_cmd", metavar="<verb>")
+    pterm_up = pterm_sub.add_parser(
+        "up", help="launch the arrangement (or --dry-run to print it)")
+    _arg(pterm_up, "tabs", nargs="*", help="tab names to launch (default: all)")
+    _arg(pterm_up, "--dry-run", action="store_true",
+         help="print the wt.exe command instead of running it")
+    _arg(pterm_up, "--terminal", choices=("wt",), default="wt",
+         help="terminal backend (only 'wt' for now)")
+    pterm_up.set_defaults(func=cmd_term_up)
+    pterm_ls = pterm_sub.add_parser("ls", help="show tabs/panes defined in .mcc/term")
+    pterm_ls.set_defaults(func=cmd_term_ls)
+    pterm.set_defaults(func=lambda a: pterm.print_help())
+
     # --- team ---
     pt = sub.add_parser("team", help="bus team: setup, status")
     pt_sub = pt.add_subparsers(dest="team_cmd", metavar="<verb>")
@@ -4357,6 +4711,7 @@ TOP_HELP_GROUPS = [
     ("Project", [
         ("status",  "Show plugin state and registered sessions"),
         ("vscode",  "Bootstrap .vscode/tasks.json with session tasks"),
+        ("term",    "Render .mcc/term into a terminal (`mcc term -h`)"),
         ("team",    "Bus team setup/status (`mcc team -h`)"),
         ("docs",    "Stakeholder docs publish/pull (`mcc docs -h`)"),
         ("migrate", "Migrate legacy .mam/.mama/.pdt[-scope]/ state dirs"),
