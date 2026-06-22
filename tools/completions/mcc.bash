@@ -67,7 +67,7 @@ _mcc_complete() {
             ;;
         term)
             if (( cword == 2 )); then
-                COMPREPLY=( $(compgen -W "ls up" -- "$cur") )
+                COMPREPLY=( $(compgen -W "init ls up" -- "$cur") )
                 return
             fi
             cmd2="${words[2]}"
@@ -145,6 +145,7 @@ _mcc_complete() {
             session:set)  flags="--scope" ;;
             session:transcript)  flags="--chronological --include-compact-summaries --include-harness-commands --include-meta --include-thinking --live-branch --output --post-compact-only" ;;
             team:setup)  flags="--name" ;;
+            term:init)  flags="--force" ;;
             term:up)  flags="--dry-run --terminal" ;;
             vscode:)  flags="--group --group-by --no-folder-open" ;;
         esac
