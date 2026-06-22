@@ -147,7 +147,7 @@ _mcc_complete() {
             team:setup)  flags="--name" ;;
             term:init)  flags="--force" ;;
             term:up)  flags="--dry-run --terminal" ;;
-            vscode:)  flags="--group --group-by --no-folder-open" ;;
+            vscode:)  flags="--group --group-by --no-folder-open --no-term" ;;
         esac
         COMPREPLY=( $(compgen -W "$flags" -- "$cur") )
         return

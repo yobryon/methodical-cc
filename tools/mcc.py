@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.21.0"
+MCC_VERSION = "1.22.0"
 
 import json
 import time
@@ -720,11 +720,11 @@ def _strip_jsonc_comments(text):
     return "\n".join(out_lines)
 
 
-def _make_session_task(name, group="personas"):
+def _make_session_task(name, group="personas", command=None):
     return {
         "label": f"mcc:{name}",
         "type": "shell",
-        "command": f"mcc {name}",
+        "command": command or f"mcc {name}",
         "isBackground": True,
         "presentation": {
             "reveal": "always",
@@ -747,6 +747,43 @@ def _make_aggregator_task(label, dep_names, run_on_folder_open=False):
     if run_on_folder_open:
         task["runOptions"] = {"runOn": "folderOpen"}
     return task
+
+
+def _write_vscode_tasks(new_mcc_tasks):
+    """Merge new mcc:* tasks into .vscode/tasks.json, preserving every non-mcc
+    task. Returns (tasks_file, had_comments). Shared by the interactive
+    `mcc vscode` flow and the `.mcc/term` projection."""
+    vscode_dir = Path(".vscode")
+    tasks_file = vscode_dir / "tasks.json"
+    config = {"version": "2.0.0", "tasks": []}
+    had_comments = False
+    if tasks_file.exists():
+        text = tasks_file.read_text(encoding="utf-8", errors="replace")
+        if "//" in text or "/*" in text:
+            had_comments = True
+        try:
+            config = json.loads(_strip_jsonc_comments(text))
+        except json.JSONDecodeError as e:
+            die(f"could not parse {tasks_file}: {e}")
+        if not isinstance(config, dict):
+            die(f"{tasks_file} is not a JSON object; refusing to overwrite.")
+        if "tasks" not in config or not isinstance(config["tasks"], list):
+            config["tasks"] = []
+        if "version" not in config:
+            config["version"] = "2.0.0"
+
+    # Replace existing mcc:* tasks; preserve everything else
+    other_tasks = [
+        t for t in config["tasks"]
+        if not (isinstance(t, dict)
+                and isinstance(t.get("label"), str)
+                and t["label"].startswith("mcc:"))
+    ]
+    config["tasks"] = other_tasks + new_mcc_tasks
+
+    vscode_dir.mkdir(exist_ok=True)
+    tasks_file.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    return tasks_file, had_comments
 
 
 def _parse_selection(raw, registered):
@@ -837,10 +874,38 @@ def cmd_vscode(args):
 
     Auto-run on folder open is opt-in per group (default: none) in scope/custom
     mode. Single-project ('none' mode) auto-runs `mcc:all` by default.
+
+    Source of truth: if .mcc/term exists it is projected into tasks.json
+    (tabs -> groups, layouts collapsed since VSCode can't place grids). Pass
+    --no-term to ignore it and use the interactive/CLI flow below.
     """
     no_folder_open = bool(args.no_folder_open)
     group_by = args.group_by  # may be None; resolved below
     cli_args = list(args.tokens or [])
+
+    # --- .mcc/term projection (source of truth when present) ---
+    term_path = None if getattr(args, "no_term", False) else _find_existing_term_file()
+    if term_path is not None:
+        model = _build_term_model(_read_term_cp(term_path))
+        # Positional tokens select tabs by title (mirrors `mcc term up`).
+        tabs = _select_term_tabs(model, cli_args)
+        new_tasks, dupes = _term_to_vscode_tasks(model, tabs, no_folder_open)
+        tasks_file, had_comments = _write_vscode_tasks(new_tasks)
+        print(f"Wrote {tasks_file} from {term_path}  ({len(tabs)} tab(s))")
+        for t in tabs:
+            members = ", ".join(_layout_leaves(t["tree"]))
+            tag = " (auto-run on folder open)" if t["autostart"] and not no_folder_open else ""
+            print(f"  [{t['title']}] {members}{tag}")
+        for name, owner, skipped in dupes:
+            print(f"  ! '{name}' in both '{owner}' and '{skipped}' — kept '{owner}'")
+        if had_comments:
+            print("  ! existing JSONC comments were dropped on write")
+        print("  note: pane grid geometry isn't represented — VSCode splits "
+              "share one terminal group per tab.")
+        print()
+        print("In VS Code: Cmd/Ctrl+Shift+P → 'Tasks: Run Task' → "
+              "mcc:all (or mcc:all:<tab>) or any mcc:<name>")
+        return
 
     # Parse repeated --group label=name1,name2 specs
     custom_groups = []  # list of (label, [names])
@@ -1087,36 +1152,7 @@ def cmd_vscode(args):
         "mcc:all", names, run_on_folder_open=auto_run_top
     ))
 
-    vscode_dir = Path(".vscode")
-    tasks_file = vscode_dir / "tasks.json"
-    config = {"version": "2.0.0", "tasks": []}
-    had_comments = False
-    if tasks_file.exists():
-        text = tasks_file.read_text(encoding="utf-8", errors="replace")
-        if "//" in text or "/*" in text:
-            had_comments = True
-        try:
-            config = json.loads(_strip_jsonc_comments(text))
-        except json.JSONDecodeError as e:
-            die(f"could not parse {tasks_file}: {e}")
-        if not isinstance(config, dict):
-            die(f"{tasks_file} is not a JSON object; refusing to overwrite.")
-        if "tasks" not in config or not isinstance(config["tasks"], list):
-            config["tasks"] = []
-        if "version" not in config:
-            config["version"] = "2.0.0"
-
-    # Replace existing mcc:* tasks; preserve everything else
-    other_tasks = [
-        t for t in config["tasks"]
-        if not (isinstance(t, dict)
-                and isinstance(t.get("label"), str)
-                and t["label"].startswith("mcc:"))
-    ]
-    config["tasks"] = other_tasks + new_mcc_tasks
-
-    vscode_dir.mkdir(exist_ok=True)
-    tasks_file.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    tasks_file, had_comments = _write_vscode_tasks(new_mcc_tasks)
 
     print(f"Wrote {tasks_file} with mcc tasks for: {', '.join(names)}")
     print(f"  group-by: {group_by}")
@@ -1131,6 +1167,10 @@ def cmd_vscode(args):
     print()
     aggregator_hint = "mcc:all" if group_by == "none" else "mcc:all (or mcc:all:<group>)"
     print(f"In VS Code: Cmd/Ctrl+Shift+P → 'Tasks: Run Task' → {aggregator_hint} or any individual mcc:<name>")
+    if _find_existing_term_file() is None:
+        print()
+        print("Tip: `mcc term init` captures this as a portable .mcc/term that "
+              "also drives `mcc term up` (Windows Terminal) and future `mcc vscode` runs.")
 
 
 # ----------------------------- Terminal arrangements (mcc term) ---------------
@@ -1342,24 +1382,70 @@ def _render_term_dryrun(window, ops):
     return "\n".join(lines)
 
 
-def _load_term_config():
-    """Locate and parse .mcc[-scope]/term. Returns (path, ConfigParser)."""
-    import configparser
-    path = None
+def _find_existing_term_file():
+    """Return the first .mcc[-scope]/term that exists, or None."""
     for d in find_state_dirs():
         p = d / "term"
         if p.exists():
-            path = p
-            break
-    if path is None:
-        die("no .mcc/term found. Create one (see `mcc term -h`) and try again.")
+            return p
+    return None
+
+
+def _read_term_cp(path):
+    import configparser
     cp = configparser.ConfigParser()
     cp.optionxform = str  # preserve case in keys (session names, cmd.<name>)
     try:
         cp.read(path, encoding="utf-8")
     except configparser.Error as e:
         die(f"could not parse {path}: {e}")
-    return path, cp
+    return cp
+
+
+def _load_term_config():
+    """Locate and parse .mcc[-scope]/term. Returns (path, ConfigParser)."""
+    path = _find_existing_term_file()
+    if path is None:
+        die("no .mcc/term found. Create one with `mcc term init` and try again.")
+    return path, _read_term_cp(path)
+
+
+def _term_to_vscode_tasks(model, tabs, no_folder_open=False):
+    """Project a .mcc/term model into VSCode task dicts.
+
+    VSCode can't place arbitrary grids, so geometry is dropped: a tab's layout
+    leaves become split-terminal tasks sharing one presentation group, and
+    `autostart` maps to runOn=folderOpen on that tab's aggregator. Per-pane
+    command overrides and the `default` template are honored.
+
+    A session that appears in more than one tab can't map to a unique task
+    label; the first occurrence wins and the rest are returned as `dupes`.
+    """
+    single = len(tabs) == 1
+    new_tasks = []
+    seen = {}  # name -> tab title that owns its task
+    dupes = []  # (name, owning_title, skipped_title)
+    for t in tabs:
+        group = f"personas:{t['title']}"
+        for name in _layout_leaves(t["tree"]):
+            if name in seen:
+                dupes.append((name, seen[name], t["title"]))
+                continue
+            seen[name] = t["title"]
+            cmd = t["cmd"].get(name) or model["default"].replace("{name}", name)
+            new_tasks.append(_make_session_task(name, group=group, command=cmd))
+
+    if not single:
+        for t in tabs:
+            members = [n for n in _layout_leaves(t["tree"]) if seen.get(n) == t["title"]]
+            new_tasks.append(_make_aggregator_task(
+                f"mcc:all:{t['title']}", members,
+                run_on_folder_open=t["autostart"] and not no_folder_open))
+
+    top_auto = single and tabs[0]["autostart"] and not no_folder_open
+    new_tasks.append(_make_aggregator_task("mcc:all", list(seen.keys()),
+                                           run_on_folder_open=top_auto))
+    return new_tasks, dupes
 
 
 def _build_term_model(cp):
@@ -4642,6 +4728,8 @@ def build_parser():
          complete="group_label_eq_csv")
     _arg(pv, "--no-folder-open", action="store_true",
          help="don't auto-run anything on folder open")
+    _arg(pv, "--no-term", action="store_true",
+         help="ignore .mcc/term and use the interactive/CLI flow")
     pv.set_defaults(func=cmd_vscode)
 
     # --- term ---
