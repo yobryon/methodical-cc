@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.23.0"
+MCC_VERSION = "1.24.0"
 
 import json
 import time
@@ -1338,7 +1338,7 @@ def _pane_prog(cmd, shell, wrap=None):
     return ["bash", "-lic", cmd]  # default
 
 
-def _compile_tab_ops(tab_title, node, resolve_cmd, profile):
+def _compile_tab_ops(tab_title, node, resolve_cmd, profile, start_dir=None):
     """Compile one tab's layout tree into an ordered list of wt subcommand
     token-lists (`nt ...`, `sp ...`, `mf ...`). resolve_cmd(name) returns the
     pane program token list for a leaf.
@@ -1346,11 +1346,16 @@ def _compile_tab_ops(tab_title, node, resolve_cmd, profile):
     Geometry is built outer-split-first so spanning panes span: a split carves
     the full region before either half is subdivided. Focus walks back with
     `mf` after each subtree so siblings land in the right place.
+
+    start_dir, when given, pins every pane's working directory via `-d` so the
+    pane lands in the project (not the wt profile's startingDirectory). Used on
+    Windows where profile cwd-inheritance is unreliable.
     """
     # --suppressApplicationTitle keeps our --title from being clobbered by the
     # app running in the pane (e.g. claude rewriting the tab title). Every pane
     # needs it — any unsuppressed pane can rewrite the shared tab title.
-    ops = [["nt", "--title", tab_title, "--suppressApplicationTitle", "-p", profile]
+    pane_opts = (["-d", start_dir] if start_dir else []) + ["-p", profile]
+    ops = [["nt", "--title", tab_title, "--suppressApplicationTitle"] + pane_opts
            + resolve_cmd(_first_leaf(node)["name"])]
 
     def render(n):
@@ -1378,7 +1383,7 @@ def _compile_tab_ops(tab_title, node, resolve_cmd, profile):
         for i in range(1, count):
             size = min(max(1.0 - frac[i - 1] / tail, 0.05), 0.95)
             ops.append(["sp", axis, "--size", f"{size:.3f}",
-                        "--suppressApplicationTitle", "-p", profile]
+                        "--suppressApplicationTitle"] + pane_opts
                        + resolve_cmd(_first_leaf(children[i])["name"]))
             tail *= size
         # Subdivide right-to-left, stepping focus back toward the first sibling.
@@ -1539,12 +1544,19 @@ def _select_term_tabs(model, wanted):
 
 def _compile_term(model, tabs):
     """Flatten selected tabs into one ordered wt op list."""
+    # On Windows, pin the pane cwd to the project dir via `-d`: launching wt
+    # fresh uses the profile's startingDirectory, not the caller's, so a bare
+    # `mcc <name>` would run somewhere without .mcc/. On WSL/posix the wt.exe
+    # `-d` would need a Windows-form path; profile cwd-inheritance works there,
+    # so we leave it unpinned.
+    start_dir = os.getcwd() if is_windows() else None
     all_ops = []
     for t in tabs:
         def resolve(name, t=t):
             raw = t["cmd"].get(name) or model["default"].replace("{name}", name)
             return _pane_prog(raw, model["shell"], model.get("wrap"))
-        all_ops.extend(_compile_tab_ops(t["title"], t["tree"], resolve, model["profile"]))
+        all_ops.extend(_compile_tab_ops(t["title"], t["tree"], resolve,
+                                        model["profile"], start_dir))
     return all_ops
 
 
