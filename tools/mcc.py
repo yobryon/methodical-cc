@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.22.0"
+MCC_VERSION = "1.23.0"
 
 import json
 import time
@@ -1189,6 +1189,9 @@ def cmd_vscode(args):
 #   default = mcc {name}          # per-pane command template; {name}=leaf name
 #   profile = Ubuntu              # wt profile (-p) panes launch under; inherits
 #                                 # the launching shell's cwd ('distro' alias ok)
+#   shell   = bash                # wrapper for pane commands: bash | cmd |
+#                                 # powershell | none. Default: cmd on Windows,
+#                                 # bash elsewhere. (Or wrap = cmd /k {cmd}.)
 #
 #   [tab.core]
 #   layout = mcc | mcc-docs                #  | columns, / rows, () nesting, name@40 size
@@ -1310,13 +1313,29 @@ def _first_leaf(node):
     return node
 
 
-def _pane_prog(cmd):
-    """Pane commandline: a login-interactive bash so the user's PATH/aliases
-    (incl. `mcc`) resolve. Spawned via wt's `-p <profile>` (see _compile_tab_ops)
-    rather than `wsl.exe -d <distro>` because the profile inherits the launching
-    shell's working directory — so project-relative state (.mcc/sessions) is
-    found, whereas a fresh `wsl.exe` login starts in $HOME and can't see it."""
-    return ["bash", "-lic", cmd]
+def _pane_prog(cmd, shell, wrap=None):
+    """Wrap a pane command for the chosen shell so the user's PATH/aliases
+    (incl. `mcc`) resolve and a bare `mcc <name>` (which may be a .cmd/.bat shim
+    on Windows) actually runs.
+
+    Spawned via wt's `-p <profile>` (see _compile_tab_ops) rather than
+    `wsl.exe -d <distro>` because the profile inherits the launching shell's
+    working directory — so project-relative state (.mcc/sessions) is found.
+
+    `wrap` (a template containing the literal token `{cmd}`) overrides `shell`
+    for full control, e.g. `wrap = cmd /k {cmd}`.
+    """
+    if wrap:
+        return [cmd if t == "{cmd}" else t for t in wrap.split()]
+    s = (shell or "").lower()
+    if s == "cmd":
+        return ["cmd", "/c", cmd]
+    if s in ("powershell", "pwsh"):
+        exe = "pwsh" if s == "pwsh" else "powershell"
+        return [exe, "-NoLogo", "-Command", cmd]
+    if s == "none":
+        return shlex.split(cmd)
+    return ["bash", "-lic", cmd]  # default
 
 
 def _compile_tab_ops(tab_title, node, resolve_cmd, profile):
@@ -1372,13 +1391,27 @@ def _compile_tab_ops(tab_title, node, resolve_cmd, profile):
     return ops
 
 
+def _cmd_quote(tok):
+    """Quote a token for a Windows cmd command line (double quotes)."""
+    if tok and not any(c in tok for c in ' \t"^&|<>;()'):
+        return tok
+    return '"' + tok.replace('"', '""') + '"'
+
+
 def _render_term_dryrun(window, ops):
-    """Render the flattened op list as a copy-pasteable WSL bash command line."""
-    lines = [f"wt.exe -w {shlex.quote(window)} \\"]
+    """Render the flattened op list as a copy-pasteable command line in the
+    syntax of the shell mcc is running in: bash (`\\;` separators, `\\` line
+    continuations, single-quote) on posix/WSL, cmd (`;` separators, `^` line
+    continuations, double-quote) on Windows."""
+    if is_windows():
+        quote, sep, cont, head = _cmd_quote, " ; ^", " ^", "wt.exe -w {} ^"
+    else:
+        quote, sep, cont, head = shlex.quote, " \\; \\", " \\", "wt.exe -w {} \\"
+    lines = [head.format(quote(window))]
     last = len(ops) - 1
     for i, op in enumerate(ops):
-        body = " ".join(shlex.quote(t) for t in op)
-        lines.append(f"  {body}" + (" \\; \\" if i < last else ""))
+        body = " ".join(quote(t) for t in op)
+        lines.append(f"  {body}" + (sep if i < last else ""))
     return "\n".join(lines)
 
 
@@ -1454,9 +1487,17 @@ def _build_term_model(cp):
     window_tmpl = g.get("window", "cc-{dir}")
     default_tmpl = g.get("default", "mcc {name}")
     # wt profile (-p) the panes launch under; inherits the launching shell's cwd.
-    # `distro` accepted as a back-compat alias.
-    profile = (g.get("profile") or g.get("distro")
-               or os.environ.get("WSL_DISTRO_NAME") or "Ubuntu")
+    # `distro` accepted as a back-compat alias. Defaults are platform-aware: a
+    # Windows host wants the cmd profile + cmd wrapper, WSL/posix wants the
+    # distro profile + bash wrapper.
+    if is_windows():
+        default_profile, default_shell = "Command Prompt", "cmd"
+    else:
+        default_profile = os.environ.get("WSL_DISTRO_NAME") or "Ubuntu"
+        default_shell = "bash"
+    profile = g.get("profile") or g.get("distro") or default_profile
+    shell = g.get("shell") or default_shell
+    wrap = g.get("wrap") or None
 
     dirname = Path.cwd().name
     slug = re.sub(r"[^A-Za-z0-9]+", "-", dirname).strip("-").lower() or "project"
@@ -1482,7 +1523,8 @@ def _build_term_model(cp):
                      "autostart": autostart, "layout": layout.strip()})
     if not tabs:
         die("no [tab.*] sections in .mcc/term")
-    return {"window": window, "default": default_tmpl, "profile": profile, "tabs": tabs}
+    return {"window": window, "default": default_tmpl, "profile": profile,
+            "shell": shell, "wrap": wrap, "tabs": tabs}
 
 
 def _select_term_tabs(model, wanted):
@@ -1501,7 +1543,7 @@ def _compile_term(model, tabs):
     for t in tabs:
         def resolve(name, t=t):
             raw = t["cmd"].get(name) or model["default"].replace("{name}", name)
-            return _pane_prog(raw)
+            return _pane_prog(raw, model["shell"], model.get("wrap"))
         all_ops.extend(_compile_tab_ops(t["title"], t["tree"], resolve, model["profile"]))
     return all_ops
 
@@ -1511,7 +1553,7 @@ def cmd_term_ls(args):
     model = _build_term_model(cp)
     print(f"{path}")
     print(f"  window '{model['window']}'  profile '{model['profile']}'  "
-          f"default '{model['default']}'")
+          f"shell '{model['shell']}'  default '{model['default']}'")
     for t in model["tabs"]:
         star = "  *autostart" if t["autostart"] else ""
         print(f"  [tab.{t['title']}]{star}")
@@ -1528,9 +1570,10 @@ def cmd_term_up(args):
     ops = _compile_term(model, tabs)
 
     if args.dry_run:
-        print(f"# from {path}  -> wt window '{model['window']}', "
-              f"profile '{model['profile']}'")
-        print(f"# tabs: {', '.join(t['title'] for t in tabs)}")
+        c = "rem" if is_windows() else "#"
+        print(f"{c} from {path}  -> wt window '{model['window']}', "
+              f"profile '{model['profile']}', shell '{model['shell']}'")
+        print(f"{c} tabs: {', '.join(t['title'] for t in tabs)}")
         print(_render_term_dryrun(model["window"], ops))
         return
 
@@ -1551,7 +1594,7 @@ def cmd_term_up(args):
     print(f"Launched {len(tabs)} tab(s) into window '{model['window']}'.")
 
 
-def _write_term_file(path, window, default, profile, tab_layouts):
+def _write_term_file(path, window, default, profile, shell, tab_layouts):
     """Render a clean, commented .mcc/term from elicited values."""
     lines = [
         "# .mcc/term — terminal arrangement for this project.",
@@ -1564,6 +1607,7 @@ def _write_term_file(path, window, default, profile, tab_layouts):
         f"window  = {window}",
         f"default = {default}",
         f"profile = {profile}",
+        f"shell   = {shell}",
         "",
     ]
     for label, layout in tab_layouts:
@@ -1660,14 +1704,18 @@ def cmd_term_init(args):
             tab_layouts.append((label, lay))
             break
 
-    # --- globals ---
+    # --- globals (platform-aware defaults) ---
+    if is_windows():
+        dflt_profile, dflt_shell = "Command Prompt", "cmd"
+    else:
+        dflt_profile, dflt_shell = os.environ.get("WSL_DISTRO_NAME") or "Ubuntu", "bash"
     print()
     window = prompt("Window name (-w; {dir}/{slug} expand)", default="cc-{dir}").strip() or "cc-{dir}"
     default_cmd = prompt("Per-pane command template", default="mcc {name}").strip() or "mcc {name}"
-    profile = (prompt("wt profile (-p)", default=os.environ.get("WSL_DISTRO_NAME") or "Ubuntu").strip()
-               or "Ubuntu")
+    profile = prompt("wt profile (-p)", default=dflt_profile).strip() or dflt_profile
+    shell = prompt("Pane shell (bash/cmd/powershell/none)", default=dflt_shell).strip() or dflt_shell
 
-    _write_term_file(term_path, window, default_cmd, profile, tab_layouts)
+    _write_term_file(term_path, window, default_cmd, profile, shell, tab_layouts)
     print()
     print(f"Wrote {term_path}:")
     for label, layout in tab_layouts:
