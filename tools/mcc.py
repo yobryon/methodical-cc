@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.24.0"
+MCC_VERSION = "1.25.0"
 
 import json
 import time
@@ -124,6 +124,10 @@ def confirm(message, default=True):
 
 def is_windows():
     return os.name == "nt"
+
+
+def is_macos():
+    return sys.platform == "darwin"
 
 
 def user_local_bin():
@@ -1177,10 +1181,12 @@ def cmd_vscode(args):
 #
 # `.mcc/term` declares how this project's sessions are laid out across terminal
 # tabs and panes. It is the single source of truth that `mcc term` renders into
-# a live terminal (Windows Terminal today) and that `mcc vscode` will later
-# render into tasks.json. Each renderer honors what its surface can express and
-# silently degrades the rest (vscode can't place arbitrary grids, so it keeps
-# grouping + autostart and drops geometry).
+# a live terminal (Windows Terminal on Windows/WSL, iTerm2 on macOS) and that
+# `mcc vscode` will later render into tasks.json. Each renderer honors what its
+# surface can express and silently degrades the rest: vscode can't place
+# arbitrary grids, so it keeps grouping + autostart and drops geometry; iTerm2's
+# AppleScript split has no size parameter, so `name@40` pins degrade to even
+# splits there.
 #
 # Format (INI, parsed with configparser):
 #
@@ -1497,6 +1503,10 @@ def _build_term_model(cp):
     # distro profile + bash wrapper.
     if is_windows():
         default_profile, default_shell = "Command Prompt", "cmd"
+    elif is_macos():
+        # iTerm2 ships a profile named "Default"; users with custom profiles
+        # can override in [term]. Shell stays bash — Mac default.
+        default_profile, default_shell = "Default", "bash"
     else:
         default_profile = os.environ.get("WSL_DISTRO_NAME") or "Ubuntu"
         default_shell = "bash"
@@ -1560,6 +1570,92 @@ def _compile_term(model, tabs):
     return all_ops
 
 
+# --- macOS / iTerm2 renderer ---------------------------------------------------
+#
+# iTerm2's AppleScript dictionary exposes `create window`, `create tab`, and
+# `split vertically/horizontally with default profile command "..."`. Each split
+# returns the new session; recursing into a node means addressing the right
+# variable. The Windows compiler's `--size` knob has no analogue here, so
+# `name@40` pins are silently dropped on macOS — splits are always even.
+
+def _as_quote(s):
+    """Escape a string for embedding inside an AppleScript "..." literal."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _macos_pane_cmd(name, t, model, start_dir):
+    """Build the literal shell string iTerm2 should run for one pane: a
+    cd-into-project prefix so `mcc <name>` finds .mcc/, wrapped through the
+    configured shell so PATH/aliases resolve."""
+    raw = t["cmd"].get(name) or model["default"].replace("{name}", name)
+    cd_prefix = f"cd {shlex.quote(start_dir)} && "
+    prog = _pane_prog(cd_prefix + raw, model["shell"], model.get("wrap"))
+    return " ".join(shlex.quote(tok) for tok in prog)
+
+
+def _emit_iterm_applescript(model, tabs):
+    """Render the selected tabs into a single AppleScript program that drives
+    iTerm2. Tabs land in a fresh window; each tab's first leaf seeds the tab,
+    subsequent leaves are placed by splitting from the running anchor.
+
+    We avoid iTerm2's `create ... command "..."` parameter form (its AppleScript
+    parser is fussy about keyword ordering across versions) and instead create
+    each session with the profile's default shell, then `write text` the pane
+    command. The pane sees one extra prompt for an instant before our command
+    runs — harmless."""
+    start_dir = os.getcwd()
+    lines = ['tell application "iTerm"', "\tactivate"]
+    sid = [0]
+
+    def newvar():
+        sid[0] += 1
+        return f"s{sid[0]}"
+
+    def write_into(var, name, t):
+        cmd = _macos_pane_cmd(name, t, model, start_dir)
+        lines.append(f'\ttell {var} to write text "{_as_quote(cmd)}"')
+
+    def render_split_tree(node, anchor_var, t):
+        """Carve `anchor_var` per `node`. For a split with N children, child 0
+        stays in `anchor_var`; children 1..N-1 are placed by splitting from the
+        previously created child (mirrors the Windows growing-tail order)."""
+        if "name" in node:
+            return
+        axis = "vertically" if node["op"] == "|" else "horizontally"
+        children = node["children"]
+        child_vars = [anchor_var]
+        current = anchor_var
+        for c in children[1:]:
+            leaf = _first_leaf(c)
+            v = newvar()
+            lines.append(f"\ttell {current}")
+            lines.append(
+                f"\t\tset {v} to (split {axis} with default profile)"
+            )
+            lines.append("\tend tell")
+            write_into(v, leaf["name"], t)
+            child_vars.append(v)
+            current = v
+        for c, v in zip(children, child_vars):
+            render_split_tree(c, v, t)
+
+    win_var = "win"
+    for i, t in enumerate(tabs):
+        first_leaf_name = _first_leaf(t["tree"])["name"]
+        anchor = newvar()
+        if i == 0:
+            lines.append(f"\tset {win_var} to (create window with default profile)")
+        else:
+            lines.append(f"\ttell {win_var} to create tab with default profile")
+        lines.append(f"\tset {anchor} to current session of current tab of {win_var}")
+        lines.append(f'\ttell {anchor} to set name to "{_as_quote(t["title"])}"')
+        write_into(anchor, first_leaf_name, t)
+        render_split_tree(t["tree"], anchor, t)
+
+    lines.append("end tell")
+    return "\n".join(lines)
+
+
 def cmd_term_ls(args):
     path, cp = _load_term_config()
     model = _build_term_model(cp)
@@ -1579,6 +1675,30 @@ def cmd_term_up(args):
     path, cp = _load_term_config()
     model = _build_term_model(cp)
     tabs = _select_term_tabs(model, list(args.tabs or []))
+
+    # macOS — drive iTerm2 via osascript. (No Windows Terminal here; geometry
+    # @size pins degrade to even splits, since iTerm2's AppleScript split has
+    # no size parameter.)
+    if is_macos():
+        script = _emit_iterm_applescript(model, tabs)
+        if args.dry_run:
+            print(f"# from {path}  -> iTerm2, "
+                  f"profile '{model['profile']}', shell '{model['shell']}'")
+            print(f"# tabs: {', '.join(t['title'] for t in tabs)}")
+            print(script)
+            return
+        try:
+            rc = subprocess.run(["osascript", "-e", script]).returncode
+        except FileNotFoundError:
+            die("osascript not found. macOS-only path; ensure you're on macOS "
+                "with iTerm2 installed, or use `mcc term up --dry-run` to "
+                "print the AppleScript.")
+        if rc != 0:
+            die(f"osascript exited {rc}", code=rc)
+        print(f"Launched {len(tabs)} tab(s) into iTerm2.")
+        return
+
+    # Windows / WSL — drive wt.exe.
     ops = _compile_term(model, tabs)
 
     if args.dry_run:
@@ -1719,12 +1839,15 @@ def cmd_term_init(args):
     # --- globals (platform-aware defaults) ---
     if is_windows():
         dflt_profile, dflt_shell = "Command Prompt", "cmd"
+    elif is_macos():
+        dflt_profile, dflt_shell = "Default", "bash"
     else:
         dflt_profile, dflt_shell = os.environ.get("WSL_DISTRO_NAME") or "Ubuntu", "bash"
+    profile_label = "iTerm2 profile" if is_macos() else "wt profile (-p)"
     print()
     window = prompt("Window name (-w; {dir}/{slug} expand)", default="cc-{dir}").strip() or "cc-{dir}"
     default_cmd = prompt("Per-pane command template", default="mcc {name}").strip() or "mcc {name}"
-    profile = prompt("wt profile (-p)", default=dflt_profile).strip() or dflt_profile
+    profile = prompt(profile_label, default=dflt_profile).strip() or dflt_profile
     shell = prompt("Pane shell (bash/cmd/powershell/none)", default=dflt_shell).strip() or dflt_shell
 
     _write_term_file(term_path, window, default_cmd, profile, shell, tab_layouts)
@@ -4798,8 +4921,9 @@ def build_parser():
         help="render .mcc/term into a terminal (wt.exe)",
         description=(
             "Render the .mcc/term arrangement into a live terminal.\n"
-            "Currently targets Windows Terminal (wt.exe) from WSL.\n"
-            "Use `up --dry-run` to print the exact command without running it."),
+            "Targets Windows Terminal (wt.exe) on Windows/WSL and iTerm2\n"
+            "(via osascript) on macOS. Use `up --dry-run` to print without\n"
+            "running."),
     )
     pterm_sub = pterm.add_subparsers(dest="term_cmd", metavar="<verb>")
     pterm_init = pterm_sub.add_parser(
@@ -4811,9 +4935,9 @@ def build_parser():
         "up", help="launch the arrangement (or --dry-run to print it)")
     _arg(pterm_up, "tabs", nargs="*", help="tab names to launch (default: all)")
     _arg(pterm_up, "--dry-run", action="store_true",
-         help="print the wt.exe command instead of running it")
-    _arg(pterm_up, "--terminal", choices=("wt",), default="wt",
-         help="terminal backend (only 'wt' for now)")
+         help="print the launch command (wt.exe or AppleScript) without running it")
+    _arg(pterm_up, "--terminal", choices=("wt", "iterm"), default=None,
+         help="terminal backend (default: wt on Win/WSL, iterm on macOS)")
     pterm_up.set_defaults(func=cmd_term_up)
     pterm_ls = pterm_sub.add_parser("ls", help="show tabs/panes defined in .mcc/term")
     pterm_ls.set_defaults(func=cmd_term_ls)
