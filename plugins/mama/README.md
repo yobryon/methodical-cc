@@ -44,7 +44,7 @@ claude --plugin-dir /path/to/plugins/mama
 | User interaction | You talk to each agent in separate sessions | You talk to any agent from the same session |
 | Mid-sprint questions | Implementor logs them for later | Implementor messages Architect directly |
 | Context persistence | Your session compacts naturally | Implementor state document, compacted each sprint |
-| MAMA internal state | N/A | `.mama/` directory for operational state |
+| MAMA internal state | N/A | `.mcc/` directory for operational state |
 | Sprint artifacts | `docs/` (flat) | `docs/sprint/X/` (hierarchical) |
 
 ## Commands
@@ -52,8 +52,8 @@ claude --plugin-dir /path/to/plugins/mama
 ### Architect Commands
 | Command | Purpose |
 |---------|---------|
-| `/mama:arch-init` | Initialize project, establish scope, create `.mama/` state |
-| `/mama:arch-resume` | Resume in-flight project from `.mama/` state |
+| `/mama:arch-init` | Initialize project, establish scope, create `.mcc/` state |
+| `/mama:arch-resume` | Resume in-flight project from `.mcc/` state |
 | `/mama:arch-discuss` | Discuss ideas, process feedback, explore architecture |
 | `/mama:arch-create-docs` | Create initial product documentation |
 | `/mama:arch-roadmap` | Create implementation roadmap |
@@ -111,10 +111,10 @@ The Implementor accumulates expertise across sprints through `implementor_state.
 
 ### MAMA State Directory
 
-MAMA keeps its internal state in `.mama/` (or `.mama-{scope}/` for multi-product projects):
+MAMA keeps its internal state in `.mcc/` (or `.mcc-{scope}/` for multi-product projects):
 
 ```
-.mama/
+.mcc/
 ├── architect_state.md      # Architect's running project knowledge
 ├── implementor_state.md    # Implementor's compacted working memory
 └── sprint_log.md           # Chronological sprint record
@@ -125,9 +125,9 @@ MAMA keeps its internal state in `.mama/` (or `.mama-{scope}/` for multi-product
 For multi-product projects sharing a directory, each MAMA instance scopes itself:
 
 ```
-.mama-backend/    # Backend architect's state
-.mama-app/        # App architect's state
-.mama-admin/      # Admin architect's state
+.mcc-backend/    # Backend architect's state
+.mcc-app/        # App architect's state
+.mcc-admin/      # Admin architect's state
 ```
 
 Sprint artifacts follow the same pattern:
@@ -155,7 +155,7 @@ The Implementor brief that MAM produces is replaced in MAMA by the **spawn promp
 ## Typical Workflow
 
 ```
-1. /mama:arch-init              Initialize project, create .mama/ state
+1. /mama:arch-init              Initialize project, create .mcc/ state
 2. /mama:arch-create-docs       Create product documentation
 3. /mama:arch-roadmap           Plan the roadmap
 4. /mama:arch-sprint-prep       Propose sprint scope

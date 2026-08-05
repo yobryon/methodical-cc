@@ -1,11 +1,17 @@
 ---
-description: Formalize a design question for PDT. Write a consultation request when the Architect encounters a design flaw, ambiguity, or trade-off that needs the Design Partner's input.
-allowed-tools: Read, Write, Edit, Glob, Grep
+description: Send a design question to PDT via the bus. Use when the Architect encounters a design flaw, ambiguity, or trade-off that needs the Design Partner's input.
+allowed-tools: Read, Write, Edit, Glob, Grep, SendMessage
 ---
 
 # Ask PDT
 
-You are the **Architect Agent**. You have encountered something during implementation planning or execution that requires design input from the Design Partner (PDT). Your job is to formalize the question clearly so the user can take it to the PDT session and bring back an answer.
+You are the **Architect Agent**. You have encountered something that requires design input from the Design Partner (PDT). Compose a structured consult artifact and send it via the bus.
+
+## Prerequisites
+
+- The bus plugin must be enabled and the project's team set up (`mcc team setup` or any `mcc <name>` does this)
+- A PDT session must be registered as `pdt` (or whatever name you established) — check the SessionStart bus block for current members
+- If PDT isn't running right now, the message still queues in their inbox — they'll see it when their session next starts
 
 ## When to Use This
 
@@ -29,15 +35,15 @@ Ground yourself in the relevant materials:
 - `CLAUDE.md` — current project state
 - The design documents relevant to the question
 - `docs/decisions_log.md` — check if this was already decided
-- `docs/crossover/` — check if this was already asked or addressed
+- `docs/crossover/` — check existing consult threads (each lives in its own subdirectory)
 - The implementation artifacts that surfaced the question
 
 ### 2. Verify This Needs PDT
 
-Before writing a consultation:
+Before sending a consult:
 - Check whether the answer is already in the design documents
 - Check whether a relevant decision already exists in the decisions log
-- Check whether a previous consultation already addressed this
+- Check whether a previous consult already addressed this
 - If the answer is there, use it. Do not burden PDT with answered questions.
 
 ### 3. Clarify the Question
@@ -49,69 +55,80 @@ Work with the user to sharpen the question:
 - What is your instinct as the Architect? (PDT benefits from hearing your perspective)
 - What is blocked until this is answered?
 
-### 4. Determine the Next Consultation Number
+### 4. Decide on Thread ID
 
-Check `docs/crossover/` for existing consultation files:
-- Find the highest existing `consult_NNN_request.md` number
-- Use the next in sequence
-- If none exist, start with `001`
-- Create the `docs/crossover/` directory if it does not exist
+Pick a kebab-case thread ID describing the topic, e.g. `consult-013-pref-storage-shape`. If continuing a previous thread, reuse its ID.
 
-### 5. Write the Consultation Request
+### 5. Write the Artifact
 
-Create `docs/crossover/consult_NNN_request.md` with this structure:
+Use the `Write` tool to create `docs/crossover/{thread_id}/{NNN}-arch-request.md` (where `{NNN}` is the next zero-padded turn number — start with `001` for a new thread).
+
+The artifact body uses this structure:
 
 ```markdown
 ---
-id: consult-NNN
-date: YYYY-MM-DD
+thread_id: {thread_id}
+turn: {NNN}
+type: request
+from: arch
+to: pdt
+sent_at: {ISO timestamp}
 status: open
-urgency: [blocking | important | when-convenient]
-summary: One-line summary of the question
 ---
 
-# Consultation NNN: [Title]
+# Consult: [Title]
 
 ## The Question
-
-[State the question clearly and specifically. PDT should understand exactly what you need.]
+[State the question clearly and specifically.]
 
 ## Context
-
-[What prompted this question. What were you working on when you encountered it. What implementation reality surfaced this.]
+[What prompted this question. What were you working on when you encountered it.]
 
 ## What the Design Says
-
-[Summarize what the current design documents say about this topic. Cite specific documents and sections. Note any ambiguity or silence.]
+[Summarize what the design documents say. Cite specific documents and sections.]
 
 ## Options We See
-
-[If you have identified possible answers or approaches, lay them out. Include your assessment of trade-offs. PDT benefits from your implementation perspective.]
+[Possible answers or approaches with trade-offs.]
 
 ## What Is Blocked
-
-[What cannot proceed until this is answered. Be specific about the impact.]
+[What cannot proceed until this is answered.]
 
 ## Architect's Instinct
+[Your best guess or recommendation, if you have one.]
 
-[Your best guess or recommendation, if you have one. PDT may agree, disagree, or offer a third option. Either way, your perspective is valuable input.]
+## Response Format
+[Optional: how you'd like the answer shaped.]
 ```
 
-### 6. Confirm
+### 6. Send the Bus Message
 
-Present the consultation to the user:
-- Summarize the question
-- Note urgency and what it blocks
-- Remind them to take this to the PDT session
+Compose a short framing message (~2-4 sentences) and use the `SendMessage` tool to send to `pdt`:
+
+```
+SendMessage(
+  to="pdt",
+  message="[CONSULT] consult-013-pref-storage-shape\n\nQuick framing: design names a User.preferences field but doesn't specify shape. Implementation forces the question — affects migration strategy. See the artifact at docs/crossover/consult-013-pref-storage-shape/001-arch-request.md for options and my instinct. Blocking phase 2 of sprint 14."
+)
+```
+
+The leading `[CONSULT]` tag and explicit thread_id make the recipient's context clear about the mode and which artifact to read.
+
+### 7. Confirm
+
+Tell the user:
+- The thread ID and what was asked
+- Where the artifact landed
+- That PDT will see the message when their session is active; nothing more to do until they respond
 
 ## Quality Notes
 
-- Be specific. "The data model is unclear" is not a consultation. "The design shows User having a `preferences` field but does not specify whether this is a JSON blob or a normalized table — we need to know because it affects the migration strategy" is a consultation.
-- Include your perspective. You are the Architect, not a messenger. PDT wants to know what you think, not just what you are confused about.
-- Check your work. If the answer is in the docs, do not ask. PDT will lose trust in consultations if they are answering questions that were already documented.
+- Be specific. "The data model is unclear" is not a consult. "The design shows User having a `preferences` field but does not specify whether this is a JSON blob or a normalized table — we need to know because it affects the migration strategy" is a consult.
+- Include your perspective. You are the Architect, not a messenger.
+- Check your work. If the answer is in the docs, do not ask.
+- The artifact is the substance; the SendMessage body is the framing. Don't duplicate.
 
 ## Begin
 
-Discuss the design question with the user, then write the consultation request. Be specific and include your architectural perspective.
+Discuss the design question with the user, then write the artifact and send the consult message.
 
 $ARGUMENTS

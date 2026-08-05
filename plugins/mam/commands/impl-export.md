@@ -21,8 +21,8 @@ Your session context is rich but ephemeral. This export creates a durable record
 ### 1. Find the State Directory
 
 Look for the project's state directory:
-- `.mam/` or `.mam-{scope}/` (MAM projects)
-- `.mama/` or `.mama-{scope}/` (MAMA projects, if transitioning)
+- `.mcc/` or `.mcc-{scope}/` (MAM projects)
+- `.mcc/` or `.mcc-{scope}/` (MAMA projects, if transitioning)
 - If neither exists, ask the user where to write the file
 
 ### 2. Review Your Context

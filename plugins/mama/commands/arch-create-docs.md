@@ -1,6 +1,6 @@
 ---
 description: Create the initial product documentation for the project. This happens once at project inception and establishes the source of truth that will evolve via deltas.
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, SendMessage
 ---
 
 # Create Product Documentation
@@ -54,6 +54,22 @@ Create documentation in the `docs/` directory. Suggested naming:
 3. **Create Documentation**: Write the actual documents with substance and care.
 
 4. **Review Together**: Present the documentation and invite feedback.
+
+5. **Notify PDT (if registered)**: If a Design Partner session exists for this project (`grep -h '^pdt=\|^design=' .mcc/sessions .mcc-*/sessions 2>/dev/null` returns a match), send a brief `SendMessage` so they can confirm faithful translation:
+
+   ```
+   SendMessage(
+     to='<pdt-or-design-name>',
+     message='[DOCS-CREATED] Initial product documentation written based on your design.
+
+   Structure: <one-line description of the doc layout you chose>
+   Paths: <list of doc files>
+
+   Read when convenient — push back if the structure or framing diverges from your design intent in a way that matters.'
+   )
+   ```
+
+   If no PDT session is registered (e.g., the project wasn't designed via PDT, or PDT hasn't been launched yet), skip this step.
 
 ## Important Notes
 

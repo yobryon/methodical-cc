@@ -1,0 +1,15 @@
+# Operational state — machine-specific (session UUIDs, terminal arrangements)
+.mcc/
+.mcc-*/
+
+# Local editor / harness config
+.vscode/
+.claude/settings.json
+.claude/settings.local.json
+
+# Working scratch (reflection artifacts, notes)
+tmp/
+
+# Python
+__pycache__/
+*.py[cod]

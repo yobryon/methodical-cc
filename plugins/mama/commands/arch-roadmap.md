@@ -1,6 +1,6 @@
 ---
 description: Create the initial implementation roadmap. Projects out the anticipated work in a sensible sequence based on current understanding.
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, SendMessage
 ---
 
 # Create Implementation Roadmap
@@ -95,6 +95,21 @@ Create `docs/roadmap.md` with:
 3. **Refine**: Adjust based on discussion.
 
 4. **Finalize**: Lock in the initial roadmap (knowing it will evolve).
+
+5. **Notify PDT (if registered)**: If a Design Partner session exists for this project (`grep -h '^pdt=\|^design=' .mcc/sessions .mcc-*/sessions 2>/dev/null` returns a match), send a brief `SendMessage`:
+
+   ```
+   SendMessage(
+     to='<pdt-or-design-name>',
+     message='[ROADMAP] Initial roadmap drafted at docs/roadmap.md.
+
+   Sprint sequence: <one-line summary, e.g. "1: foundations · 2: data model · 3: core flows · 4: polish">
+
+   Push back if the priority sequencing or sprint phasing diverges from how you expected the design to roll out.'
+   )
+   ```
+
+   If no PDT session is registered, skip this step.
 
 ## Begin
 

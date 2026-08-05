@@ -1,0 +1,1575 @@
+"""docs subcommand module for mcc.
+
+Implements `mcc docs setup|publish|pull|status` — markdown-to-docx publishing
+and Word-comments-to-feedback ingest. Stdlib-only, hand-rolled YAML reader for
+the narrow manifest schema we ship.
+
+Manifest format (`.mcc/docs-publish.yml`):
+
+    output: docx                          # default output format
+    template: .mcc/templates/default.docx # optional pandoc --reference-doc
+    structure: mirror                     # mirror | flat
+    publish_path: .mcc/publish            # output dir
+    feedback_path: docs/feedback          # ingest dir
+    pandoc_args: []                       # extra args (escape hatch)
+    from_extensions: []                   # markdown read-side ext (e.g. lists_without_preceding_blankline)
+    to_extensions: []                     # output-format write-side ext
+    pre_publish:                          # optional shell command run before publish (e.g. rasterize SVGs)
+    post_publish:                         # optional shell command run after publish
+    docs:
+      - docs/pdt                          # directory → <dir>/**/*.md
+      - docs/**/design*.md                # explicit glob
+      - docs/product/spec.md              # literal
+      - pattern: docs/architecture
+        structure: flat
+      - pattern: docs/product/roadmap.md
+        publish_as: roadmap-2026.docx
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import xml.etree.ElementTree as ET
+import zipfile
+from pathlib import Path
+
+# Public defaults (also referenced by hooks)
+DEFAULT_PUBLISH_PATH = ".mcc/publish"
+DEFAULT_FEEDBACK_PATH = "docs/feedback"
+DEFAULT_OUTPUT = "docx"
+DEFAULT_STRUCTURE = "mirror"
+MANIFEST_PATH = ".mcc/docs-publish.yml"
+PUBLISH_STATE_PATH = ".mcc/docs-publish-state.json"
+PUBLISH_BASELINE_PATH = ".mcc/publish-baseline"
+
+W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+ET.register_namespace("w", W_NS)
+
+# ----------------------------- helpers (re-implemented locally to keep
+# this module independent of the parent's util surface) ---------------
+
+def _die(msg, code=1):
+    print(f"mcc: docs: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def _info(msg):
+    print(msg)
+
+
+def _warn(msg):
+    print(f"  ⚠ {msg}", file=sys.stderr)
+
+
+def _ok(msg):
+    print(f"  ✓ {msg}")
+
+
+def _prompt(msg, default=None):
+    suffix = f" [{default}]" if default else ""
+    raw = input(f"{msg}{suffix}: ").strip()
+    return raw or (default or "")
+
+
+def _confirm(msg, default=True):
+    suffix = "[Y/n]" if default else "[y/N]"
+    raw = input(f"{msg} {suffix} ").strip().lower()
+    if not raw:
+        return default
+    return raw.startswith("y")
+
+
+# ----------------------------- manifest reader -----------------------
+
+def _strip_comment(line: str) -> str:
+    """Strip YAML # comments, but only when the # is not inside quotes.
+
+    Our manifest schema doesn't use # in any string value, but be defensive.
+    """
+    in_single = in_double = False
+    for i, ch in enumerate(line):
+        if ch == "'" and not in_double:
+            in_single = not in_single
+        elif ch == '"' and not in_single:
+            in_double = not in_double
+        elif ch == "#" and not in_single and not in_double:
+            return line[:i]
+    return line
+
+
+def _strip_quotes(value: str) -> str:
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+        return v[1:-1]
+    return v
+
+
+def _parse_scalar(value: str):
+    v = _strip_quotes(value.strip())
+    if v in ("true", "True", "yes"):
+        return True
+    if v in ("false", "False", "no"):
+        return False
+    if v in ("null", "~", ""):
+        return None
+    return v
+
+
+def _parse_inline_list(rest: str, key: str) -> list:
+    """Parse `[a, b, c]` form into a list of strings. Empty → []."""
+    if not (rest.startswith("[") and rest.endswith("]")):
+        _die(f"{key} must be a list (e.g. [] or [\"a\", \"b\"])")
+    inner = rest[1:-1].strip()
+    if not inner:
+        return []
+    return [_strip_quotes(p.strip()) for p in inner.split(",") if p.strip()]
+
+
+def _parse_mapping_value(value: str):
+    """Used inside a doc-mapping. Inline-list form supported; otherwise scalar."""
+    v = value.strip()
+    if v.startswith("[") and v.endswith("]"):
+        return _parse_inline_list(v, "value")
+    return _parse_scalar(v)
+
+
+def load_manifest(repo_root: Path) -> dict:
+    """Read `.mcc/docs-publish.yml` and return a normalized dict.
+
+    Supports the narrow schema documented at module top. Anything more exotic
+    will produce a clear parse error rather than ambiguous behavior.
+    """
+    path = repo_root / MANIFEST_PATH
+    if not path.is_file():
+        _die(f"no manifest at {MANIFEST_PATH}. Run `mcc docs setup` first.")
+
+    text = path.read_text(encoding="utf-8")
+    out = {
+        "output": DEFAULT_OUTPUT,
+        "template": None,
+        "structure": DEFAULT_STRUCTURE,
+        "publish_path": DEFAULT_PUBLISH_PATH,
+        "feedback_path": DEFAULT_FEEDBACK_PATH,
+        "pandoc_args": [],
+        "from_extensions": [],
+        "to_extensions": [],
+        "pre_publish": None,
+        "post_publish": None,
+        "docs": [],
+    }
+
+    state = "top"  # "top" | "docs_list" | "doc_mapping"
+    current_mapping = None
+    pandoc_args_inline = False
+
+    for raw_line in text.splitlines():
+        line = _strip_comment(raw_line).rstrip()
+        if not line.strip():
+            if state == "doc_mapping" and current_mapping is not None:
+                out["docs"].append(current_mapping)
+                current_mapping = None
+                state = "docs_list"
+            continue
+
+        # Determine indent level
+        stripped = line.lstrip(" ")
+        indent = len(line) - len(stripped)
+
+        if indent == 0 and ":" in stripped:
+            # Top-level key
+            if state == "doc_mapping" and current_mapping is not None:
+                out["docs"].append(current_mapping)
+                current_mapping = None
+
+            key, _, rest = stripped.partition(":")
+            key = key.strip()
+            rest = rest.strip()
+
+            if key == "docs":
+                if rest and rest != "[]":
+                    _die(f"`docs:` must start a list (newline + `- ...` items) or be `[]`")
+                state = "docs_list"
+                continue
+
+            if key in ("pandoc_args", "from_extensions", "to_extensions"):
+                if rest:
+                    out[key] = _parse_inline_list(rest, key)
+                else:
+                    out[key] = []
+                state = "top"
+                continue
+
+            if key in ("output", "template", "structure", "publish_path", "feedback_path"):
+                out[key] = _parse_scalar(rest)
+                state = "top"
+                continue
+
+            if key in ("pre_publish", "post_publish"):
+                # Shell command string. Empty → None (no hook).
+                v = _parse_scalar(rest)
+                out[key] = v if v else None
+                state = "top"
+                continue
+
+            _die(f"unknown top-level key `{key}` in manifest")
+
+        if state == "docs_list":
+            if stripped.startswith("- "):
+                item = stripped[2:].strip()
+                # Either a bare scalar or a mapping starting on this line
+                if ":" in item and not item.startswith(("'", '"')):
+                    # Mapping starts here
+                    if current_mapping is not None:
+                        out["docs"].append(current_mapping)
+                    current_mapping = {}
+                    k, _, v = item.partition(":")
+                    current_mapping[k.strip()] = _parse_mapping_value(v)
+                    state = "doc_mapping"
+                else:
+                    if current_mapping is not None:
+                        out["docs"].append(current_mapping)
+                        current_mapping = None
+                    out["docs"].append(_strip_quotes(item))
+                continue
+
+            if state == "doc_mapping" and current_mapping is not None and indent >= 2:
+                k, _, v = stripped.partition(":")
+                if not _:
+                    _die(f"can't parse mapping line: {raw_line!r}")
+                current_mapping[k.strip()] = _parse_mapping_value(v)
+                continue
+
+        if state == "doc_mapping":
+            if stripped.startswith("- "):
+                # Next item starts; flush
+                if current_mapping is not None:
+                    out["docs"].append(current_mapping)
+                    current_mapping = None
+                state = "docs_list"
+                # Re-process this line as docs_list
+                item = stripped[2:].strip()
+                if ":" in item and not item.startswith(("'", '"')):
+                    current_mapping = {}
+                    k, _, v = item.partition(":")
+                    current_mapping[k.strip()] = _parse_mapping_value(v)
+                    state = "doc_mapping"
+                else:
+                    out["docs"].append(_strip_quotes(item))
+                continue
+            if indent >= 2:
+                k, _, v = stripped.partition(":")
+                if not _:
+                    _die(f"can't parse mapping line: {raw_line!r}")
+                current_mapping[k.strip()] = _parse_mapping_value(v)
+                continue
+
+    if state == "doc_mapping" and current_mapping is not None:
+        out["docs"].append(current_mapping)
+
+    return out
+
+
+# ----------------------------- pattern resolution ---------------------
+
+def _glob_patterns_for(item, repo_root: Path):
+    """Return list of (source_path, override_dict) tuples for one manifest item.
+
+    `item` is either a bare string or a mapping. Bare strings:
+      - directory → "<dir>/**/*.md"
+      - glob (contains *, ?, [) → as-is
+      - literal path → as-is
+    """
+    if isinstance(item, str):
+        spec = item
+        overrides = {}
+    elif isinstance(item, dict):
+        spec = item.get("pattern")
+        if not spec:
+            _die(f"manifest entry missing `pattern:` key: {item!r}")
+        overrides = {k: v for k, v in item.items() if k != "pattern"}
+    else:
+        _die(f"unsupported manifest entry type: {type(item).__name__}")
+
+    abs_spec_path = repo_root / spec
+    is_glob = any(c in spec for c in ("*", "?", "["))
+    if not is_glob and abs_spec_path.is_dir():
+        pattern = f"{spec}/**/*.md"
+    elif not is_glob:
+        pattern = spec
+    else:
+        pattern = spec
+
+    matched = sorted(repo_root.glob(pattern))
+    return matched, overrides
+
+
+def resolve_publish_targets(manifest: dict, repo_root: Path, cli_patterns=None):
+    """Return list of dicts: {source, output_path, output_format, template, pandoc_args}.
+
+    `cli_patterns` (if given) narrows the manifest's pattern set: a manifest
+    item is included only if its source path is matched by *any* CLI pattern.
+    CLI patterns are interpreted as repo-root-relative globs (or directories).
+    """
+    publish_root = repo_root / manifest["publish_path"]
+    structure_default = manifest["structure"]
+    output_default = manifest["output"]
+    template_default = manifest.get("template")
+    pandoc_args_default = list(manifest.get("pandoc_args") or [])
+    from_ext_default = list(manifest.get("from_extensions") or [])
+    to_ext_default = list(manifest.get("to_extensions") or [])
+
+    targets = []
+    seen_outputs = {}  # output_path -> source_path (collision detection)
+    cli_resolved = _resolve_cli_narrowing(cli_patterns, repo_root) if cli_patterns else None
+
+    for item in manifest.get("docs", []):
+        matched, overrides = _glob_patterns_for(item, repo_root)
+        if not matched:
+            spec = item if isinstance(item, str) else item.get("pattern")
+            _warn(f"pattern `{spec}` matched no files")
+            continue
+
+        for source in matched:
+            if source.suffix.lower() != ".md":
+                spec = item if isinstance(item, str) else item.get("pattern")
+                _die(f"non-markdown match: pattern `{spec}` matched `{source.relative_to(repo_root)}`. Adjust the pattern.")
+
+            if cli_resolved is not None and source.resolve() not in cli_resolved:
+                continue
+
+            output_format = overrides.get("output") or output_default
+            structure = overrides.get("structure") or structure_default
+            template = overrides.get("template") or template_default
+            publish_as = overrides.get("publish_as")
+
+            rel = source.relative_to(repo_root)
+            if publish_as:
+                output_rel = Path(publish_as)
+            elif structure == "flat":
+                output_rel = Path(rel.stem + f".{output_format}")
+            else:  # mirror
+                output_rel = rel.with_suffix(f".{output_format}")
+
+            output_path = publish_root / output_rel
+
+            existing = seen_outputs.get(str(output_path))
+            if existing is not None and existing != source:
+                _die(f"output collision: both `{existing.relative_to(repo_root)}` and `{rel}` resolve to `{output_rel}`")
+            seen_outputs[str(output_path)] = source
+
+            from_ext = overrides.get("from_extensions")
+            to_ext = overrides.get("to_extensions")
+            targets.append({
+                "source": source,
+                "output_path": output_path,
+                "output_format": output_format,
+                "template": (repo_root / template).resolve() if template else None,
+                "pandoc_args": pandoc_args_default,
+                "from_extensions": list(from_ext) if from_ext is not None else from_ext_default,
+                "to_extensions": list(to_ext) if to_ext is not None else to_ext_default,
+            })
+
+    return targets
+
+
+def _resolve_cli_narrowing(cli_patterns, repo_root: Path):
+    """Turn CLI patterns into a set of resolved source paths (filter set)."""
+    resolved = set()
+    for spec in cli_patterns:
+        spec_path = repo_root / spec
+        is_glob = any(c in spec for c in ("*", "?", "["))
+        if not is_glob and spec_path.is_dir():
+            for p in spec_path.rglob("*.md"):
+                resolved.add(p.resolve())
+        elif not is_glob:
+            if spec_path.is_file():
+                resolved.add(spec_path.resolve())
+        else:
+            for p in repo_root.glob(spec):
+                resolved.add(p.resolve())
+    if not resolved:
+        _die(f"CLI pattern(s) matched no files: {cli_patterns}")
+    return resolved
+
+
+# ----------------------------- pandoc invocation ---------------------
+
+def _have_pandoc():
+    return shutil.which("pandoc") is not None
+
+
+def _publish_one(target: dict) -> tuple[bool, str]:
+    src = target["source"]
+    out = target["output_path"]
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = ["pandoc", str(src), "-o", str(out)]
+    from_ext = target.get("from_extensions") or []
+    to_ext = target.get("to_extensions") or []
+    # v1 input is always markdown; output_format is per-target.
+    def _join_ext(base, exts):
+        # Pandoc syntax: `markdown+ext1-ext2`. Accept entries with explicit
+        # `+`/`-` prefix; default to `+` for bare names.
+        return base + "".join(e if e[:1] in ("+", "-") else f"+{e}" for e in exts)
+    if from_ext:
+        cmd.extend(["--from", _join_ext("markdown", from_ext)])
+    if to_ext:
+        cmd.extend(["--to", _join_ext(target["output_format"], to_ext)])
+    if target.get("template"):
+        cmd.extend(["--reference-doc", str(target["template"])])
+
+    # Resolve relative paths in the source (images, includes) against the
+    # source's containing directory, not the invoking CWD. Pandoc defaults
+    # to CWD, which breaks when mcc is run from repo root but the markdown
+    # lives in a subdirectory and references images via relative paths.
+    # Include CWD as a fallback for paths authored relative to the repo.
+    src_parent = src.parent.resolve()
+    cwd = Path.cwd().resolve()
+    resource_dirs = [str(src_parent)]
+    if cwd != src_parent:
+        resource_dirs.append(str(cwd))
+    cmd.extend(["--resource-path", os.pathsep.join(resource_dirs)])
+
+    if target.get("pandoc_args"):
+        cmd.extend(target["pandoc_args"])
+
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        return False, proc.stderr.strip() or "pandoc returned non-zero"
+    return True, ""
+
+
+# ----------------------------- docx comment parser -------------------
+
+def _w(tag):
+    return f"{{{W_NS}}}{tag}"
+
+
+def _extract_text(elem) -> str:
+    """Concatenate all <w:t> descendants of an element."""
+    parts = []
+    for t in elem.iter(_w("t")):
+        if t.text:
+            parts.append(t.text)
+    return "".join(parts)
+
+
+def parse_docx_comments(docx_path: Path) -> dict:
+    """Return {comments: [...], doc_meta: {...}}.
+
+    Each comment dict: {id, author, date, body, anchored_text, section}.
+    `section` is the heading text of the nearest preceding heading paragraph.
+    """
+    if not docx_path.is_file():
+        return {"comments": [], "doc_meta": {}}
+
+    with zipfile.ZipFile(docx_path) as z:
+        names = z.namelist()
+        if "word/comments.xml" not in names:
+            return {"comments": [], "doc_meta": {}}
+
+        comments_xml = z.read("word/comments.xml").decode("utf-8")
+        document_xml = z.read("word/document.xml").decode("utf-8")
+
+    comments_root = ET.fromstring(comments_xml)
+    body_root = ET.fromstring(document_xml)
+
+    # Build: id → {author, date, body}
+    comment_meta = {}
+    for c in comments_root.iter(_w("comment")):
+        cid = c.get(_w("id"))
+        if cid is None:
+            continue
+        comment_meta[cid] = {
+            "id": cid,
+            "author": c.get(_w("author")) or "(unknown)",
+            "date": c.get(_w("date")) or "",
+            "body": _extract_text(c).strip(),
+        }
+
+    # Walk body to find anchors. Need an iter-with-context approach because
+    # commentRangeStart/End are siblings of the runs they bracket. Build a
+    # flat iteration over the body, tracking heading state and active ranges.
+    flat = []
+    body_elem = body_root.find(_w("body"))
+    if body_elem is None:
+        return {"comments": list(comment_meta.values()), "doc_meta": {}}
+
+    def _walk(elem, path):
+        for child in elem:
+            yield child, path + [elem]
+            yield from _walk(child, path + [elem])
+
+    current_heading = None
+    open_ranges = {}  # id → {section, accumulated_text}
+
+    # We iterate paragraphs in order; within each paragraph we look for
+    # range markers and runs.
+    for p in body_elem.iter(_w("p")):
+        # Check if this paragraph is a heading
+        pStyle = None
+        ppr = p.find(_w("pPr"))
+        if ppr is not None:
+            ps = ppr.find(_w("pStyle"))
+            if ps is not None:
+                pStyle = ps.get(_w("val")) or ""
+        is_heading = bool(pStyle and pStyle.startswith("Heading"))
+        if is_heading:
+            current_heading = _extract_text(p).strip()
+
+        # Walk children of the paragraph in document order
+        for node in p.iter():
+            tag = node.tag
+            if tag == _w("commentRangeStart"):
+                cid = node.get(_w("id"))
+                if cid is not None:
+                    open_ranges[cid] = {
+                        "section": current_heading or "(top of document)",
+                        "text": [],
+                    }
+            elif tag == _w("commentRangeEnd"):
+                cid = node.get(_w("id"))
+                if cid in open_ranges:
+                    meta = comment_meta.get(cid)
+                    if meta is not None:
+                        meta["section"] = open_ranges[cid]["section"]
+                        meta["anchored_text"] = "".join(open_ranges[cid]["text"]).strip()
+                    open_ranges.pop(cid, None)
+            elif tag == _w("t") and node.text:
+                # Add text to all currently-open ranges
+                for state in open_ranges.values():
+                    state["text"].append(node.text)
+
+    # Any comments that never matched an anchor: leave anchored_text empty
+    for meta in comment_meta.values():
+        meta.setdefault("section", "(unanchored)")
+        meta.setdefault("anchored_text", "")
+
+    # Sort by date when possible, else by id
+    def _sort_key(m):
+        return (m.get("date", ""), int(m.get("id", "0") or 0))
+    comments_sorted = sorted(comment_meta.values(), key=_sort_key)
+
+    return {"comments": comments_sorted, "doc_meta": {}}
+
+
+# ----------------------------- tracked-changes parser ----------------
+
+def parse_docx_tracked_changes(docx_path: Path) -> list:
+    """Return list of {id, kind, author, date, text, section}.
+
+    `kind` is `"ins"` (insertion) or `"del"` (deletion). `section` is the
+    nearest preceding heading. The pair is treated as the editorial unit;
+    we don't try to coalesce adjacent ins/del runs from the same author.
+    """
+    if not docx_path.is_file():
+        return []
+    with zipfile.ZipFile(docx_path) as z:
+        if "word/document.xml" not in z.namelist():
+            return []
+        document_xml = z.read("word/document.xml").decode("utf-8")
+    body_root = ET.fromstring(document_xml)
+    body_elem = body_root.find(_w("body"))
+    if body_elem is None:
+        return []
+
+    out = []
+    current_heading = None
+    seen_ids = set()
+    for p in body_elem.iter(_w("p")):
+        pStyle = None
+        ppr = p.find(_w("pPr"))
+        if ppr is not None:
+            ps = ppr.find(_w("pStyle"))
+            if ps is not None:
+                pStyle = ps.get(_w("val")) or ""
+        if pStyle and pStyle.startswith("Heading"):
+            current_heading = _extract_text(p).strip()
+
+        for change in p.iter():
+            tag = change.tag
+            if tag == _w("ins"):
+                kind = "ins"
+            elif tag == _w("del"):
+                kind = "del"
+            else:
+                continue
+            cid = change.get(_w("id")) or ""
+            # Same id can appear in both ins and del; namespace by kind.
+            uid = f"{kind}:{cid}"
+            if uid in seen_ids:
+                continue
+            seen_ids.add(uid)
+            # Pull text: <w:t> for ins, <w:delText> for del
+            if kind == "ins":
+                text_parts = [t.text or "" for t in change.iter(_w("t"))]
+            else:
+                text_parts = [t.text or "" for t in change.iter(_w("delText"))]
+            out.append({
+                "id": cid,
+                "kind": kind,
+                "author": change.get(_w("author")) or "(unknown)",
+                "date": change.get(_w("date")) or "",
+                "text": "".join(text_parts),
+                "section": current_heading or "(top of document)",
+            })
+
+    def _sort_key(m):
+        return (m.get("date", ""), m.get("kind", ""), int(m.get("id", "0") or 0))
+    return sorted(out, key=_sort_key)
+
+
+# ----------------------------- roundtrip-diff (body edits) -----------
+
+def _pandoc_docx_to_md(docx_path: Path, track_changes: str = "reject") -> str | None:
+    """Convert a docx to markdown via pandoc. Returns markdown text or None.
+
+    `track_changes`: passed through as pandoc's --track-changes flag. We
+    default to `reject` for body-edits comparison so tracked insertions
+    don't surface again as body edits (the tracked-changes parser already
+    surfaced them as their own feedback files).
+    """
+    if not _have_pandoc():
+        return None
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        cmd = ["pandoc", str(docx_path), "-t", "markdown",
+               f"--track-changes={track_changes}", "-o", str(tmp_path)]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            return None
+        return tmp_path.read_text(encoding="utf-8")
+    finally:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+
+
+_HEADING_RE = re.compile(r"^#")
+
+
+def _annotate_hunks_with_heading(diff_lines: list, baseline_lines: list) -> list:
+    """Mimic GNU diff's `-F '^#'`: for each hunk, scan baseline upward from
+    the hunk's start line and append the nearest preceding heading line to
+    the `@@ ... @@` header.
+    """
+    out = []
+    hunk_re = re.compile(r"^@@ -(\d+)(?:,\d+)? \+\d+(?:,\d+)? @@(.*)$")
+    for line in diff_lines:
+        m = hunk_re.match(line.rstrip("\n"))
+        if m:
+            start = int(m.group(1))  # 1-indexed first changed baseline line
+            existing_tail = m.group(2)
+            # Search backwards from start-1 (0-indexed) for a heading line
+            idx = max(0, start - 1)
+            anchor = ""
+            while idx >= 0:
+                if idx < len(baseline_lines) and _HEADING_RE.match(baseline_lines[idx]):
+                    anchor = " " + baseline_lines[idx].rstrip("\n")
+                    break
+                idx -= 1
+            if anchor and not existing_tail.strip():
+                line = line.rstrip("\n").rstrip() + anchor + "\n"
+        out.append(line)
+    return out
+
+
+def compute_body_edit_diff(baseline_docx: Path, reviewer_docx: Path) -> str:
+    """Return a unified diff (heading-anchored) of reviewer vs baseline,
+    after roundtripping both through pandoc to cancel formatting noise.
+    Tracked changes in the reviewer doc are *rejected* during conversion so
+    they don't double-surface as body edits.
+
+    Uses stdlib `difflib` rather than the `diff` CLI (which isn't on Windows
+    by default). Hunk headers get the nearest preceding heading appended,
+    mimicking GNU diff's `-F '^#'` behavior.
+
+    Returns empty string if no diff or if pandoc is unavailable.
+    """
+    import difflib
+    baseline_md = _pandoc_docx_to_md(baseline_docx)
+    reviewer_md = _pandoc_docx_to_md(reviewer_docx)
+    if baseline_md is None or reviewer_md is None:
+        return ""
+    if baseline_md == reviewer_md:
+        return ""
+
+    baseline_lines = baseline_md.splitlines(keepends=True)
+    reviewer_lines = reviewer_md.splitlines(keepends=True)
+    diff_iter = difflib.unified_diff(
+        baseline_lines, reviewer_lines,
+        fromfile="baseline", tofile="reviewer", n=3,
+    )
+    diff_lines = list(diff_iter)
+    if not diff_lines:
+        return ""
+    # Ensure trailing newlines on every line for consistent rendering.
+    diff_lines = [ln if ln.endswith("\n") else ln + "\n" for ln in diff_lines]
+    diff_lines = _annotate_hunks_with_heading(diff_lines, baseline_lines)
+    return "".join(diff_lines)
+
+
+# ----------------------------- feedback rendering --------------------
+
+def _doc_slug(source: Path, repo_root: Path) -> str:
+    rel = source.relative_to(repo_root) if source.is_absolute() else Path(source)
+    parts = list(rel.with_suffix("").parts)
+    if parts and parts[0] == "docs":
+        parts = parts[1:]
+    if not parts:
+        parts = [rel.stem]
+    return "-".join(re.sub(r"[^A-Za-z0-9]+", "-", p).strip("-") for p in parts).lower() or "doc"
+
+
+def _now_local_iso():
+    return _dt.datetime.now().astimezone().replace(microsecond=0).isoformat()
+
+
+def _now_compact():
+    return _dt.datetime.now().strftime("%Y%m%dT%H%M%S")
+
+
+DISPOSITION_STUB = "*Pending — write the author's response here, then flip `status: pending` → `status: addressed` in the frontmatter above.*"
+
+
+def render_feedback_comment_file(
+    source_md: Path, docx_path: Path, comment: dict, repo_root: Path
+) -> str:
+    """Render ONE comment as a standalone feedback file.
+
+    Frontmatter carries lifecycle status (`status: pending|addressed`) and
+    enough context to render the response sidecar without re-parsing the
+    docx later. Body has two sections: the reviewer's comment (verbatim)
+    and the author's disposition (initially a stub).
+    """
+    rel_source = source_md.relative_to(repo_root) if source_md.is_absolute() else source_md
+    rel_docx = docx_path.relative_to(repo_root) if docx_path.is_absolute() else docx_path
+    author = comment.get("author") or "(unknown)"
+    date = comment.get("date") or ""
+    section = comment.get("section") or "(unanchored)"
+    excerpt = comment.get("anchored_text") or ""
+    body = comment.get("body") or "(empty comment)"
+    cid = comment.get("id") or "0"
+
+    excerpt_short = excerpt if len(excerpt) <= 240 else excerpt[:237] + "..."
+    lines = [
+        "---",
+        f"source: {rel_source}",
+        f"published_as: {rel_docx}",
+        f"comment_id: \"{cid}\"",
+        f"author: {author}",
+        f"date: {date}",
+        f"pulled_at: {_now_local_iso()}",
+        f"section: \"{section}\"",
+        "status: pending",
+        "---",
+        "",
+        f"# Feedback on {rel_source} — Comment {cid}",
+        "",
+        f"**Anchored to:** Section \"{section}\"",
+    ]
+    if excerpt_short:
+        lines.append(f"**Excerpt:** \"{excerpt_short}\"")
+    lines.extend([
+        "",
+        "## Comment",
+        "",
+        *body.splitlines(),
+        "",
+        "## Disposition",
+        "",
+        DISPOSITION_STUB,
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def render_feedback_tracked_change_file(
+    source_md: Path, docx_path: Path, change: dict, repo_root: Path
+) -> str:
+    """Render ONE tracked change (w:ins or w:del) as a standalone feedback file.
+
+    Same frontmatter/lifecycle shape as a comment file, plus `kind`. The body
+    presents the inserted or deleted text verbatim, then a disposition stub.
+    """
+    rel_source = source_md.relative_to(repo_root) if source_md.is_absolute() else source_md
+    rel_docx = docx_path.relative_to(repo_root) if docx_path.is_absolute() else docx_path
+    cid = change.get("id") or "0"
+    kind = change.get("kind") or "ins"
+    author = change.get("author") or "(unknown)"
+    date = change.get("date") or ""
+    section = change.get("section") or "(unanchored)"
+    text = change.get("text") or ""
+    text_short = text if len(text) <= 240 else text[:237] + "..."
+    verb = "Insertion" if kind == "ins" else "Deletion"
+
+    lines = [
+        "---",
+        f"source: {rel_source}",
+        f"published_as: {rel_docx}",
+        f"tracked_change_id: \"{cid}\"",
+        f"kind: {kind}",
+        f"author: {author}",
+        f"date: {date}",
+        f"pulled_at: {_now_local_iso()}",
+        f"section: \"{section}\"",
+        "status: pending",
+        "---",
+        "",
+        f"# Feedback on {rel_source} — Tracked {verb} {cid}",
+        "",
+        f"**Anchored to:** Section \"{section}\"",
+        "",
+        f"## {verb} (verbatim)",
+        "",
+    ]
+    if text_short:
+        lines.append(f"> {text_short}")
+    else:
+        lines.append("_(empty)_")
+    lines.extend([
+        "",
+        "## Disposition",
+        "",
+        DISPOSITION_STUB,
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def render_feedback_body_edits_file(
+    source_md: Path, docx_path: Path, diff_text: str, repo_root: Path
+) -> str:
+    """Render the body-edits diff as a standalone feedback file.
+
+    Body edits are surfaced as a single disposition unit per pull cycle —
+    the whole-doc diff is the editorial review. Heading-anchored hunks let
+    the author scan section-by-section.
+    """
+    rel_source = source_md.relative_to(repo_root) if source_md.is_absolute() else source_md
+    rel_docx = docx_path.relative_to(repo_root) if docx_path.is_absolute() else docx_path
+    lines = [
+        "---",
+        f"source: {rel_source}",
+        f"published_as: {rel_docx}",
+        "kind: body_edits",
+        "author: (untracked)",
+        f"pulled_at: {_now_local_iso()}",
+        "status: pending",
+        "---",
+        "",
+        f"# Feedback on {rel_source} — Body Edits (untracked)",
+        "",
+        "Reviewer(s) edited the document body without using Word comments or",
+        "Track Changes. Author attribution is unavailable; what follows is the",
+        "diff between the as-published baseline and the returned docx, after",
+        "pandoc-roundtripping both to markdown to cancel formatting noise.",
+        "Hunk headers carry the nearest preceding heading.",
+        "",
+        "## Diff",
+        "",
+        "```diff",
+        diff_text.rstrip(),
+        "```",
+        "",
+        "## Disposition",
+        "",
+        DISPOSITION_STUB,
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _parse_frontmatter(text: str) -> tuple[dict, str]:
+    """Parse a YAML-frontmatter header off a markdown file. Returns (meta, body).
+    Tolerates absent frontmatter (meta={}, body=text). Handles only the narrow
+    `key: value` shape we ship — no nested mappings or block scalars.
+    """
+    if not text.startswith("---"):
+        return {}, text
+    lines = text.splitlines()
+    if len(lines) < 2:
+        return {}, text
+    end = None
+    for i in range(1, len(lines)):
+        if lines[i].rstrip() == "---":
+            end = i
+            break
+    if end is None:
+        return {}, text
+    meta = {}
+    for raw in lines[1:end]:
+        line = raw.strip()
+        if not line or ":" not in line:
+            continue
+        key, _, val = line.partition(":")
+        key = key.strip()
+        val = val.strip()
+        # Strip matching surrounding quotes
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in ("\"", "'"):
+            val = val[1:-1]
+        meta[key] = val
+    body = "\n".join(lines[end + 1:])
+    return meta, body
+
+
+def _extract_section(body: str, heading: str) -> str:
+    """Pull the content under `## <heading>` up to the next `##` (or EOF).
+    Returns the stripped section text (without the heading line itself)."""
+    pattern = re.compile(
+        rf"^##\s+{re.escape(heading)}\s*$(.*?)(?=^##\s|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    m = pattern.search(body)
+    if not m:
+        return ""
+    return m.group(1).strip()
+
+
+def _scan_feedback_files(repo_root: Path, feedback_root: Path) -> list[dict]:
+    """Walk the feedback directory and return one dict per parseable per-comment
+    feedback file. Skips legacy timestamp-named files (no `comment_id` in
+    frontmatter) — they're tracked separately for migration.
+
+    Returned dicts: {path, source (Path, relative to repo_root), comment_id,
+    author, date, pulled_at, section, status, comment_body, disposition_body,
+    disposition_is_stub}.
+    """
+    out = []
+    if not feedback_root.is_dir():
+        return out
+    for p in sorted(feedback_root.glob("*.md")):
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        meta, body = _parse_frontmatter(text)
+        if "comment_id" not in meta or "source" not in meta:
+            continue  # legacy file or non-feedback md; ignore here
+        comment_section = _extract_section(body, "Comment")
+        disposition_section = _extract_section(body, "Disposition")
+        is_stub = disposition_section.strip() == DISPOSITION_STUB.strip() or not disposition_section.strip()
+        out.append({
+            "path": p,
+            "source": Path(meta["source"]),
+            "comment_id": meta.get("comment_id", ""),
+            "author": meta.get("author", "(unknown)"),
+            "date": meta.get("date", ""),
+            "pulled_at": meta.get("pulled_at", ""),
+            "section": meta.get("section", ""),
+            "status": meta.get("status", "pending"),
+            "comment_body": comment_section,
+            "disposition_body": disposition_section,
+            "disposition_is_stub": is_stub,
+        })
+    return out
+
+
+def _is_pending(entry: dict) -> bool:
+    """A feedback entry is pending if its frontmatter `status` isn't addressed.
+    The disposition-section content is informational only — frontmatter is canonical."""
+    return entry.get("status", "pending").strip().lower() != "addressed"
+
+
+def render_response_sidecar(source: Path, entries: list[dict], repo_root: Path) -> str:
+    """Build the markdown for the response-companion docx: comprehensive,
+    chronological readout of every comment and its disposition for one source."""
+    rel_source = source.relative_to(repo_root) if source.is_absolute() else source
+    addressed = sum(1 for e in entries if not _is_pending(e))
+    pending = sum(1 for e in entries if _is_pending(e))
+    lines = [
+        "---",
+        f"source: {rel_source}",
+        f"generated_at: {_now_local_iso()}",
+        f"total_comments: {len(entries)}",
+        f"addressed: {addressed}",
+        f"pending: {pending}",
+        "---",
+        "",
+        f"# Feedback dispositions for {rel_source}",
+        "",
+        f"*Generated {_dt.datetime.now().strftime('%Y-%m-%d')}. "
+        f"Covers all reviewer feedback received and how it shaped this version.*",
+        "",
+    ]
+    if not entries:
+        lines.append("_No feedback has been received for this document._")
+        lines.append("")
+        return "\n".join(lines)
+
+    sorted_entries = sorted(entries, key=lambda e: (e.get("pulled_at") or "", e.get("comment_id") or ""))
+    for e in sorted_entries:
+        section = e.get("section") or "(unanchored)"
+        author = e.get("author") or "(unknown)"
+        pulled = (e.get("pulled_at") or "")[:10] or "(unknown date)"
+        status = "addressed" if not _is_pending(e) else "PENDING"
+        lines.append(f"## Comment in \"{section}\" — {author} · pulled {pulled}  *[{status}]*")
+        lines.append("")
+        lines.append("**Comment**")
+        lines.append("")
+        if e["comment_body"]:
+            for ln in e["comment_body"].splitlines():
+                lines.append(f"> {ln}" if ln.strip() else ">")
+        else:
+            lines.append("> _(empty)_")
+        lines.append("")
+        lines.append("**Disposition**")
+        lines.append("")
+        if _is_pending(e):
+            lines.append("_Pending — author has not yet written a response._")
+        else:
+            lines.append(e["disposition_body"] or "_(empty disposition)_")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+    return "\n".join(lines)
+
+
+# ----------------------------- pull-state tracking -------------------
+
+def _load_publish_state(repo_root: Path) -> dict:
+    p = repo_root / PUBLISH_STATE_PATH
+    if not p.is_file():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_publish_state(repo_root: Path, state: dict):
+    p = repo_root / PUBLISH_STATE_PATH
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _new_comment_ids(parsed: dict, prior_seen: list) -> list:
+    seen = set(prior_seen or [])
+    return [c["id"] for c in parsed["comments"] if c["id"] not in seen]
+
+
+def _baseline_path_for(output_path: Path, repo_root: Path, manifest: dict) -> Path:
+    """Map an output docx path to its baseline-snapshot location."""
+    publish_root = (repo_root / manifest["publish_path"]).resolve()
+    rel = output_path.resolve().relative_to(publish_root)
+    return repo_root / PUBLISH_BASELINE_PATH / rel
+
+
+def _synthesize_baseline_from_source(target: dict) -> Path | None:
+    """Re-render `target["source"]` to a tempfile docx using the same pandoc
+    settings as publish. Returns the temp path or None on failure. Caller
+    must `unlink()` the file when done.
+
+    Used as a fallback when no on-disk baseline exists (e.g., the source was
+    published before baseline-snapshot landed). If the source markdown is
+    unchanged since publish, this synthesis is equivalent to the snapshot.
+    If the source has drifted, the diff will include both reviewer edits
+    and source-drift — suboptimal but better than no signal.
+    """
+    import tempfile
+    fd, tmp_path = tempfile.mkstemp(suffix=".docx")
+    os.close(fd)
+    synth_target = dict(target)
+    synth_target["output_path"] = Path(tmp_path)
+    ok, _err = _publish_one(synth_target)
+    if not ok:
+        try:
+            Path(tmp_path).unlink()
+        except OSError:
+            pass
+        return None
+    return Path(tmp_path)
+
+
+def _snapshot_baseline(output_path: Path, repo_root: Path, manifest: dict) -> None:
+    """Copy a freshly-published docx into the baseline directory so pull
+    can diff against it later. Errors are non-fatal — baseline is best-effort.
+    """
+    try:
+        baseline = _baseline_path_for(output_path, repo_root, manifest)
+        baseline.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(output_path, baseline)
+    except Exception:
+        pass
+
+
+# ----------------------------- output→source mapping -----------------
+
+def _source_for_output(output_path: Path, manifest: dict, repo_root: Path) -> Path | None:
+    targets = resolve_publish_targets(manifest, repo_root)
+    for t in targets:
+        if t["output_path"].resolve() == output_path.resolve():
+            return t["source"]
+    return None
+
+
+# ----------------------------- commands ------------------------------
+
+def cmd_docs_setup(args):
+    repo_root = Path.cwd()
+    manifest_file = repo_root / MANIFEST_PATH
+    manifest_file.parent.mkdir(parents=True, exist_ok=True)
+
+    _info("docs setup — interactive")
+    _info("")
+
+    if manifest_file.exists():
+        if not _confirm(f"  {MANIFEST_PATH} exists. Overwrite?", default=False):
+            _info("Aborted. No changes made.")
+            return
+
+    if not _have_pandoc():
+        _warn("pandoc not found on PATH.")
+        _info("    Install: https://pandoc.org/installing.html")
+        if not _confirm("  Continue setup anyway? (you can install pandoc later)", default=True):
+            _info("Aborted.")
+            return
+
+    output = _prompt("Output format", default="docx")
+    structure = _prompt("Structure (mirror | flat)", default="mirror")
+    publish_path = _prompt("Publish path", default=DEFAULT_PUBLISH_PATH)
+    feedback_path = _prompt("Feedback path", default=DEFAULT_FEEDBACK_PATH)
+    template = _prompt("Reference template (path or empty for none)", default="")
+
+    lines = [
+        "# docs publish manifest. See `mcc docs -h` and docs-design.md for schema.",
+        f"output: {output}",
+    ]
+    if template:
+        lines.append(f"template: {template}")
+    lines.append(f"structure: {structure}")
+    lines.append(f"publish_path: {publish_path}")
+    lines.append(f"feedback_path: {feedback_path}")
+    lines.append("pandoc_args: []")
+    lines.append("# Pandoc format extensions. Examples:")
+    lines.append("#   from_extensions: [lists_without_preceding_blankline]")
+    lines.append("#   to_extensions: []")
+    lines.append("from_extensions: []")
+    lines.append("to_extensions: []")
+    lines.append("")
+    lines.append("# Optional pre/post hooks — shell command run before/after publish.")
+    lines.append("# Pre-hook failure aborts the publish; post-hook failure surfaces but")
+    lines.append("# doesn't roll back. Useful for image rasterization, syncing, etc.")
+    lines.append("# pre_publish: scripts/rasterize-svgs.sh")
+    lines.append("# post_publish: echo \"done\"")
+    lines.append("")
+    lines.append("# What to publish. Each entry can be:")
+    lines.append("#   - a directory (publishes all *.md beneath it)")
+    lines.append("#   - a glob pattern (e.g. docs/**/design*.md)")
+    lines.append("#   - a literal path")
+    lines.append("#   - a mapping with `pattern:` plus optional overrides:")
+    lines.append("#       output, structure, template, publish_as")
+    lines.append("docs:")
+    lines.append("  # - docs/product")
+    lines.append("  # - docs/**/design*.md")
+    lines.append("  # - pattern: docs/architecture/overview.md")
+    lines.append("  #   publish_as: architecture-overview.docx")
+    lines.append("")
+
+    manifest_file.write_text("\n".join(lines), encoding="utf-8")
+    _ok(f"wrote {MANIFEST_PATH}")
+
+    _ensure_gitignore_entries(repo_root, [
+        f"{publish_path.rstrip('/')}/",
+        ".mcc/docs-publish-state.json",
+        f"{PUBLISH_BASELINE_PATH}/",
+        ".mcc/publish-staging/",
+    ])
+
+    _info("")
+    _info("Next steps:")
+    _info(f"  1. Edit {MANIFEST_PATH} to declare which docs to publish.")
+    _info(f"  2. Set up {publish_path}/ (typically a symlink to your synced folder).")
+    _info(f"     Example (WSL → OneDrive):")
+    _info(f"       ln -s /mnt/c/Users/<you>/OneDrive/.../ProjectDocs {publish_path}")
+    _info(f"  3. Run `mcc docs publish` to generate, then notify your reviewers.")
+    _info(f"  4. After comments come in, run `mcc docs pull` to ingest as feedback files.")
+
+
+def _ensure_gitignore_entries(repo_root: Path, entries: list):
+    gi = repo_root / ".gitignore"
+    existing = gi.read_text(encoding="utf-8") if gi.is_file() else ""
+    existing_set = set(line.strip() for line in existing.splitlines())
+    to_add = [e for e in entries if e not in existing_set]
+    if not to_add:
+        return
+    if existing and not existing.endswith("\n"):
+        existing += "\n"
+    if existing and not existing.endswith("\n\n"):
+        existing += "\n"
+    existing += "# docs plugin\n"
+    for e in to_add:
+        existing += f"{e}\n"
+    gi.write_text(existing, encoding="utf-8")
+    _ok(f"updated .gitignore with: {', '.join(to_add)}")
+
+
+def _run_hook(name: str, command: str | None, cwd: Path) -> bool:
+    """Run a shell hook command. Returns True on success (or absence).
+
+    Streams the hook's stdout/stderr through to the user — useful progress
+    info from rasterizers or other pre-flight scripts shouldn't be hidden.
+    Runs with cwd = manifest's repo root so paths resolve consistently.
+    """
+    if not command:
+        return True
+    _info(f"Running {name} hook: {command}")
+    proc = subprocess.run(command, shell=True, cwd=str(cwd))
+    if proc.returncode != 0:
+        _warn(f"{name} hook failed (exit {proc.returncode})")
+        return False
+    return True
+
+
+def cmd_docs_publish(args):
+    if not _have_pandoc():
+        _die("pandoc not found on PATH. Install pandoc and retry.")
+
+    repo_root = Path.cwd()
+    manifest = load_manifest(repo_root)
+
+    cli_patterns = list(args.patterns) if args.patterns else None
+    targets = resolve_publish_targets(manifest, repo_root, cli_patterns=cli_patterns)
+    if not targets:
+        _info("No targets resolved. Check your manifest's `docs:` list.")
+        return
+
+    include_pending = bool(getattr(args, "include_pending", False))
+    skip_pending = bool(getattr(args, "skip_pending", False))
+    if include_pending and skip_pending:
+        _die("--include-pending and --skip-pending are mutually exclusive")
+
+    # ---- Preflight: scan feedback for pending dispositions ----
+    feedback_root = repo_root / manifest["feedback_path"]
+    feedback_entries = _scan_feedback_files(repo_root, feedback_root)
+    pending_by_source: dict[str, int] = {}
+    for e in feedback_entries:
+        if _is_pending(e):
+            key = str(e["source"])
+            pending_by_source[key] = pending_by_source.get(key, 0) + 1
+
+    target_source_keys = {str(t["source"].relative_to(repo_root)) for t in targets}
+    affected_pending = {s: n for s, n in pending_by_source.items() if s in target_source_keys}
+
+    if affected_pending and not include_pending and not skip_pending:
+        _info("Pending dispositions found in the targets you asked to publish:")
+        for src, n in sorted(affected_pending.items()):
+            _info(f"  {src}    {n} pending")
+        _info("")
+        _info("Resolve them (edit feedback files and flip `status: pending` → `status: addressed`), or:")
+        _info("  mcc docs publish --skip-pending      # publish only docs with no pending feedback")
+        _info("  mcc docs publish --include-pending   # publish everything, accepting unresolved feedback")
+        sys.exit(1)
+
+    if affected_pending and skip_pending:
+        skipped_srcs = set(affected_pending)
+        before = len(targets)
+        targets = [t for t in targets if str(t["source"].relative_to(repo_root)) not in skipped_srcs]
+        _info(f"--skip-pending: excluding {before - len(targets)} doc(s) with pending feedback:")
+        for s in sorted(skipped_srcs):
+            _info(f"  {s}")
+        _info("")
+        if not targets:
+            _info("Nothing left to publish.")
+            return
+
+    if affected_pending and include_pending:
+        _warn("--include-pending: publishing the following with PENDING dispositions:")
+        for src, n in sorted(affected_pending.items()):
+            _warn(f"  {src}  ({n} pending)")
+        _info("")
+
+    # Pre-publish hook: if configured, run before publishing. Abort on failure —
+    # the user's script is doing pre-flight work (image rasterization, etc.)
+    # that downstream pandoc steps may depend on.
+    if not _run_hook("pre_publish", manifest.get("pre_publish"), repo_root):
+        _die("aborting publish — pre_publish hook failed")
+
+    _info(f"Publishing {len(targets)} document(s) → {manifest['publish_path']}/")
+    ok_count = 0
+    sidecar_count = 0
+    for t in targets:
+        rel_src = t["source"].relative_to(repo_root)
+        rel_out = t["output_path"].relative_to(repo_root)
+        ok, err = _publish_one(t)
+        if ok:
+            _ok(f"{rel_src} → {rel_out}")
+            ok_count += 1
+            # Snapshot the as-published output for later roundtrip-diff. Body
+            # edits are detected by diffing this snapshot against the reviewer's
+            # returned docx (after pandoc-normalizing both to md).
+            _snapshot_baseline(t["output_path"], repo_root, manifest)
+        else:
+            _warn(f"{rel_src} → {rel_out}\n      {err}")
+            continue
+
+        # Generate the response sidecar (full disposition history for this source)
+        source_key = str(rel_src)
+        entries_for_source = [e for e in feedback_entries if str(e["source"]) == source_key]
+        if not entries_for_source:
+            continue
+        sidecar_ok, sidecar_err = _publish_response_sidecar(
+            t, entries_for_source, repo_root, manifest,
+        )
+        if sidecar_ok:
+            sidecar_count += 1
+        else:
+            _warn(f"      response sidecar failed: {sidecar_err}")
+
+    _info("")
+    _info(f"Done: {ok_count}/{len(targets)} published, {sidecar_count} response sidecar(s).")
+
+    # Post-publish hook: runs after publishing regardless of per-doc failures.
+    # Failures surface but don't undo work already written.
+    _run_hook("post_publish", manifest.get("post_publish"), repo_root)
+
+
+def _publish_response_sidecar(
+    target: dict, entries: list, repo_root: Path, manifest: dict
+) -> tuple[bool, str]:
+    """Render the response companion markdown for one source and pandoc-convert
+    it to docx, written as a sibling to the source's published file with a
+    `-responses` suffix (e.g. `spec.docx` → `spec-responses.docx`).
+    """
+    source = target["source"]
+    md_body = render_response_sidecar(source, entries, repo_root)
+    out_docx = target["output_path"].with_name(
+        target["output_path"].stem + "-responses" + target["output_path"].suffix
+    )
+    out_docx.parent.mkdir(parents=True, exist_ok=True)
+
+    # Stage the md in a tmp file under the publish root so pandoc has a path to
+    # read. It's transient — regenerated on next publish — and never checked in.
+    staging_dir = repo_root / ".mcc" / "publish-staging"
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    staging_md = staging_dir / (target["output_path"].stem + "-responses.md")
+    staging_md.write_text(md_body, encoding="utf-8")
+
+    sidecar_target = {
+        "source": staging_md,
+        "output_path": out_docx,
+        "output_format": target.get("output_format", "docx"),
+        "from_extensions": target.get("from_extensions") or [],
+        "to_extensions": target.get("to_extensions") or [],
+        "template": target.get("template"),
+        "pandoc_args": target.get("pandoc_args") or [],
+    }
+    ok, err = _publish_one(sidecar_target)
+    if ok:
+        rel = out_docx.relative_to(repo_root) if out_docx.is_absolute() else out_docx
+        _ok(f"  ↳ {rel} ({len(entries)} comment(s))")
+    return ok, err
+
+
+def cmd_docs_pull(args):
+    repo_root = Path.cwd()
+    manifest = load_manifest(repo_root)
+    publish_root = repo_root / manifest["publish_path"]
+    feedback_root = repo_root / manifest["feedback_path"]
+    if not publish_root.exists():
+        _die(f"publish path does not exist: {manifest['publish_path']}")
+
+    feedback_root.mkdir(parents=True, exist_ok=True)
+    state = _load_publish_state(repo_root)
+
+    if getattr(args, "resync", False):
+        # Forget prior pull state so EVERY comment gets re-pulled. Existing
+        # per-comment feedback files are preserved on disk — re-pull skips
+        # those (by file existence) so author-written dispositions survive.
+        _info("--resync: clearing pull state; will re-pull every comment.")
+        state = {}
+
+    docx_files = sorted(publish_root.rglob("*.docx"))
+    if not docx_files:
+        _info(f"No .docx files under {manifest['publish_path']}/.")
+        return
+
+    targets = resolve_publish_targets(manifest, repo_root)
+    output_to_source = {str(t["output_path"].resolve()): t["source"] for t in targets}
+    output_to_target = {str(t["output_path"].resolve()): t for t in targets}
+
+    pulled_files = 0
+    skipped_existing = 0
+    docs_with_no_new_signal = 0
+    for docx in docx_files:
+        # Skip response sidecars first — they're our own output, not source
+        # docs, and they wouldn't match the manifest anyway.
+        if docx.stem.endswith("-responses"):
+            continue
+
+        key = str(docx.resolve())
+        source = output_to_source.get(key)
+        if source is None:
+            _warn(f"skipping {docx.relative_to(publish_root)} (no manifest match)")
+            continue
+
+        slug = _doc_slug(source, repo_root)
+        rel_docx = docx.relative_to(publish_root)
+        doc_state = state.get(key, {})
+        emitted_this_doc = 0
+
+        # ----- Signal 1: comments -----
+        parsed = parse_docx_comments(docx)
+        prior_comments = doc_state.get("seen_comment_ids", [])
+        new_comment_ids = _new_comment_ids(parsed, prior_comments)
+        if new_comment_ids:
+            new_ids_set = set(new_comment_ids)
+            for c in parsed["comments"]:
+                if c["id"] not in new_ids_set:
+                    continue
+                out_path = feedback_root / f"{slug}__c{c['id']}.md"
+                if out_path.exists():
+                    skipped_existing += 1
+                    continue
+                out_path.write_text(
+                    render_feedback_comment_file(source, docx, c, repo_root),
+                    encoding="utf-8",
+                )
+                emitted_this_doc += 1
+
+        # ----- Signal 2: tracked changes -----
+        tracked = parse_docx_tracked_changes(docx)
+        prior_tracked = set(doc_state.get("seen_tracked_change_uids", []))
+        for t in tracked:
+            uid = f"{t['kind']}:{t['id']}"
+            if uid in prior_tracked:
+                continue
+            out_path = feedback_root / f"{slug}__t{t['kind']}-{t['id']}.md"
+            if out_path.exists():
+                skipped_existing += 1
+                continue
+            out_path.write_text(
+                render_feedback_tracked_change_file(source, docx, t, repo_root),
+                encoding="utf-8",
+            )
+            emitted_this_doc += 1
+
+        # ----- Signal 3: body edits (roundtrip-diff vs baseline) -----
+        # Prefer the on-disk baseline (snapshotted at publish). Fall back to
+        # synthesizing one from the current source markdown if missing —
+        # makes pull work for docs published before baseline-snapshot landed.
+        baseline = _baseline_path_for(docx, repo_root, manifest)
+        synth_baseline: Path | None = None
+        diff_text = ""
+        diff_hash = ""
+        if baseline.is_file():
+            baseline_to_use = baseline
+        else:
+            synth_baseline = _synthesize_baseline_from_source(output_to_target[key])
+            baseline_to_use = synth_baseline
+        if baseline_to_use is not None:
+            diff_text = compute_body_edit_diff(baseline_to_use, docx)
+            if diff_text:
+                import hashlib
+                diff_hash = hashlib.sha256(diff_text.encode("utf-8")).hexdigest()[:8]
+        if synth_baseline is not None:
+            try:
+                synth_baseline.unlink()
+            except OSError:
+                pass
+        prior_hash = doc_state.get("body_edits_hash", "")
+        if diff_hash and diff_hash != prior_hash:
+            out_path = feedback_root / f"{slug}__b{diff_hash}.md"
+            if out_path.exists():
+                skipped_existing += 1
+            else:
+                out_path.write_text(
+                    render_feedback_body_edits_file(source, docx, diff_text, repo_root),
+                    encoding="utf-8",
+                )
+                emitted_this_doc += 1
+
+        if emitted_this_doc:
+            pulled_files += emitted_this_doc
+            _ok(f"{rel_docx} → {emitted_this_doc} new file(s) "
+                f"in {feedback_root.relative_to(repo_root)}/")
+        else:
+            docs_with_no_new_signal += 1
+
+        # Update state for all three signal sources
+        state[key] = {
+            "last_pull": _now_local_iso(),
+            "seen_comment_ids": [c["id"] for c in parsed["comments"]],
+            "seen_tracked_change_uids": [f"{t['kind']}:{t['id']}" for t in tracked],
+            "body_edits_hash": diff_hash or prior_hash,
+            "source": str(source.relative_to(repo_root)),
+        }
+
+    _save_publish_state(repo_root, state)
+
+    _info("")
+    if pulled_files == 0 and docs_with_no_new_signal == 0 and skipped_existing == 0:
+        _info("No docs had feedback.")
+    else:
+        msg = f"Pulled: {pulled_files} new feedback file(s); docs with no new signal: {docs_with_no_new_signal}."
+        if skipped_existing:
+            msg += f" (skipped {skipped_existing} existing file(s) to preserve dispositions.)"
+        _info(msg)
+
+
+def cmd_docs_status(args):
+    repo_root = Path.cwd()
+    manifest_file = repo_root / MANIFEST_PATH
+    if not manifest_file.is_file():
+        _info(f"docs: not configured ({MANIFEST_PATH} missing). Run `mcc docs setup`.")
+        return
+    manifest = load_manifest(repo_root)
+    publish_root = repo_root / manifest["publish_path"]
+    feedback_root = repo_root / manifest["feedback_path"]
+
+    _info(f"manifest:      {MANIFEST_PATH}")
+    _info(f"publish_path:  {manifest['publish_path']}/  "
+          f"({'exists' if publish_root.exists() else 'MISSING — symlink it before publish'})")
+    _info(f"feedback_path: {manifest['feedback_path']}/")
+
+    targets = resolve_publish_targets(manifest, repo_root)
+    _info(f"declared docs: {len(targets)}")
+
+    entries = _scan_feedback_files(repo_root, feedback_root)
+    if not entries:
+        # Maybe legacy files still around — surface their count for visibility.
+        legacy_count = 0
+        if feedback_root.is_dir():
+            for p in feedback_root.glob("*.md"):
+                try:
+                    text = p.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                meta, _ = _parse_frontmatter(text)
+                if "comment_id" not in meta and "source" in meta:
+                    legacy_count += 1
+        if legacy_count:
+            _info(f"feedback: 0 per-comment files (but {legacy_count} legacy file(s) found — "
+                  f"run `mcc docs pull --resync` to re-pull under per-comment structure)")
+        else:
+            _info("feedback: none recorded yet")
+        return
+
+    total = len(entries)
+    pending = sum(1 for e in entries if _is_pending(e))
+    addressed = total - pending
+    _info(f"feedback: {total} comment(s) — {addressed} addressed, {pending} pending")
+
+    # Per-source breakdown for any source with pending feedback
+    pending_by_source: dict[str, int] = {}
+    for e in entries:
+        if _is_pending(e):
+            key = str(e["source"])
+            pending_by_source[key] = pending_by_source.get(key, 0) + 1
+    if pending_by_source:
+        _info("")
+        _info("Pending dispositions by source:")
+        for src, n in sorted(pending_by_source.items()):
+            _info(f"  {src}    {n} pending")
+        _info("")
+        _info("  Edit each feedback file's `## Disposition` section and flip")
+        _info("  `status: pending` → `status: addressed` in the frontmatter.")

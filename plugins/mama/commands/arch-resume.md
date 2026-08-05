@@ -19,11 +19,11 @@ This command helps establish context when:
 ### 1. Find Your MAMA State
 
 Look for the MAMA state directory:
-- `.mama/` (unscoped) or `.mama-{scope}/` (scoped)
+- `.mcc/` (unscoped) or `.mcc-{scope}/` (scoped)
 - Read `architect_state.md` -- this is your primary context document, containing project identity, sprint history, current status, and accumulated knowledge
 - Read `sprint_log.md` for the chronological sprint record
 
-If no `.mama*/` directory exists, this project may need initialization via `/mama:arch-init`.
+If no `.mcc*/` directory exists, this project may need initialization via `/mama:arch-init`.
 
 ### 2. Read Supporting Context
 

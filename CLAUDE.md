@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains Claude Code plugins for structured product design and implementation workflows. Three plugins: PDT for pre-implementation product design thinking, MAM and MAMA for sprint-based implementation with distinct Architect and Implementor roles.
+This repository contains Claude Code plugins for structured product design and implementation workflows. Five plugins: PDT for pre-implementation product design thinking, MAM and MAMA for sprint-based implementation with distinct Architect and Implementor roles, Bus for peer messaging across Claude Code sessions (eliminates user-as-courier between PDT and MAM/MAMA), and Docs for circulating markdown as docx to stakeholders and ingesting their comments as feedback.
 
 ## Plugin Structure
 
@@ -13,7 +13,7 @@ This plugin follows the Claude Code plugin specification:
 ```
 methodical-cc/
 ├── .claude-plugin/
-│   └── marketplace.json         # Marketplace advertising all three plugins
+│   └── marketplace.json         # Marketplace advertising all five plugins
 ├── plugins/
 │   ├── pdt/                     # Product Design Thinking
 │   │   ├── .claude-plugin/
@@ -29,23 +29,35 @@ methodical-cc/
 │   │   ├── agents/
 │   │   │   └── ux-designer/
 │   │   └── hooks/
-│   └── mama/                    # Team-based implementation
+│   ├── mama/                    # Team-based implementation
+│   │   ├── .claude-plugin/
+│   │   │   └── plugin.json
+│   │   ├── skills/
+│   │   ├── commands/
+│   │   ├── agents/
+│   │   │   ├── ux-designer/     # UX Designer teammate definition
+│   │   │   └── implementor/     # Implementor teammate definition
+│   │   └── hooks/
+│   ├── bus/                     # Peer messaging bus (agent-team mailbox)
+│   │   ├── .claude-plugin/
+│   │   │   └── plugin.json
+│   │   ├── hooks/               # SessionStart hook for team membership orientation
+│   │   ├── skills/
+│   │   └── commands/
+│   └── docs/                    # Stakeholder documentation sharing
 │       ├── .claude-plugin/
 │       │   └── plugin.json
+│       ├── hooks/               # SessionStart hook for pending-feedback count
 │       ├── skills/
-│       ├── commands/
-│       ├── agents/
-│       │   ├── ux-designer/     # UX Designer teammate definition
-│       │   └── implementor/     # Implementor teammate definition
-│       └── hooks/
-├── tools/                       # Migration and utility scripts
+│       └── commands/
+├── tools/                       # Migration and utility scripts (mcc, etc.)
 ├── docs/                        # Design-time documentation (not part of plugins)
 └── README.md
 ```
 
 **Critical**: `commands/`, `skills/`, `hooks/`, and `agents/` must be at the **plugin root**, NOT inside `.claude-plugin/`.
 
-## Three Plugin Variants
+## Four Plugin Variants
 
 ### PDT (Product Design Thinking)
 Pre-implementation product design workflow with a Socratic Design Partner.
@@ -65,9 +77,18 @@ Team-based workflow where Architect orchestrates Implementor and UX Designer as 
 - Commands namespaced as `/mama:arch-init`, `/mama:arch-sprint-start`, etc.
 - User can interact directly with Implementor and UX Designer teammates
 - Implementor maintains persistent working knowledge via compacted state document
-- MAMA internal state kept in `.mama/` (or `.mama-{scope}/` for multi-product)
+- All operational state unified under `.mcc/` (or `.mcc-{scope}/` for multi-product)
 - Sprint artifacts organized hierarchically: `docs/sprint/X/`
-- Requires agent teams feature enabled
+- Requires agent teams feature enabled (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`)
+
+### Bus (Peer Messaging)
+Built on Claude Code's native agent-team mailbox protocol. Sessions in a project join a shared team and message each other via the standard `SendMessage` tool — no MCP server, no extra dependencies.
+- Replaces user-as-courier between PDT and MAM/MAMA workflows
+- Two modes: `chat` (lightweight, ephemeral) and `consult` (durable, produces artifact in `docs/crossover/{thread_id}/`)
+- Identity comes from existing session-name registry in `.mcc/sessions` (`/{plugin}:session set <name>`)
+- Send: native `SendMessage`. Receive: harness polls each session's mailbox automatically once a second
+- Set up implicitly when launching any session via `mcc <name>` or `mcc create <name>`; manual setup via `mcc team setup`
+- Full design at `docs/bus-design.md`
 
 ## Commands
 
@@ -171,25 +192,40 @@ claude --plugin-dir ./plugins/mama
 
 ### SessionStart Hook
 On session start, the plugin auto-detects project state:
-- Checks for `.mama/` or `.mama-{scope}/` state directories
+- Checks for `.mcc/` or `.mcc-{scope}/` state directories
 - Reads architect state for sprint history
 - Falls back to scanning `CLAUDE.md` and `docs/` if no state directory exists
 - Displays detected state and invites correction ("We're actually in sprint X")
 
-### MAMA State Directory
-MAMA keeps its internal state in `.mama/` (or `.mama-{scope}/` for multi-product projects):
+### Unified `.mcc/` State Directory
+All operational state lives under `.mcc/` (or `.mcc-{scope}/` for multi-product projects):
+- `sessions` - registered session identities for the project
 - `architect_state.md` - Architect's running project knowledge and sprint history
 - `implementor_state.md` - Implementor's compacted working memory across sprints
 - `sprint_log.md` - Chronological sprint record
+- `bus/inbox/` - per-session inbox staging used by the bus plugin
+- `term` - terminal arrangement (tabs/panes) for the project's sessions
+
+### Terminal Arrangements (`.mcc/term`)
+`.mcc/term` is the single source of truth for how a project's sessions lay out across
+terminal tabs and panes. Renderers project from it and degrade what they can't express:
+- `mcc term up` - Windows Terminal (`wt.exe`) and iTerm2; full grid geometry
+- `mcc vscode` - `.vscode/tasks.json`; tabs become presentation groups, geometry dropped
+
+The layout grammar is a slicing mini-language: leaves are session names, `|` splits into
+columns, `/` into rows, `()` nests, and `name@40` pins a pane to 40% of its split. Any
+guillotine (X-by-Y) grid is expressible; a non-slicing pinwheel is intentionally not.
+Platform differences (pane shell, profile, cwd pinning, dry-run syntax) are handled by
+the compiler — see the `mcc term` block in `tools/mcc.py`.
 
 ### Agent Teams
-MAMA uses agent teams for orchestration:
-- Architect is the team lead
-- Implementor and UX Designer are spawned as teammates
-- User can interact directly with any teammate (Shift+Down to cycle, or split panes)
-- Teammates communicate directly via SendMessage
+The bus plugin uses a phantom-lead team pattern:
+- All real participants (PDT, Architect, Implementor, UX) are symmetric peers
+- A non-running phantom "coordinator" satisfies Claude Code's flat-roster requirement
+- Teammates cannot spawn other teammates — the user launches each session via `mcc create <name>` and resumes via `mcc <name>`
+- For long-running UX work, launch a separate `design-ux` session; for one-shots the Architect uses the Agent tool (subagent semantics)
 - Shared task list provides live sprint progress visibility
-- Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+- Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (set automatically by `mcc team setup`)
 
 ### Implementor Persistent Working Knowledge
 The Implementor accumulates expertise across sprints via `implementor_state.md`:
@@ -201,12 +237,24 @@ The Implementor accumulates expertise across sprints via `implementor_state.md`:
 Key commands prompt Claude to read relevant files before proceeding:
 - `arch-sprint-prep` - Reads architect state, roadmap, active deltas
 - `arch-sprint-complete` - Reads implementation log, updates architect state and sprint log
-- `arch-sprint-start` (MAMA) - Writes sprint artifacts and spawns Implementor teammate in one step
+- `arch-sprint-start` (MAMA) - Writes sprint artifacts and sends kickoff `SendMessage` to the user-launched Implementor session
 - `mam:impl-begin` - Reads brief, plan, and state references in the Implementor session
-- `arch-resume` - Reads `.mama*/` state for session resumption
+- `arch-resume` - Reads `.mcc*/` state for session resumption
 
 ## Development Notes
 
 - The `docs/` directory contains the original design documents from the design session (kept for reference)
-- Plugin names are `pdt`, `mam`, and `mama` for brevity, so commands are invoked as `/pdt:init`, `/mam:arch-init`, `/mama:arch-init` etc.
+- Plugin names are `pdt`, `mam`, `mama`, `bus`, and `docs` for brevity, so commands are invoked as `/pdt:init`, `/mam:arch-init`, `/mama:arch-init`, `/bus:status`, `/docs:publish`, etc.
 - To test changes, restart Claude Code with `claude --plugin-dir ./`
+
+### Adding a new plugin — checklist
+
+When introducing a new plugin (or renaming one), three places need to stay in sync or surfaces silently rot:
+
+1. **`tools/mcc.py`** — add the name to the `PLUGINS` tuple. This drives `mcc setup`, `mcc update`, `mcc enable/disable`, and the `--plugin` value in tab-completion.
+2. **`.claude-plugin/marketplace.json`** — add the plugin entry so `claude plugin install` can find it.
+3. **`tools/completions/mcc.bash`** — regenerate via `python3 tools/mcc.py completions emit` and commit the result. The verify step (`mcc completions verify`) is what catches drift; run it after any parser change. Hardcoded plugin lists in the emitter are derived from `PLUGINS` — don't reintroduce literals.
+
+## Contributing
+
+The bus plugin is now pure-Python/shell — no Node, no MCP server, no build step. Plugin changes can be tested directly with `claude --plugin-dir ./`.

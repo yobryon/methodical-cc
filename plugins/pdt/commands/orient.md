@@ -1,6 +1,6 @@
 ---
 description: Write or update the architect orientation -- a living document that helps the Architect understand the design, where to begin reading, what matters most, and what has changed. Works for initial launch and phase transitions.
-allowed-tools: Read, Write, Edit, Glob, Grep
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, SendMessage
 ---
 
 # Orient the Architect
@@ -132,6 +132,33 @@ This is important -- the orientation shapes how the Architect understands the en
 
 Write (or update) `docs/architect_orientation.md`.
 
+### 6. Notify the Architect
+
+Don't make the user the courier. After writing, notify the Architect via the bus.
+
+Check whether an Architect session is registered for this project:
+
+```bash
+grep -h '^arch=' .mcc/sessions .mcc-*/sessions 2>/dev/null
+```
+
+**If registered** (typical for phase transitions): send a `SendMessage` so the orientation update lands as a turn:
+
+```
+SendMessage(
+  to='arch',
+  message='[ORIENT] {Initial orientation | Phase update — <phase name>} written to docs/architect_orientation.md.
+
+<2-3 sentence summary of what is new or what to focus on>
+
+Read the {full document | new dated section at the top} when you next have context to absorb it.'
+)
+```
+
+Tell the user briefly that the message has been sent. No further courier instructions.
+
+**If not registered** (typical for initial orientation, before the Architect session has been launched): tell the user, in one short block, that the orientation is ready and that the Architect should read `docs/architect_orientation.md` first when they launch their session. Don't elaborate — they know how to launch arch.
+
 ## Your Posture
 
 You are writing for someone smart who has not been in the room for the design conversations. They need the map, not the territory. Be opinionated about reading order and priorities -- the Architect benefits from your judgment about what matters most. Be honest about what is validated vs. assumed -- the Architect needs to know where the design is solid and where it might shift.
@@ -140,6 +167,6 @@ This document should feel like a trusted colleague sitting down with the Archite
 
 ## Begin
 
-Read the full corpus, then write (or update) the architect orientation. Take your time -- this document shapes the Architect's entire understanding of the design.
+Read the full corpus, write (or update) the architect orientation, then notify the Architect via the bus. Take your time on the writing — this document shapes the Architect's entire understanding of the design.
 
 $ARGUMENTS

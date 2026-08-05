@@ -155,34 +155,40 @@ Steps 3 and 4 happen repeatedly. Discussion scales from Socratic exploration to 
 
 After intensive iteration, run a coherence audit (`/pdt:coherence`) to catch drift -- contradictions, stale descriptions, and missing cross-references that accumulate across the corpus.
 
-## Launch and Ongoing Collaboration with MAM
+## Launch and Ongoing Collaboration with MAM/MAMA
 
-PDT and MAM are peers with different domains. PDT owns the design indefinitely. MAM owns execution. After launch, they run concurrently and communicate through a formal crossover channel (`docs/crossover/`).
+PDT and MAM/MAMA are peers with different domains. PDT owns the design indefinitely. MAM/MAMA owns execution. After launch, they run concurrently and communicate over the **bus** plugin — built on Claude Code's agent-team protocol, where each project's sessions join a shared team and message each other via the standard `SendMessage` tool.
 
 ### Launch
 
 When the design effort reaches sufficient completeness:
 - The `/pdt:coherence` command will confirm the corpus is internally consistent
 - The `/pdt:gaps` command will naturally show that critical areas are resolved
-- The `/pdt:orient` command writes the architect orientation -- the Architect's entry point into the design corpus, with reading guidance, priorities, and confidence assessments
-- Optionally, `/pdt:commission` writes validation or prototyping tasks for the Architect to pick up
-- The user installs MAM or MAMA and runs `/mam:arch-init` or `/mama:arch-init`
+- The `/pdt:orient` command writes the architect orientation — the Architect's entry point into the design corpus, with reading guidance, priorities, and confidence assessments
+- The user installs MAM or MAMA and the bus plugin: `mcc team setup` in the project (or any `mcc <name>` does it implicitly)
+- Both sessions register identities (`/pdt:session set design`, `/mam:session set arch` or `/mama:session set arch`) so they can address each other on the bus
 - The Architect reads `docs/architect_orientation.md` as their starting point
+- Optionally, `/pdt:commission` sends an initial commission via the bus
 
 There is no rigid gate. Readiness is a gradient that the gap analysis makes visible.
 
-### Crossover Channel
+### Crossover via the Bus
 
-PDT and MAM communicate through discrete files in `docs/crossover/`:
-- **Commissions** (PDT→MAM): `commission_NNN_request.md` / `commission_NNN_response.md` — PDT requests execution work, MAM reports results
-- **Consultations** (MAM→PDT): `consult_NNN_request.md` / `consult_NNN_response.md` — MAM asks design questions, PDT responds
-- **Debriefs** (MAM→PDT): `debrief_NNN.md` — MAM reports back after a milestone (MVP, phase completion, version release) with an assessment of how the design played out in practice
+PDT and the Architect communicate via `SendMessage` (Claude Code's standard team-messaging tool) plus the `Write` tool for durable artifacts. Three categories:
 
-Each file has an ordinal, a status, and a one-line summary. This structure allows both sides to reference specific interactions in their logs and documents.
+- **Commissions** (PDT→Architect): `/pdt:commission` writes a commission artifact at `docs/crossover/{thread_id}/001-pdt-commission.md` and sends a framing `SendMessage(to='arch', ...)`. The Architect receives it as a turn and acts on it.
+- **Consultations** (Architect→PDT): The Architect sends a design question via `/mam:consult-pdt` or `/mama:consult-pdt`. PDT responds via `/pdt:consult` (or reactively, guided by skill).
+- **Debriefs** (Architect→PDT): The Architect sends a milestone debrief via `/mam:debrief-pdt` or `/mama:debrief-pdt`. PDT processes via `/pdt:debrief`.
+
+All consult-mode crossover produces **durable artifacts** in `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` — citable forever, separate from the bus message body. Threading is sender-declared kebab-case (e.g. `consult-013-pref-storage-shape`).
+
+Inbound bus messages arrive automatically as new turns (Claude Code's harness polls each session's mailbox once a second). The `bus-protocol` skill in the bus plugin covers the full protocol — modes, threading conventions, response composition discipline.
+
+If the bus plugin isn't enabled in this project (`mcc team status` will tell you), you can still discuss with the user about manual courier (writing files in `docs/crossover/` for the user to relay). But the methodology going forward assumes bus is enabled.
 
 ### Milestone Debriefs
 
-When MAM reaches a milestone, the Architect writes a debrief reporting what was built, how faithfully the design was realized, where deviations occurred, and what was learned. PDT processes the debrief via `/pdt:debrief` — evaluating design fidelity, assessing deviations, absorbing emergent insights, and evolving the design through document updates, new deltas, new decisions, and backlog changes. This is how the design learns from implementation.
+When MAM/MAMA reaches a milestone, the Architect sends a debrief via the bus reporting what was built, how faithfully the design was realized, where deviations occurred, and what was learned. PDT processes the debrief via `/pdt:debrief` — evaluating design fidelity, assessing deviations, absorbing emergent insights, and evolving the design through document updates, new deltas, new decisions, and backlog changes. This is how the design learns from implementation.
 
 ### Phase Transitions
 

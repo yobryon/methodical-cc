@@ -2,15 +2,17 @@
 
 Claude Code plugins for structured product design and implementation workflows.
 
-## Three Plugins
+## Five Plugins
 
 | Plugin | Description | Best For |
 |--------|-------------|----------|
 | **PDT** | Product Design Thinking - Socratic design partner for pre-implementation thinking | Product vision, concept development, documentation crystallization |
 | **MAM** | Session-based - Architect and Implementor as separate Claude sessions | Explicit context separation, document-based handoffs |
 | **MAMA** | Team-based - Architect orchestrates Implementor and UX Designer as teammates | Direct interaction with agents, real-time communication, persistent knowledge |
+| **Bus** | Peer messaging built on Claude Code's agent-team mailbox protocol | Eliminating user-as-courier between PDT and MAM/MAMA workflows |
+| **Docs** | Stakeholder doc sharing - publish markdown as docx, pull comments and edits back as feedback | Circulating design docs to non-technical reviewers and ingesting their responses |
 
-PDT is the natural predecessor to MAM/MAMA. Design your product with PDT, then build it with MAM or MAMA.
+PDT is the natural predecessor to MAM/MAMA. Design your product with PDT, then build it with MAM or MAMA. Add Bus when you want PDT and the Architect to communicate directly without you relaying messages, and Docs when your design needs review by people who live in Word and SharePoint.
 
 ## Features
 
@@ -45,6 +47,12 @@ claude plugin install mam@methodical-cc
 
 # Team-based implementation workflow
 claude plugin install mama@methodical-cc
+
+# Peer messaging bus (cross-session communication)
+claude plugin install bus@methodical-cc
+
+# Stakeholder documentation sharing (docx publish / feedback ingest)
+claude plugin install docs@methodical-cc
 ```
 
 ### Test Locally
@@ -136,9 +144,10 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
    /mama:arch-sprint-prep
    /mama:arch-sprint-start
    ```
-   → Architect writes plan/brief, spawns Implementor teammate, and kicks off work in one flow
+   → Architect writes plan/brief and sends a kickoff `SendMessage` to the user-launched Implementor session
+   → Launch the Implementor session in a separate terminal: `mcc create impl --persona mama:implementor` then `mcc impl`
    → Implementor loads persistent working knowledge from prior sprints
-   → User can interact directly with Implementor during execution
+   → User can interact directly with the Implementor session during execution
 
 3. **Complete Sprint**:
    ```
@@ -176,7 +185,7 @@ claude --plugin-dir /path/to/methodical-cc/plugins/mama
 | `arch-create-docs` | Create product documentation |
 | `arch-roadmap` | Create implementation roadmap |
 | `arch-sprint-prep` | Prepare sprint proposal |
-| `arch-sprint-start` | Lock scope, write plan and brief (MAMA: also spawns Implementor, begins work) |
+| `arch-sprint-start` | Lock scope, write plan and brief (MAMA: also sends kickoff `SendMessage` to user-launched Implementor) |
 | `arch-sprint-complete` | Complete sprint, reconcile docs |
 | `arch-review` | Architectural review — DRY, fragmentation, pattern drift |
 | `consult-pdt` | Formalize a design question for PDT |
@@ -206,10 +215,12 @@ After initialization, projects typically have:
 your-project/
 ├── .claude/
 │   └── CLAUDE.md              # Project patterns and context
-├── .mama/                     # MAMA internal state (or .mama-{scope}/)
+├── .mcc/                      # Methodical-cc state (or .mcc-{scope}/)
+│   ├── sessions               # Registered session identities
 │   ├── architect_state.md     # Architect's running project knowledge
 │   ├── implementor_state.md   # Implementor's compacted working memory
-│   └── sprint_log.md          # Chronological sprint record
+│   ├── sprint_log.md          # Chronological sprint record
+│   └── bus/inbox/             # Per-session bus inbox staging
 ├── docs/
 │   ├── [product_docs]         # Product documentation
 │   ├── roadmap.md             # Implementation roadmap
@@ -236,17 +247,60 @@ docs/app/sprint/1/{implementation_plan,implementation_log}.md
 `mcc` is a small CLI that manages methodical-cc workflows from outside Claude Code:
 
 ```
-mcc setup                     # First-time install of pdt/mam/mama at user scope,
+# Plugins
+mcc setup                     # First-time install of all plugins at user scope,
                               #   choose which to enable user-wide, install mcc on PATH
-mcc update                    # Pull marketplace updates and update all three plugins
-mcc status                    # Show what's enabled, project state, registered sessions
+mcc update                    # Pull marketplace updates and update all plugins
 mcc switch mam|mama|off       # Swap implementation plugin in current project (leaves pdt alone)
 mcc enable|disable <plugin>   # Granular per-project plugin control
+
+# Sessions
 mcc <name>                    # Resume a session registered as <name>
+mcc create <name> [--persona] # Create a new persona-flavored session and register it
 mcc list                      # List registered sessions in the current project
+mcc status                    # Show what's enabled, project state, registered sessions
+mcc session list|set          # Inspect Claude Code sessions / register one by name
+mcc session args <name> ...   # Per-session launch args forwarded to claude on resume
+mcc session transcript <name> # Dump a session's full history to a markdown file
+
+# Project surfaces
+mcc term init|ls|up           # Terminal arrangements (see below)
+mcc vscode                    # Bootstrap .vscode/tasks.json with session tasks
+mcc team setup|status         # Set up or inspect the project's bus team
+mcc docs publish|pull|status  # Stakeholder docs: docx out, comments/edits back in
+mcc migrate                   # Consolidate legacy .mam/.mama/.pdt state dirs
+
+# Other
+mcc reflect list|scan|submit  # Share methodology feedback with the maintainers
+mcc completions install       # Shell tab-completion (bash/zsh)
 ```
 
 Sessions are registered from inside Claude Code with `/pdt:session set <name>`, `/mam:session set <name>`, or `/mama:session set <name>` — useful when you switch between CLI and IDE and want to deterministically return to a specific persona's session.
+
+### Terminal arrangements (`mcc term`)
+
+Running several agents at once means several terminals. `.mcc/term` declares how a project's sessions lay out across tabs and panes, once, in one place — and each surface renders what it can:
+
+```
+                       ┌─ mcc term up  → Windows Terminal / iTerm2  (full grid geometry)
+.mcc/term  ──renders──>│
+ (source of truth)     └─ mcc vscode   → .vscode/tasks.json         (groups; geometry dropped)
+```
+
+```ini
+[term]
+window  = cc-{dir}         # window name — same name means same window per project
+default = mcc {name}       # per-pane command template
+profile = Ubuntu           # terminal profile; shell defaults per-platform
+
+[tab.core]
+layout = arch | impl       # | = columns, / = rows, () = nesting, name@40 = size pin
+
+[tab.support]
+layout = (arch / impl) | bus
+```
+
+`mcc term init` walks you through building this interactively; `mcc term ls` shows and validates it; `mcc term up` launches it (`--dry-run` prints the command first). Windows Terminal and iTerm2 are supported today.
 
 ### First-time setup
 
@@ -284,7 +338,9 @@ methodical-cc/
 ├── plugins/
 │   ├── pdt/              # Product design thinking plugin
 │   ├── mam/              # Session-based implementation plugin
-│   └── mama/             # Team-based implementation plugin
+│   ├── mama/             # Team-based implementation plugin
+│   ├── bus/              # Peer messaging bus plugin
+│   └── docs/             # Stakeholder documentation sharing plugin
 ├── tools/                # Utilities (including `mcc` — session resume + plugin management)
 └── docs/                 # Design documentation
 ```
@@ -293,6 +349,8 @@ See individual plugin READMEs for detailed documentation:
 - [PDT README](plugins/pdt/README.md)
 - [MAM README](plugins/mam/README.md)
 - [MAMA README](plugins/mama/README.md)
+- [Bus README](plugins/bus/README.md)
+- [Docs README](plugins/docs/README.md)
 
 ## License
 
