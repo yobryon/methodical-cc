@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository contains Claude Code plugins for structured product design and implementation workflows. Four plugins: PDT for pre-implementation product design thinking, MAM and MAMA for sprint-based implementation with distinct Architect and Implementor roles, and Bus for peer messaging across Claude Code sessions (eliminates user-as-courier between PDT and MAM/MAMA).
+This repository contains Claude Code plugins for structured product design and implementation workflows. Five plugins: PDT for pre-implementation product design thinking, MAM and MAMA for sprint-based implementation with distinct Architect and Implementor roles, Bus for peer messaging across Claude Code sessions (eliminates user-as-courier between PDT and MAM/MAMA), and Docs for circulating markdown as docx to stakeholders and ingesting their comments as feedback.
 
 ## Plugin Structure
 
@@ -13,7 +13,7 @@ This plugin follows the Claude Code plugin specification:
 ```
 methodical-cc/
 ├── .claude-plugin/
-│   └── marketplace.json         # Marketplace advertising all four plugins
+│   └── marketplace.json         # Marketplace advertising all five plugins
 ├── plugins/
 │   ├── pdt/                     # Product Design Thinking
 │   │   ├── .claude-plugin/
@@ -38,10 +38,16 @@ methodical-cc/
 │   │   │   ├── ux-designer/     # UX Designer teammate definition
 │   │   │   └── implementor/     # Implementor teammate definition
 │   │   └── hooks/
-│   └── bus/                     # Peer messaging bus (agent-team mailbox)
+│   ├── bus/                     # Peer messaging bus (agent-team mailbox)
+│   │   ├── .claude-plugin/
+│   │   │   └── plugin.json
+│   │   ├── hooks/               # SessionStart hook for team membership orientation
+│   │   ├── skills/
+│   │   └── commands/
+│   └── docs/                    # Stakeholder documentation sharing
 │       ├── .claude-plugin/
 │       │   └── plugin.json
-│       ├── hooks/               # SessionStart hook for team membership orientation
+│       ├── hooks/               # SessionStart hook for pending-feedback count
 │       ├── skills/
 │       └── commands/
 ├── tools/                       # Migration and utility scripts (mcc, etc.)
@@ -198,6 +204,19 @@ All operational state lives under `.mcc/` (or `.mcc-{scope}/` for multi-product 
 - `implementor_state.md` - Implementor's compacted working memory across sprints
 - `sprint_log.md` - Chronological sprint record
 - `bus/inbox/` - per-session inbox staging used by the bus plugin
+- `term` - terminal arrangement (tabs/panes) for the project's sessions
+
+### Terminal Arrangements (`.mcc/term`)
+`.mcc/term` is the single source of truth for how a project's sessions lay out across
+terminal tabs and panes. Renderers project from it and degrade what they can't express:
+- `mcc term up` - Windows Terminal (`wt.exe`) and iTerm2; full grid geometry
+- `mcc vscode` - `.vscode/tasks.json`; tabs become presentation groups, geometry dropped
+
+The layout grammar is a slicing mini-language: leaves are session names, `|` splits into
+columns, `/` into rows, `()` nests, and `name@40` pins a pane to 40% of its split. Any
+guillotine (X-by-Y) grid is expressible; a non-slicing pinwheel is intentionally not.
+Platform differences (pane shell, profile, cwd pinning, dry-run syntax) are handled by
+the compiler — see the `mcc term` block in `tools/mcc.py`.
 
 ### Agent Teams
 The bus plugin uses a phantom-lead team pattern:
