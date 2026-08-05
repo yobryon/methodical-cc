@@ -465,7 +465,11 @@ Three categories of crossover, all using `SendMessage` for the channel and the `
 
 All consult-mode crossover produces **durable artifacts** in `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` — citable forever, separate from the bus message body. Threading is sender-declared kebab-case (e.g. `consult-013-pref-storage-shape`).
 
-Inbound bus messages arrive automatically as new turns (the harness polls each session's inbox at `~/.claude/teams/<team>/inboxes/<your-name>.json`); no polling needed on your part. The `bus-protocol` skill (in the bus plugin) covers full protocol details, including the chat-vs-consult discipline distinction.
+Inbound bus messages arrive as new turns (the harness polls each session's inbox at `~/.claude/teams/<team>/inboxes/<your-name>.json`); no polling needed on your part.
+
+**Delivery is turn-bounded** — a message lands only when *your* turn ends, so if you ask a question and keep working you won't see the answer until you stop. Send and **stop** when the answer changes your next move; otherwise say *"proceeding unless countermanded"*. Silence means the peer is mid-turn, never that a message was lost. Rulings that gate work go on the durable record (issue, artifact, log) when decided — the bus message is the notification, not the record.
+
+The `bus-protocol` skill (in the bus plugin) covers full protocol details, including the chat-vs-consult discipline distinction.
 
 ### Phase Transitions
 

@@ -182,7 +182,11 @@ PDT and the Architect communicate via `SendMessage` (Claude Code's standard team
 
 All consult-mode crossover produces **durable artifacts** in `docs/crossover/{thread_id}/{NNN}-{role}-{type}.md` — citable forever, separate from the bus message body. Threading is sender-declared kebab-case (e.g. `consult-013-pref-storage-shape`).
 
-Inbound bus messages arrive automatically as new turns (Claude Code's harness polls each session's mailbox once a second). The `bus-protocol` skill in the bus plugin covers the full protocol — modes, threading conventions, response composition discipline.
+Inbound bus messages arrive as new turns (Claude Code's harness polls each session's mailbox once a second).
+
+**Delivery is turn-bounded** — a message lands only when *your* turn ends, so if you ask a question and keep working you won't see the answer until you stop. Send and **stop** when the answer changes your next move; otherwise say *"proceeding unless countermanded"*. Silence means the peer is mid-turn, never that a message was lost. Anything that gates work goes on the durable record (artifact, decisions log) when decided — the bus message is the notification, not the record.
+
+The `bus-protocol` skill in the bus plugin covers the full protocol — modes, threading conventions, response composition discipline.
 
 If the bus plugin isn't enabled in this project (`mcc team status` will tell you), you can still discuss with the user about manual courier (writing files in `docs/crossover/` for the user to relay). But the methodology going forward assumes bus is enabled.
 
