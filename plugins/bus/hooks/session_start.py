@@ -141,7 +141,14 @@ def main():
     print(f"Other team members: {other_str} (plus phantom lead `coordinator`).")
     print(
         "Use the SendMessage tool to communicate with any teammate by name; "
-        "messages from teammates arrive automatically as new turns."
+        "messages from teammates arrive as new turns."
+    )
+    print(
+        "Delivery is turn-bounded: a message reaches you only when YOUR turn ends. "
+        "If an answer changes your next move, send and STOP — otherwise say "
+        "\"proceeding unless countermanded\". Silence means someone is mid-turn, "
+        "never that a message was lost. Anything that gates work goes on the "
+        "durable record when decided, not only on the bus."
     )
     print()
     print(

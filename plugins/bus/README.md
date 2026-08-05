@@ -60,7 +60,13 @@ The `bus-protocol` skill covers the full convention.
 
 ## Receiving a message
 
-Inbound messages arrive automatically as new turns — Claude Code's harness polls each session's mailbox once a second. No explicit receive call needed.
+Inbound messages arrive as new turns — Claude Code's harness polls each session's mailbox once a second. No explicit receive call needed.
+
+**Delivery is turn-bounded.** The poll runs every second, but a message is injected only when the *recipient's* turn ends — so an agent that asks a question and keeps working sees nothing until it stops. This is the most misdiagnosed property of the bus (teams have concluded "the bus drops messages" and built workarounds on that wrong model). The discipline it forces:
+
+- **Send and stop** when the answer changes your next move; otherwise say *"proceeding unless countermanded"*.
+- **Never infer loss from silence** — silence means mid-turn. Re-sends arrive together and read as contradictions.
+- **Rulings that gate work go on the durable record when decided**, not only on the bus. The bus message is the notification, not the record.
 
 ## Threading
 

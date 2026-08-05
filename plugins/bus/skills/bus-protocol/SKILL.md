@@ -1,6 +1,6 @@
 ---
 name: bus-protocol
-description: How to use the methodical-cc peer messaging bus. Built on Claude Code's agent-team protocol — each project has a team, each session is a teammate addressable by name, messages flow via SendMessage and arrive automatically. Covers identity, the chat-vs-consult mode distinction, threading conventions, and the discipline that makes consult-mode messages produce durable outcomes.
+description: How to use the methodical-cc peer messaging bus. Built on Claude Code's agent-team protocol — each project has a team, each session is a teammate addressable by name, messages flow via SendMessage. Covers identity, turn-bounded delivery and the send-and-stop discipline it forces, the chat-vs-consult mode distinction, threading conventions, and the discipline that makes consult-mode messages produce durable outcomes.
 ---
 
 # Bus Protocol
@@ -11,16 +11,28 @@ The methodical-cc bus connects PDT, Architect, Implementor, and UX Designer sess
 
 - The user's `mcc` tool maintains a team config at `~/.claude/teams/<project>/config.json` and seeds members from registered session identities
 - When `mcc <name>` resumes a session, it passes `--team-name`, `--agent-name`, and `--agent-id` flags to claude
-- Each session's harness polls `~/.claude/teams/<project>/inboxes/<your-name>.json` once per second; new messages there are injected into your context as new turns
+- Each session's harness polls `~/.claude/teams/<project>/inboxes/<your-name>.json` once per second; messages found there are injected into your context **as new turns**
 - `SendMessage` writes to the recipient's inbox file (with a lockfile, atomically)
 
-You don't manage any of this directly — `SendMessage` is a normal tool call, and inbound messages arrive as natural turns. The mechanics matter only when something looks wrong.
+You don't manage any of this directly — `SendMessage` is a normal tool call, and inbound messages arrive as natural turns. But one mechanical detail below is not an implementation footnote; it changes how you must work. Read the next section.
+
+## Delivery is turn-bounded, not instant
+
+**A message is delivered to you only when *your* turn ends.** The inbox poll runs every second, but injection happens at a turn boundary — so an agent that asks a question and then keeps working sees nothing until it stops. This is the single most misdiagnosed thing about the bus; teams have concluded "the bus drops messages" and built workarounds on that wrong model, twice.
+
+Three consequences, all load-bearing:
+
+- **Send and STOP when the answer changes your next move.** Continuing past a question means acting on your own judgment while the answer sits undelivered. When the answer does *not* change your next move, say so explicitly — *"proceeding unless countermanded"* — so the recipient knows you didn't block.
+- **Never infer loss from silence.** Silence means the other party is mid-turn. Re-sending creates duplicates that arrive together and read as contradictions.
+- **Anything that gates work goes on the durable record at the moment it's decided — not (only) on the bus.** A ruling posted to the issue/artifact is readable without waiting on anyone's turn boundary. The bus message is the *notification*, not the record. Bus messages also race with in-flight work reports: a ruling and the report it rules on can cross.
+
+Before sending a status report, drain your inbox first.
 
 ## Identity
 
 Your bus identity is set when you launch (via `--agent-name <name>`). The bus plugin's SessionStart hook tells you your name explicitly — look for the `=== METHODICAL-CC BUS ===` block in your context. It looks like:
 
-> *"You are a member of agent team `forms-cli`. Your name on the team is `arch`, your agent_id is `arch@forms-cli`. Other team members: `pdt`, `coordinator` (phantom lead). Use `SendMessage` to message any teammate by name; messages from teammates arrive automatically as new turns."*
+> *"You are a member of agent team `forms-cli`. Your name on the team is `arch`, your agent_id is `arch@forms-cli`. Other team members: `pdt`, `coordinator` (phantom lead). Use `SendMessage` to message any teammate by name; messages from teammates arrive as new turns. Delivery is turn-bounded: a message reaches you only when YOUR turn ends…"*
 
 Trust this even if other context elsewhere suggests you're not in a team. The team is real, the tools work.
 
@@ -30,7 +42,7 @@ If the SessionStart hook reports `anonymous` or no team membership block appears
 
 ## Receiving messages
 
-Peer messages arrive in your context **as turns** — they look like the user wrote them, but they're actually messages from teammates. They typically come prefaced with the sender's name. The Claude Code harness handles the injection automatically.
+Peer messages arrive in your context **as turns** — they look like the user wrote them, but they're actually messages from teammates. They typically come prefaced with the sender's name. The Claude Code harness handles the injection automatically, **at your turn boundaries** — see *Delivery is turn-bounded* above for what that forces.
 
 For consult-mode messages, the body will reference an artifact at a known path under `docs/crossover/{thread_id}/`. Read it for the full structured content.
 
@@ -101,7 +113,7 @@ When a thread reaches its natural conclusion, you can note this in your final me
 
 - **Don't send unstructured questions in chat mode and call it a consult.** Mode is determined by the discipline you bring, not by claiming a label.
 - **Don't ask the user to courier messages** — that's what the bus is for. If a peer isn't currently running, your message sits in their inbox until they start their session. The user can spin them up via `mcc <name>` if your message warrants it.
-- **Don't poll for responses.** Messages arrive as turns automatically. If a peer hasn't responded yet, they haven't read your message yet (or are still composing). Don't badger them with chat-mode "did you see my consult?" pings.
+- **Don't badger for responses.** Don't send chat-mode "did you see my consult?" pings. Silence means the peer is mid-turn or hasn't started — not that the message was lost (see *Delivery is turn-bounded*). Re-sending produces duplicates that arrive together and read as contradictions. If the answer gates your work, end your turn and wait; if it doesn't, say "proceeding unless countermanded" and carry on.
 - **Don't skip reading artifacts.** When a consult-mode message arrives, the body is framing. The artifact at the referenced path has the substance. Read it before responding.
 
 ## When the user is involved

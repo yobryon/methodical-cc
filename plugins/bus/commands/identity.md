@@ -11,7 +11,7 @@ Tell the user who they are on the methodical-cc bus right now.
 
 1. Look at the `=== METHODICAL-CC BUS ===` block in your SessionStart context (it tells you your resolved identity, team name, and other members).
 
-2. If identity is registered: tell the user their identity name (e.g. `arch`), their agent_id (`arch@<team>`), and the team they're on. Mention they can use `SendMessage` to message any teammate by name and that messages from teammates arrive automatically as new turns.
+2. If identity is registered: tell the user their identity name (e.g. `arch`), their agent_id (`arch@<team>`), and the team they're on. Mention they can use `SendMessage` to message any teammate by name and that messages from teammates arrive as new turns — noting that delivery is turn-bounded (a message lands only when the recipient's turn ends), so an agent that asks and keeps working won't see the answer until it stops.
 
 3. If identity is `anonymous`: tell the user they can still send messages (if the session was launched with team flags) but peers can't reach them by name. Show them how to register:
    - `/pdt:session set <name>` (PDT)
