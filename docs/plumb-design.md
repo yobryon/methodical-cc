@@ -270,6 +270,23 @@ silently.
 | `linear` | GraphQL | **Best-effort, marked as such** — no account available to test against. Shipped unverified, and the adapter says so at load |
 | `markdown` | Files in the repo | The honest degradation, see below |
 
+**Each adapter ships GUIDANCE, not just code** — a setup section covering auth, how an arc maps onto
+that tracker's native grouping (project / milestone / epic / fix-version), how PLUMB's normalized
+states map to its workflow, and what it cannot express. An adapter that connects but leaves the PO
+guessing at the mapping has moved the work rather than done it. `plumb ledger setup <adapter>` prints
+it; `plumb doctor` checks the parts that are checkable.
+
+**Arc mapping, per tracker** — the one thing every adapter must answer explicitly, because it is the
+first thing a PO hits:
+
+| Adapter | An arc is a… | Notes |
+|---|---|---|
+| `nonlinear` | project | One project per arc; issues are work items within it |
+| `github` | milestone | Labels carry state where the Projects API is unavailable |
+| `jira` | fix version *or* epic | Declared in the manifest — teams genuinely differ here, and guessing wrong is expensive |
+| `linear` | project or cycle | **Unverified** |
+| `markdown` | a directory | `docs/ledger/<arc>/`, one file per issue |
+
 ### 4.3 The `markdown` adapter, and answering "should the tracker be assumed?"
 
 The proposal's open question 3: *our two-ledger split depends on an agent-native issue tracker; a
@@ -605,12 +622,17 @@ an answer that reaches a working agent — is met.
    adapters because everything above defers to a document that, today, only exists as a stub from
    `plumb init`. Partial dependency on step 5: `establish` has to help the PO *choose* a ledger
    adapter, but it only needs to name the choices, not run them.
-5. **The ledger interface + `github` and `markdown` adapters** (§4), then `nonlinear`, `jira`,
-   `linear`.
-6. **The bus: two delivery classes, urgency declared per message by the sender** (§9), then
-   `plumb:consult` and `plumb:rule` on top of it.
-7. **Monitors** (§6).
-8. **MAMA → PLUMB migration** — deliberately last. A migration written before PLUMB exists would be
+5. **The ledger interface + adapters** (§4). First tranche: **`markdown`** (no external dependency,
+   and it forces the degradation question to be answered honestly), **`github`** (testable here via
+   `gh`), and **`nonlinear`** (the reference implementation — it is what the evidence base actually
+   ran on). Then **`jira`**, then `linear` shipped unverified and labelled.
+6. **The remaining skills** (§11): `plumb:promote` first — it is the mechanism by which a process
+   document is *supposed* to grow, and without it the log-then-promote rhythm has no tool. Then
+   `arc-plan`, `arc-kickoff`, `reconcile`, and `rule`.
+7. **The bus: two delivery classes, urgency declared per message by the sender** (§9), then
+   `plumb:consult` on top of it.
+8. **Monitors** (§6).
+9. **MAMA → PLUMB migration** — deliberately last. A migration written before PLUMB exists would be
    a migration to a guess.
 
 MAMA stays shipped and enable-able throughout; PLUMB is a separate plugin, not a replacement in

@@ -130,3 +130,9 @@ This is the part worth building a habit around, because it is where the value ac
 - **At a design gate**, ask which entry the proposed design would make possible.
 
 An entry read only after a defect is an entry that arrived too late to do its job.
+
+---
+
+> **Living document.** If this taught you something about *how you work* rather than about the code,
+> put it in the reflection log — that is the only intake. Norms arrive by recurrence, not by decree;
+> `plumb:promote` graduates the ones that recur. Your process document is meant to grow.

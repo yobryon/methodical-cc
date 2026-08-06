@@ -64,21 +64,33 @@ squash-merge everything else — is that a rule or a habit?"* beats *"how do you
 
 Six things. Ask about what is not already answered by Step 1; confirm what is.
 
-1. **Who is in this?** Which roles actually exist here — is there a separate implementor session, a
-   design partner, only the PO and one agent? Do not assume PLUMB's default cast. A project with one
+Eight things. Ask about what is not already answered by Step 1; confirm what is.
+
+1. **Who is in this?** Which roles actually exist here — a separate implementor session, a design
+   partner, or only the PO and one agent? Do not assume PLUMB's default cast. A project with one
    agent and one human is legitimate and much of PLUMB still applies.
-2. **Where does execution state live?** The tracker, or nothing yet. This sets `[ledger] adapter`.
-   If they have no tracker, say plainly what the `markdown` adapter costs them — the cross-team half
-   of the methodology does not survive it.
-3. **Where does design memory live?** Which documents exist, which are load-bearing, which are
+2. **What may each of them decide alone, and when do they escalate?** Ask it as *"if this call is
+   wrong, who pays, and how much?"* — cheap calls inside your lane, boundary moves, and calls that
+   belong to the PO are different kinds of decision, and roles without boundaries are just names.
+   A short answer now is fine; this is one that sharpens with use.
+3. **How does work get bounded here?** Bounded bodies of work with a start and a close, a continuous
+   flow, something else entirely? **Ask it neutrally.** Do not offer an arc rhythm as the default —
+   but *do* ask, because unlike most of this document a cadence cannot arrive by promotion. A
+   project needs some answer from day one, and the answer shapes half the other artifacts.
+4. **Where does execution state live?** The tracker, or nothing yet. This sets `[ledger] adapter`.
+   If they have no tracker, say plainly what the `markdown` adapter costs them.
+5. **Where does design memory live?** Which documents exist, which are load-bearing, which are
    fiction. This sets `[artifacts]`.
-4. **What is already dead?** The highest-value question in the interview, and the one nobody thinks
+6. **Who do you depend on, and who depends on you?** Other teams, upstream providers, downstream
+   consumers. Structural, and it decides whether the cross-team half of the tooling matters at all —
+   which is exactly what the `markdown` adapter cannot give them.
+7. **What is already dead?** The highest-value question in the interview, and the one nobody thinks
    to ask. *"What have you tried and stopped doing? What document does nobody maintain?"* Every
    answer becomes an `[artifacts.retired]` entry **with its reason**, and that entry is a permanent
    guard against the thing coming back attached to a tool.
-5. **What do you do repeatedly that you would want shorthand for?** This is Step 4.
-6. **What has gone wrong more than once?** Not to fix now — to know what this project's guards should
-   watch, and what its failure catalog will open with.
+8. **What do you do repeatedly that you would want shorthand for, and what has gone wrong more than
+   once?** The first feeds Step 4. The second tells you what this project's guards should watch and
+   what its failure catalog will open with.
 
 ---
 

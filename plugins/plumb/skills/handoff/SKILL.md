@@ -130,3 +130,9 @@ afterwards, but **they cannot author judgment.** What the hooks preserve is the 
 write here is the substance.
 
 So write it *before* you are out of room, not as the last thing you do.
+
+---
+
+> **Living document.** If this taught you something about *how you work* rather than about the code,
+> put it in the reflection log — that is the only intake. Norms arrive by recurrence, not by decree;
+> `plumb:promote` graduates the ones that recur. Your process document is meant to grow.

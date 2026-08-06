@@ -129,3 +129,9 @@ The gate is closed when:
 One gate's best day: an issue was told to re-measure an eight-day-old claim and **retired the
 premise rather than the number.** That is the gate working. Re-running the query and reporting the
 same figure is the gate merely functioning.
+
+---
+
+> **Living document.** If this taught you something about *how you work* rather than about the code,
+> put it in the reflection log — that is the only intake. Norms arrive by recurrence, not by decree;
+> `plumb:promote` graduates the ones that recur. Your process document is meant to grow.

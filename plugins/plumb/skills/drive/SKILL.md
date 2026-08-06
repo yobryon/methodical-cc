@@ -147,3 +147,9 @@ reading it; a principled-sounding one recruits the reader's agreement.**
 
 > **An explanation is the thing that stops you measuring.** The only defence against a good reason
 > not to look is looking anyway.
+
+---
+
+> **Living document.** If this taught you something about *how you work* rather than about the code,
+> put it in the reflection log — that is the only intake. Norms arrive by recurrence, not by decree;
+> `plumb:promote` graduates the ones that recur. Your process document is meant to grow.
