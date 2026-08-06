@@ -39,6 +39,14 @@ arrive:
 So the reflection log matters more than the norms section on day one. The norms section is supposed
 to be thin at the start. **Say that out loud** so its thinness does not read as incompleteness.
 
+**This is greenfield guidance, and it inverts for an in-flight adoption.** A project with real
+history has norms that arrived exactly the right way — logged as instances, promoted after
+recurrence, several carrying the scar that produced them. Starting thin there would destroy the
+most valuable content the project owns. The in-flight default: **carry earned norms forward with
+their evidence; the burden is on deleting one, not on keeping it.** What gets rewritten is what the
+old tooling *supplied* — the norms the team *earned* are precisely what "let norms arrive by
+recurrence" produces, already arrived. (`plumb:migrate` owns that path and says the same.)
+
 **3. This skill is re-runnable, and that is the point.** An establishing step that runs once is a
 template. Say when you finish: *"run this again when the way of working has moved."*
 

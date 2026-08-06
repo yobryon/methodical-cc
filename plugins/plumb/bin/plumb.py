@@ -23,7 +23,7 @@ import re
 import sys
 from pathlib import Path
 
-PLUMB_VERSION = "0.1.0"
+PLUMB_VERSION = "0.4.0"
 MANIFEST_NAME = ".plumb.toml"
 
 # Exit codes are part of the contract — callers branch on them.
@@ -175,22 +175,40 @@ class Manifest:
 
     # -- the load-bearing operation
 
-    def resolve(self, role, arc=None):
+    def resolve(self, role, arc=None, subs=None):
         """Resolve an artifact role to a path.
 
         Raises Retired for a role the project killed — carrying the reason, so
         the refusal teaches instead of merely blocking.
+
+        A template may carry ANY `{token}` placeholders — `{arc}`, `{issue}`,
+        `{cycle}`, whatever keys this project's records by. PLUMB models no
+        rhythm here: a tool whose thesis is that arcs are optional must not
+        bake arcs into its only parameterised path. `arc=` is kept as sugar
+        for the `{arc}` token; everything else arrives via `subs`.
+
+        A role may also resolve to a DIRECTORY — first-class, not a trick:
+        point the role at the folder and address files within it however the
+        project's own skills say to.
         """
         if role in self.retired:
             raise Retired(role, self.retired[role], self.process_version)
         if role not in self.roles:
             raise UnknownRole(role, sorted(self.roles), sorted(self.retired))
         template = self.roles[role]
-        if "{arc}" in template:
-            if arc is None:
-                raise ValueError(
-                    f"role '{role}' is arc-scoped ({template}) — pass --arc")
-            template = template.replace("{arc}", str(arc))
+        mapping = dict(subs or {})
+        if arc is not None:
+            mapping.setdefault("arc", arc)
+        tokens = set(re.findall(r"\{(\w+)\}", template))
+        missing = sorted(tokens - set(mapping))
+        if missing:
+            raise ValueError(
+                f"role '{role}' is parameterised ({template}) — missing "
+                f"{', '.join('{'+t+'}' for t in missing)}. Pass "
+                + " ".join(f"--sub {t}=<value>" for t in missing)
+                + (" (or --arc for {arc})" if "arc" in missing else ""))
+        for t in tokens:
+            template = template.replace("{" + t + "}", str(mapping[t]))
         return self.root / template
 
 
@@ -305,10 +323,20 @@ def cmd_init(args):
           "that is the establish conversation's exit criterion, not an error in init.")
 
 
+def _parse_subs(pairs):
+    subs = {}
+    for spec in (pairs or []):
+        if "=" not in spec:
+            die(f"--sub expects token=value, got {spec!r}")
+        k, _, v = spec.partition("=")
+        subs[k.strip().strip("{}")] = v.strip()
+    return subs
+
+
 def cmd_path(args):
     mf = Manifest.load(args.root)
     try:
-        print(mf.resolve(args.role, arc=args.arc))
+        print(mf.resolve(args.role, arc=args.arc, subs=_parse_subs(args.sub)))
     except Retired as exc:
         report_retired(exc)
     except UnknownRole as exc:
@@ -573,12 +601,15 @@ def cmd_doctor(args):
         problems.append("no `process_version` — the plugin cannot honour a process it can't name")
 
     for role, tmpl in sorted(mf.roles.items()):
-        if "{arc}" in tmpl:
-            notes.append(f"role '{role}' is arc-scoped: {tmpl}")
+        tokens = sorted(set(re.findall(r"\{(\w+)\}", tmpl)))
+        if tokens:
+            notes.append(f"role '{role}' is parameterised by "
+                         f"{', '.join('{'+t+'}' for t in tokens)}: {tmpl}")
             continue
         p = mf.root / tmpl
+        kind = "  (directory)" if p.is_dir() else ""
         (notes if p.exists() else problems).append(
-            f"role '{role}' → {tmpl}" + ("" if p.exists() else "  MISSING"))
+            f"role '{role}' → {tmpl}{kind}" + ("" if p.exists() else "  MISSING"))
 
     overlap = set(mf.roles) & set(mf.retired)
     for role in sorted(overlap):
@@ -633,9 +664,12 @@ document = "{document}"
 [artifacts]
 # Artifact ROLES this project actually has. Skills ask for a role by name;
 # this table resolves it to a path — skills never hardcode filenames.
-# Syntax (names and paths are your project's own, not these):
-#   some_role     = "docs/some_doc.md"
-#   per_arc_role  = "docs/arcs/arc_{{arc}}/some_doc.md"    # resolved with --arc
+# Syntax (names, paths and tokens are your project's own, not these):
+#   some_role      = "docs/some_doc.md"
+#   keyed_role     = "docs/records/{{key}}.md"   # ANY {{token}}; resolved with --sub key=<value>
+#   grouped_role   = "docs/evidence/"            # a directory is first-class too
+# PLUMB models no rhythm here: key your paths by whatever survives YOUR
+# process — an issue id, a cycle, an arc, a date. The token is yours to name.
 
 [artifacts.retired]
 # A role listed here becomes a REFUSAL carrying its reason. This is how a
@@ -701,7 +735,9 @@ def build_parser():
 
     s = sub.add_parser("path", parents=[common], help="resolve an artifact ROLE to a path")
     s.add_argument("role")
-    s.add_argument("--arc", help="arc identifier, for arc-scoped roles")
+    s.add_argument("--sub", action="append", metavar="TOKEN=VALUE",
+                   help="value for a {token} in the role's path (repeatable)")
+    s.add_argument("--arc", help="sugar for --sub arc=<value>")
     s.set_defaults(func=cmd_path)
 
     s = sub.add_parser("roles", parents=[common], help="list declared and retired artifact roles")

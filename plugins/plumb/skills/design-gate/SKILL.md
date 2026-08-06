@@ -1,6 +1,6 @@
 ---
 name: design-gate
-description: Run a read-before-rule design gate. The Implementor brings the READ (measures what the code and the world actually do, and explicitly does NOT propose a design); the Architect RULES. Enforces the asymmetry in both directions — a read containing a proposal is a failure, and so is a ruling written without a read. Use when an arc's next step is a decision rather than a build.
+description: Run a read-before-rule design gate. The Implementor brings the READ (measures what the code and the world actually do, and explicitly does NOT propose a design); the Architect RULES. Enforces the asymmetry in both directions — a read containing a proposal is a failure, and so is a ruling written without a read. Use whenever the next step is a decision rather than a build, in any rhythm.
 ---
 
 # The design gate — read before rule

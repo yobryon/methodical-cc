@@ -52,7 +52,11 @@ PROBES = [
     ("sprint_log", [".mcc*/sprint_log.md"], "carry"),
     ("implementation_log", ["docs/**/implementation_log*.md",
                             "docs/**/*implementation-log*.md"], "retire"),
-    ("brief", ["docs/**/*brief*.md"], "retire"),
+    # Path-SHAPE match, deliberately narrow: a loose "*brief*" glob once
+    # flagged a live two-day-old DESIGN brief as a dead MAMA implementor
+    # brief — a check that is right about something other than what it does.
+    ("brief", ["docs/**/implementor_brief*.md", "docs/**/*implementor-brief*.md",
+               ".mcc*/implementor_brief*.md"], "retire"),
     ("plan", ["docs/**/implementation_plan*.md", "docs/**/*_plan.md"], "carry"),
     ("decisions", ["docs/**/decisions_log.md", "docs/**/decisions.md"], "carry"),
     ("backlog", ["docs/**/concept_backlog.md", "docs/**/backlog.md"], "carry"),
@@ -141,7 +145,9 @@ def report(root, found, as_json=False):
 
     print("MAMA artifacts in this project\n")
     print("Disposition is a PROPOSAL, not a decision. The question for each is the")
-    print("one that caught the drift: can anyone point to when this was chosen?\n")
+    print("one that caught the drift: can anyone point to when this was chosen?")
+    print("Matches are by path shape — a match is a lead, not a verdict. Read a")
+    print("file before retiring on its name.\n")
 
     for f in found:
         role, disp, entries = f["role"], f["disposition"], f["entries"]

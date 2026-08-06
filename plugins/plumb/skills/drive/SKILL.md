@@ -1,6 +1,6 @@
 ---
 name: drive
-description: Run the closing drive of an arc — someone USING the thing, in the product, against real data, and writing a record of it. Not a review, not a test run. Enforces anchors named before the surface is opened, anchors measured on the day, parity as an equality between two live reads, and the honesty rule. Use at arc close where the arc changed anything a user sees, or any time you need to know whether green work actually works.
+description: Run a closing drive — someone USING the thing, in the product, against real data, and writing a record of it. Not a review, not a test run. Enforces anchors named before the surface is opened, anchors measured on the day, parity as an equality between two live reads, and the honesty rule. Use at the close of any bounded body of work (an arc, a batch — or per-feature in continuous flow) that changed anything a user sees, or any time you need to know whether green work actually works.
 ---
 
 # The drive

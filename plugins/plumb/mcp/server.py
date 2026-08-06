@@ -143,9 +143,14 @@ TOOLS = [
                          "description": "The artifact role name, e.g. 'plan' or "
                                         "'decisions'. Unknown names return the "
                                         "declared list."},
+                "sub": {"type": "object",
+                        "additionalProperties": {"type": "string"},
+                        "description": "Values for any {token} placeholders in the "
+                                       "role's path — the token names are the "
+                                       "project's own ({issue}, {cycle}, {arc}, "
+                                       "whatever its manifest declares)."},
                 "arc": {"type": "string",
-                        "description": "Arc/cycle identifier, for roles whose path "
-                                       "is per-arc (contains {arc})."},
+                        "description": "Sugar for sub={\"arc\": ...}."},
             },
             "required": ["role"],
         },
@@ -297,7 +302,8 @@ def tool_process_path(args):
     if mf is None:
         return NO_MANIFEST
     try:
-        return str(mf.resolve(args["role"], arc=args.get("arc")))
+        return str(mf.resolve(args["role"], arc=args.get("arc"),
+                              subs=args.get("sub")))
     except plumb.Retired as exc:
         return plumb.retired_text(exc)
     except plumb.UnknownRole as exc:

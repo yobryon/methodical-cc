@@ -120,7 +120,7 @@ Add entries as you kill things. Never delete them — the entry *is* the guard.
 
 | | |
 |---|---|
-| `plumb path <role> [--arc N]` | Resolve a role. Exit `2` retired, `3` unknown, `4` no manifest |
+| `plumb path <role> [--sub k=v]` | Resolve a role — any `{token}` in its path via `--sub` (`--arc` is sugar). Exit `2` retired, `3` unknown, `4` no manifest |
 | `plumb roles` | List live and retired roles |
 | `plumb process [section]` | Print your process document, or one section — how skills consult your norms |
 | `plumb decision next` | The next unclaimed decision number, read from the log |

@@ -20,10 +20,22 @@ the moment of need.** Ours ship with the plugin. Yours live in your repo.
 
 ---
 
-## Step 1 — Check the genre. Two ways this is not a ceremony
+## Step 1 — Check the genre. Three ways this is not a ceremony
 
-Answer both before writing anything. Getting this wrong is how the third home becomes the new drift
-vector.
+Answer all three before writing anything. Getting this wrong is how the third home becomes the new
+drift vector.
+
+### Is it really yours to run?
+
+**Will you still be the ones running this in a year — or are you standing in for a user who will?**
+A project ceremony asserts *this is how we work.* A sequence you perform only because you currently
+occupy a chair your product will hand to its users is not your way of working — it is a user
+journey you happen to be rehearsing. Its durable content belongs in the failure catalog or an
+operator runbook; its ordering belongs, eventually, in the product.
+
+This check exists because the first migrated project authored a well-evidenced, well-shaped
+ceremony that passed every craft check below — and their PO rejected it on exactly this ground.
+For a project building a platform, this is the check that will catch the most.
 
 ### Is it really a norm?
 
@@ -138,7 +150,8 @@ failure this skill was built to end.
 
 ## Done when
 
-- [ ] It is genuinely a sequence, and genuinely recurring — both checked, not assumed
+- [ ] It is genuinely a sequence, genuinely recurring, and genuinely **yours to run** — all three
+      checked, not assumed
 - [ ] The description says **when**, and names a condition rather than a slot
 - [ ] No filenames — every artifact reached through `plumb path <role>`
 - [ ] No standing behaviours — those went to the process document

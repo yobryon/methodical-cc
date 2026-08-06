@@ -43,6 +43,14 @@ ceremony skill you author:
 7. **Was it amended in place when reality corrected it?** Both exemplars carry
    dated amendments. A correction written into a retro while the ceremony
    stays unchanged is the failure this whole surface exists to end.
+8. **Will you still be the ones running this in a year — or are you standing
+   in for a user who will?** A project ceremony asserts *this is how we work*;
+   a sequence you perform only because you currently occupy a chair your
+   product will hand to its users belongs in a runbook or the product, not in
+   your skills. The first project to migrate authored a ceremony that passed
+   the other seven checks and failed only this one — their PO caught it, and
+   for any project building a platform this is the check that will catch the
+   most.
 
 ## Contributing real ones
 

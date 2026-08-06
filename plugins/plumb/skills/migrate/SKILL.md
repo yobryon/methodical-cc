@@ -32,6 +32,10 @@ scaffolding survives a change of tools.
 someone *can* point to when it was chosen, and say why. This skill re-opens the question. It does not
 presume the answer.
 
+**This wants a fresh context — it is a conversation, not a chore.** The migration is
+conversation-dense and judgment-dense; run at the tail of a long working session, the judgment is
+what degrades first. Start it as the session's main event.
+
 ---
 
 ## Step 1 — The unlearning pass, before any inventory
@@ -100,9 +104,35 @@ Retire generously. **A retired role is cheap and reversible; a carried-forward a
 maintains is a hazard that looks like state.** And retiring is not deleting — it converts a file into
 a refusal with a reason attached, which is strictly more information than the file was carrying.
 
+**Retire something that worked.** The retirements with teeth are the ones recording a practice you
+chose, used, and *outgrew* — nobody was ever going to re-adopt the failure. If every entry in the
+retired table records a thing that failed, the table is guarding doors nobody would open.
+
 ```bash
 plumb migrate retired     # the [artifacts.retired] block this project has earned
 ```
+
+---
+
+## Step 3½ — Ask what the file tree asserts
+
+**The directory structure is a claim about the process. It is the first thing a fresh session
+reads, and it outlives every document that contradicts it.** Eighteen plan docs under
+`docs/sprints/` assert *we work in sprints* more loudly than a process document asserting you do
+not — retiring a rhythm leaves its folder structure behind, still teaching the old shape.
+
+Walk the tree with the PO and sort **by role, not by age**:
+
+- **Live artifacts filed under a dead rhythm** move to homes keyed by something durable (an issue
+  id, a topic — whatever survives a change of cadence).
+- **Records are live evidence that happens to be old.** A measurement a current ruling rests on is
+  not archive material, however stale its folder looks — burying it buries what the ruling stands
+  on.
+- **Genuinely dead plans and ceremony output** go to an archive directory, where the tree stops
+  asserting them.
+
+This step exists because the first project to migrate found it *after* both skills had finished —
+prompted by their PO, not by the tooling — and rated it the highest-value thing they did.
 
 ---
 
@@ -112,11 +142,16 @@ Run **`plumb:establish`** properly — the whole thing, not an abbreviated versi
 given you a head start no greenfield project has: real history, and answers from a team that has
 actually felt this process.
 
-Two adjustments for the in-flight case:
+Three adjustments for the in-flight case:
 
 - **Feed the archaeology in as evidence, never as the default.** *"You closed 14 arcs at roughly two
   weeks each"* is a finding worth putting in front of them. *"So we'll keep two-week arcs"* is the
   frame doing the deciding.
+- **Carry earned norms forward with their evidence — establish's "write the minimum" does not apply
+  here.** That is greenfield guidance; this project's norms arrived exactly the way the good ones
+  arrive (logged as instances, promoted after recurrence, several carrying their scar), and starting
+  thin would destroy the most valuable content it owns. **The burden is on deleting a norm, not on
+  keeping it.** What gets rewritten is what MAMA *supplied*; what the team *earned* comes along.
 - **Offer patterns after they have spoken** (`plumb patterns`), one at a time — including patterns
   describing things they already do. A practice they have run for a year and can now see the *cost
   and scar* of is a practice they can finally choose, rather than one they inherited.
@@ -169,6 +204,8 @@ template**: write it into this project's own skill, in this project's words.
 - [ ] `[artifacts.retired]` has the three retired-by-design entries plus everything the inventory
       showed abandoned, each with a reason
 - [ ] `[artifacts]` holds only roles someone actually reads
+- [ ] **The file tree stopped asserting the old process** — live artifacts re-homed by role,
+      records kept as evidence, dead ceremony archived
 - [ ] The process document describes what this team **chose**, not what MAMA prescribed and not
       merely what they happened to do
 - [ ] Project skills exist for the ceremonies they will really run, in their vocabulary

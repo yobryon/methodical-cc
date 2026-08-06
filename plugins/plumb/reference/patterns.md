@@ -5,7 +5,7 @@ menu of things you should do.
 
 ## How to read this, and how NOT to
 
-Every entry carries five fields, and the last one is the important one:
+Every entry carries six fields; *how you'd know it's wrong for you* is the important one:
 
 | Field | Why |
 |---|---|
@@ -14,6 +14,7 @@ Every entry carries five fields, and the last one is the important one:
 | **Applies when** | The conditions under which it earns its keep |
 | **Costs** | What running it takes, so you can decline on cost alone |
 | **How you'd know it's wrong for you** | The tell that this is not your project's practice |
+| **Provenance** | How many projects, and what shape — read it at the moment of offering. A project that recognises its own practices in this library should know the resemblance may be ancestry, not corroboration |
 
 **A pattern that cannot tell you how to reject it is a template.** That last field is what makes
 these different from what MAMA shipped, and it is not decoration — read it first.
@@ -64,6 +65,8 @@ overhead — one project measured ~15 ledger comments plus ~15 messages for an 8
 design is settled before building starts. If the architect has nothing to rule on while the
 implementor builds, you are paying for a split you are not using.
 
+**Provenance.** One project ran the split throughout; two sibling projects shipped substantial products with NO persistent implementor — the entry's 'one of four modes' framing comes from that contrast, not from a single source.
+
 ---
 
 ## two-ledgers — Execution state and design memory live in different systems
@@ -86,6 +89,8 @@ the boundary.
 one — in which case read the `markdown` adapter's degradation table and know what you are giving up
 rather than discovering it later.
 
+**Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
+
 ---
 
 ## design-gate — Read before rule
@@ -106,6 +111,8 @@ accurately — legacy code, real data, third-party engines.
 turn on preference rather than fact. If reads keep confirming what everyone already assumed, the gate
 is costing more than it returns — though check that the reads are *discriminating* before concluding
 that.
+
+**Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
 
 ---
 
@@ -128,6 +135,8 @@ hardest to justify, and exactly why it needs to be a rule rather than an intenti
 API where the tests genuinely are the usage. Note that "our tests are thorough" is *not* the tell;
 every scar above happened behind green tests.
 
+**Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
+
 ---
 
 ## failure-catalog — Catalogue shapes, ordered by why they hid
@@ -147,6 +156,8 @@ Most first drafts are bug reports.
 **How you'd know it's wrong for you.** Your defects are mostly one-offs, or *"a defect anyone would
 have caught"* describes them. That kind teaches nothing and clutters the catalog.
 
+**Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
+
 ---
 
 ## log-then-promote — Norms arrive by recurrence, not by decree
@@ -165,6 +176,8 @@ document *living* rather than a founding statement.
 
 **How you'd know it's wrong for you.** Hard to say — this is the entry with the least visible failure
 mode, which is itself a reason to hold it loosely.
+
+**Provenance.** One project end to end — and independently re-invented there after an earlier methodology reached for the same rhythm, which is weak corroboration but not none.
 
 ---
 
@@ -189,6 +202,8 @@ flag is what lets the ruling layer catch a wrong call cheaply.
 **How you'd know it's wrong for you.** One decision-maker, so there is no boundary to move and nobody
 to route to.
 
+**Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
+
 ---
 
 ## prerequisites-first — External dependencies are filed at planning time and sequenced first
@@ -206,6 +221,8 @@ a 30-minute verification.
 **Costs.** A planning step. Occasionally waiting at the start rather than discovering mid-arc.
 
 **How you'd know it's wrong for you.** Fully self-contained work with no external gates.
+
+**Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
 
 ---
 
@@ -225,6 +242,8 @@ to replace.
 **How you'd know it's wrong for you.** Decisions rarely need justifying later, or you are the only
 one who will ever read them.
 
+**Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
+
 ---
 
 ## ruling-to-ledger — A ruling lands on the durable record at ruling time
@@ -241,6 +260,8 @@ waiting on anyone's turn to end — **and by an agent that was not running when 
 **Costs.** One extra write, at the moment you are most eager to just say it.
 
 **How you'd know it's wrong for you.** Single session; nothing to race with.
+
+**Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
 
 ---
 
@@ -266,6 +287,10 @@ per-arc implementation log.
 **How you'd know it's wrong for you.** Your agents genuinely cannot compact or resume —
 a constrained harness, a hard per-run boundary. Then something has to carry the position
 across, and it is worth writing.
+
+**Provenance.** One project, plus a harness change (durable sessions + compaction) that removed the state document's founding premise — the reasoning leans on the harness fact as much as the project.
+
+---
 
 ## relay-handoff — When a genuine relay happens, hand off a position, not a promise
 
@@ -293,6 +318,8 @@ claim more.
 **How you'd know it's wrong for you.** No relays — one durable session end to end. Writing this
 continuously "just in case" recreates the fourth ledger that `ledger-over-handover` retired.
 
+**Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
+
 ---
 
 ## provider-consumer — Norms for depending on, or serving, another team
@@ -314,6 +341,8 @@ build-straight-through.
 **How you'd know it's wrong for you.** No external dependencies and no consumers. Note that this
 pattern needs a tracker the other team can see — it does not survive the `markdown` adapter.
 
+**Provenance.** One provider/consumer pair (two teams, same PO), several same-day loops. The narrowest evidence in this library — two genuinely independent teams have not yet run it.
+
 ---
 
 ## verify-before-claim — A checklist item is ticked only when it has been driven
@@ -331,3 +360,8 @@ it is the slow one where nobody can tell which greens were checked.
 
 **How you'd know it's wrong for you.** Hard to construct a case. If you find one, that is worth
 writing down.
+
+**Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
+
+---
+

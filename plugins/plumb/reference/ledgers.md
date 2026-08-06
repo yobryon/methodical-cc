@@ -13,9 +13,10 @@ at the point of use** — which is the property PLUMB spends its own design budg
 
 A wrapper over any of them would duplicate a well-guided tool and could only fall behind it.
 
-So what PLUMB supplies is the part your tracker cannot know: **how an arc maps onto its native
-grouping, what PLUMB's state vocabulary means in its workflow, how attribution works when several
-agents share one identity, and what it cannot express.** That last one matters most — an adapter that
+So what PLUMB supplies is the part your tracker cannot know: **how your unit of work — an arc, a
+batch, or a continuous flow with no bounded unit at all — maps onto its native grouping, what
+PLUMB's state vocabulary means in its workflow, how attribution works when several agents share one
+identity, and what it cannot express.** That last one matters most — an adapter that
 connects but leaves you guessing at the mapping has moved the work rather than done it.
 
 The exception is `markdown`, which has nothing to call. That one is real code.
@@ -42,8 +43,11 @@ silently.
 **This is what the evidence base actually ran on**, across sixteen arcs.
 
 - **Access:** MCP. The agent calls nonlinear's own tools; PLUMB does not proxy them.
-- **An arc is a project.** One project per arc (e.g. *"Sprint 3: SM Connector & Query Engine"*),
-  issues as work items within it.
+- **Mapping — pick by your rhythm.** A bounded unit of work (an arc, a batch) maps to a **project**
+  — one project per unit (e.g. *"Sprint 3: SM Connector & Query Engine"*), issues as work items
+  within it. A **continuous-flow** project keys projects to **durable themes** instead — the thing
+  being built, which survives a change of cadence the way issue ids and decision numbers do.
+  Declare which in the process document; both are first-class.
 - **States** map directly — nonlinear's workflow is the vocabulary above.
 - **Comments are the play-by-play.** This is what replaced the per-arc implementation log, and it is
   why that log is retired: issue comments already hold the narrative, with timestamps and authorship
@@ -60,7 +64,8 @@ silently.
 ## `github` — the common default
 
 - **Access:** the `gh` CLI, or GitHub's MCP. Both are well-guided; use either.
-- **An arc is a milestone.** Issues carry the work.
+- **Mapping:** a bounded unit of work is a **milestone**; issues carry the work. Continuous flow
+  drops milestones and leans on labels or a Projects view keyed to durable themes.
 - **States:** GitHub has only open/closed natively. Use **labels** for the intermediate states, or
   Projects v2 columns where the project has them. **Declare which**, in the process document — a
   reader who cannot tell whether `in_review` is a label or a column cannot trust the board.
@@ -72,9 +77,10 @@ silently.
 ## `jira` — the enterprise case
 
 - **Access:** Jira's MCP, or its REST API via your own credentials.
-- **An arc is a fix version *or* an epic — and this project must declare which**, in `.plumb.toml`.
-  Teams genuinely differ here and guessing wrong is expensive: a fix-version arc and an epic arc
-  produce different reports, different roll-ups, and different answers to *"what shipped?"*
+- **Mapping:** a bounded unit of work is a fix version *or* an epic — **and this project must
+  declare which**, in `.plumb.toml`. Teams genuinely differ here and guessing wrong is expensive: a
+  fix-version unit and an epic unit produce different reports, different roll-ups, and different
+  answers to *"what shipped?"* Continuous flow maps to epics-as-themes and skips fix versions.
 - **States:** map to your board's workflow. Jira workflows are often *enforced*, which is stricter
   than PLUMB's vocabulary — that is an improvement, not a conflict, but it means a transition may be
   refused where another tracker would allow it.
@@ -85,7 +91,8 @@ silently.
 ## `linear` — shipped unverified
 
 - **Access:** MCP or GraphQL.
-- **An arc is a project or a cycle**, depending on how the team works.
+- **Mapping:** a bounded unit of work is a project or a cycle, depending on how the team works;
+  continuous flow keys projects to durable themes.
 - **⚠ Unverified.** No account was available to test against, so this guidance is derived from
   documentation rather than from use. **Treat it as a starting point and correct it in your process
   document as you learn** — and if you do, that correction is worth sending back upstream.

@@ -1,0 +1,6 @@
+#!/bin/sh
+# The extensionless entry point. The harness puts an enabled plugin's bin/ on
+# the Bash tool's PATH, but PATH lookup finds files by exact name — skills say
+# `plumb`, and without this shim only `plumb.py` existed. The first live
+# adopter's first command failed on exactly that.
+exec python3 "$(dirname "$0")/plumb.py" "$@"
