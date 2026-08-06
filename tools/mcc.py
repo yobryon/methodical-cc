@@ -3529,6 +3529,26 @@ def cmd_session_transcript(args):
 
 # ----------------------------- Commands -----------------------------
 
+def inject_agent_identity(name):
+    """Put this session's identity into the process environment before launch.
+
+    `os.execvp` replaces the process image but keeps the environment, and
+    `subprocess.run` inherits it, so setting it here reaches claude either way.
+
+    This CANNOT live in .claude/settings.json: that env block is project-wide
+    and every session in the project would read the same value. Identity is
+    per-session by definition, so it has to be injected per-process at launch.
+
+    The same lever carries per-agent credentials later — .mcp.json can
+    reference env vars, so the injection that tells the bus who I am can also
+    hand a tracker a key that is mine rather than the project's. That closes
+    the whoami problem where every agent authenticates as one shared identity
+    and comment attribution survives only on convention.
+    """
+    os.environ["PLUMB_AGENT"] = name
+    return name
+
+
 def _team_launch_args(name, sid, team_name):
     """Build claude argv with team flags.
 
@@ -3657,6 +3677,7 @@ def cmd_create(args):
     print(f"  (claude -p will run; this may take a few seconds)", file=sys.stderr)
     print(file=sys.stderr)
 
+    inject_agent_identity(name)
     rc = subprocess.run(["claude", "-p", prompt_text]).returncode
     if rc != 0:
         die(f"claude -p exited with rc={rc}; session may not have been created")
@@ -3725,6 +3746,8 @@ def cmd_resume(args):
     if passthrough:
         argv.extend(passthrough)
         launch_note += f" +passthrough ({' '.join(passthrough)})"
+
+    inject_agent_identity(name)
 
     on_team = f" on team '{team_name}'" if team_name else ""
     print(f"Resuming '{name}' from {src}{on_team} → {launch_note}", file=sys.stderr)
