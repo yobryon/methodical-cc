@@ -326,23 +326,37 @@ each shaped for its job.**
 The boundary: *why / what / how-it-should-be* → a doc. *who / when / status / what-happened* → an
 issue.
 
-### 4.1 The ledger interface
+### 4.0 Guidance, not a wrapper — the decision and its reason
 
-PLUMB defines a narrow interface and ships adapters. The operations are derived from what sixteen
-arcs actually used, not from what trackers offer:
+PLUMB does **not** wrap your tracker, and that is a deliberate reversal of this document's first
+draft, which specified a six-operation interface with adapters behind it.
 
-| Operation | Why it's in the interface |
-|---|---|
-| `arc_open(name)` → arc ref | One project/milestone per arc |
-| `issue_create(arc, title, body)` | Planned scope, filed at planning time |
-| `issue_comment(id, body)` | **The play-by-play, and the ruling-to-ledger primitive** |
-| `issue_state(id, state)` | States move as work moves |
-| `issue_get(id)` / `issue_list(arc, filter)` | Reconciliation and drift detection |
-| `search(query)` | *Search their tracker before filing* — the cross-team norm |
+Two of the shipped options (`nonlinear`, `linear`) are **MCP servers** — the agent already holds
+their tools, and a CLI could not call them regardless. The other two (`github`, `jira`) have mature
+CLIs and MCPs that **carry their own guidance at the point of use**, which is the exact property
+PLUMB spends its design budget on elsewhere (§7.1b). A wrapper over any of them would duplicate a
+well-guided tool and could only fall behind it.
 
-State vocabulary is normalized to `triage → backlog → todo → in_progress → in_review → done`;
-adapters map to native states and **declare what they cannot express** rather than approximating
-silently.
+So PLUMB supplies the part a tracker cannot know about itself: **how an arc maps onto its native
+grouping, what PLUMB's state vocabulary means in its workflow, how attribution works when several
+agents share one identity, and what it cannot express.** `plumb ledger guide` prints it.
+
+`markdown` is the exception and is real code, because there is nothing else to call.
+
+**Consequence for the `--record` primitive:** a ruling reaches the ledger because the *agent* writes
+it with the tracker's own tools, and passes the reference to `bus_send`. PLUMB does not perform the
+write, so `record` is a reference the sender supplies — and `bus_send` says so when a `gating`
+message arrives without one.
+
+### 4.1 The normalized state vocabulary
+
+```
+triage → backlog → todo → in_progress → in_review → done
+```
+
+**States move as work moves.** ~16 issues once sat in `triage` while their work shipped, and the
+Product Owner caught it rather than the agents. Where a tracker cannot express one of these, its
+guidance says so rather than approximating silently.
 
 ### 4.2 Adapters shipped
 

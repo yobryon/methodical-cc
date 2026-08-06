@@ -503,6 +503,16 @@ def cmd_ceremony_new(args):
           "and belongs in version control beside the process document.")
 
 
+def cmd_ledger(args):
+    """Delegate to ledger.py — kept a separate module, exposed as one verb."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import ledger
+    argv = list(args.rest or [])
+    if args.root and "--root" not in argv:
+        argv += ["--root", str(args.root)]
+    sys.exit(ledger.main(argv or ["guide"]))
+
+
 def cmd_doctor(args):
     mf = Manifest.load(args.root)
     problems, notes = [], []
@@ -692,6 +702,11 @@ def build_parser():
     c.add_argument("--description", help="one line: when to reach for this")
     c.add_argument("--force", action="store_true")
     c.set_defaults(func=cmd_ceremony_new)
+
+    s = sub.add_parser("ledger", parents=[common], add_help=False,
+                       help="tracker guidance, state vocabulary, and the markdown adapter")
+    s.add_argument("rest", nargs=argparse.REMAINDER)
+    s.set_defaults(func=cmd_ledger)
 
     s = sub.add_parser("doctor", parents=[common], help="validate the manifest against the filesystem")
     s.set_defaults(func=cmd_doctor)

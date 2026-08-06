@@ -109,6 +109,8 @@ Add entries as you kill things. Never delete them — the entry *is* the guard.
 | `plumb doctor` | Validate the manifest against the filesystem |
 | `plumb ceremony list` | List this project's own procedures |
 | `plumb ceremony new <name>` | Scaffold a project procedure in `.claude/skills/` |
+| `plumb ledger guide` | How an arc and the states map onto your tracker |
+| `plumb ledger states` | The normalized state vocabulary |
 
 ---
 
@@ -169,7 +171,10 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
 - ✅ Compaction survival: PreCompact snapshots and steers the summarizer; SessionStart re-orients on
   `source=compact` only
 
-Next, in build order: the ledger adapters, then `plumb:promote`, then the drift monitors.
+- ✅ The ledger layer: guidance for nonlinear / GitHub / Jira / Linear, and a real `markdown`
+  adapter for projects with no tracker
+
+Next, in build order: `plumb:promote`, then the drift monitors, then MAMA → PLUMB migration.
 **MAMA → PLUMB migration is deliberately last** — a migration written before PLUMB exists would be a
 migration to a guess.
 
