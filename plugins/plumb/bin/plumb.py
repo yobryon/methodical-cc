@@ -576,7 +576,6 @@ adapter = "markdown"
 
 [artifacts]
 plan            = "docs/arcs/arc_{{arc}}/implementation_plan.md"
-state           = "docs/arcs/arc_{{arc}}/state.md"
 drive_record    = "docs/arcs/arc_{{arc}}/drive_record.md"
 decisions       = "docs/decisions_log.md"
 backlog         = "docs/concept_backlog.md"
@@ -589,6 +588,7 @@ roadmap         = "docs/roadmap.md"
 # still encodes it. Add entries as you kill things; never delete them.
 implementation_log = "Died with MAMA: triplication. Issue comments are the play-by-play."
 brief              = "Died with MAMA: folded into the plan doc plus the kickoff message."
+implementor_state  = "Died with MAMA: it existed to APPROXIMATE compaction for an agent that had none. A running session compacts; a subagent has its parent as continuity; an ended session is resumed with its context. It was also a fourth ledger — rulings belong in the decisions log, environment traps in the failure catalog, progress in the tracker."
 '''
 
 PROCESS_DOC_TEMPLATE = '''\

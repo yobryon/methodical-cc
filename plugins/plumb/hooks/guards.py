@@ -390,11 +390,48 @@ def guard_skip_count(cmd, output):
 
 # ------------------------------------------------------------------ dispatch
 
+STAGING_CMD = re.compile(r"\bgit\b[^|;&]*\b(?:add|rm|mv|restore\s+--staged|stage)\b")
+
+
+def staged_snapshot_file(root, session):
+    return state_dir(root) / f"staged-{session or 'anon'}"
+
+
+def note_staged_before(root, session, cmd):
+    """Record the staged set before a command that is about to stage something.
+
+    The touched-set is fed by Edit/Write, so anything staged through the SHELL
+    — `git rm`, `git mv`, a heredoc followed by `git add` — is invisible to it.
+    The foreign-staged guard then blocks the agent's own legitimate work, which
+    is how a guard teaches people to disable it.
+
+    Snapshot before, diff after: whatever appeared is causally this command's,
+    and therefore this session's.
+    """
+    if not STAGING_CMD.search(cmd):
+        return
+    staged = {p for p in git(root, "diff", "--cached", "--name-only").split("\n") if p}
+    staged_snapshot_file(root, session).write_text("\n".join(sorted(staged)),
+                                                   encoding="utf-8")
+
+
+def claim_newly_staged(root, session, cmd):
+    if not STAGING_CMD.search(cmd):
+        return
+    f = staged_snapshot_file(root, session)
+    before = set(f.read_text(encoding="utf-8").split("\n")) if f.exists() else set()
+    after = {p for p in git(root, "diff", "--cached", "--name-only").split("\n") if p}
+    for path in after - before:
+        record_touch(root, session, Path(root) / path)
+    f.unlink(missing_ok=True)
+
+
 def handle_pre_bash(payload, root, cfg):
     cmd = (payload.get("tool_input") or {}).get("command", "")
+    session = payload.get("session_id")
+    note_staged_before(root, session, cmd)
     if not is_git_commit(cmd):
         return
-    session = payload.get("session_id")
     reasons = []
     # Secrets and control bytes are properties of the CONTENT, so an explicit
     # pathspec does not make them safe — it only changes whose commit carries
@@ -417,6 +454,8 @@ def handle_post_bash(payload, root, cfg):
     output = resp if isinstance(resp, str) else (
         resp.get("stdout", "") + "\n" + resp.get("stderr", ""))
     session = payload.get("session_id")
+
+    claim_newly_staged(root, session, cmd)
 
     if BUILD_CMD.search(cmd) and not STALE_FLAGS.search(cmd):
         rc = response_exit_code(resp)

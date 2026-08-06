@@ -75,7 +75,6 @@ adapter = "github"        # nonlinear | github | jira | linear | markdown
 
 [artifacts]
 plan      = "docs/arcs/arc_{arc}/implementation_plan.md"
-state     = "docs/arcs/arc_{arc}/state.md"
 decisions = "docs/decisions_log.md"
 
 [artifacts.retired]
@@ -161,12 +160,16 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
 - ✅ The process host: manifest, role resolution, retired-role refusal, process reader, decision
   allocator, `doctor`
 - ✅ All five guards
-- ✅ The four skills attached to the deepest scars: `drive`, `design-gate`, `handoff`, `catalog`
+- ✅ The skills attached to the deepest scars: `drive`, `design-gate`, `catalog`
 - ✅ The process negotiation: `establish` (author the way of working *with* the PO) and `ceremony`
   (give a project procedure a home), plus `plumb ceremony list|new`
 
-Next, in build order: the ledger adapters, then the bus (two delivery classes, urgency declared per
-message by the sender), then the drift monitors.
+- ✅ The bus: MCP send, monitor for `gating` (interrupts mid-turn), Stop hook for `normal`, SQLite
+  store, `mcc`-injected identity — verified live
+- ✅ Compaction survival: PreCompact snapshots and steers the summarizer; SessionStart re-orients on
+  `source=compact` only
+
+Next, in build order: the ledger adapters, then `plumb:promote`, then the drift monitors.
 **MAMA → PLUMB migration is deliberately last** — a migration written before PLUMB exists would be a
 migration to a guess.
 

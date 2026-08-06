@@ -68,7 +68,7 @@ straight.
 | Layer | What it is | Depends on |
 |---|---|---|
 | **1. Process host** | The project's way-of-working document as the single source of truth; the manifest; role resolution; retired-ceremony refusal; the pattern library; `establish` | Nothing |
-| **2. Evidence layer** | The epistemic norms and the scar-attached skills — `design-gate`, `drive`, `handoff`, `catalog`, `promote` — plus the mechanical guards | Nothing. **Usable standalone by any project with zero methodology attached** |
+| **2. Evidence layer** | The epistemic norms and the scar-attached skills — `design-gate`, `drive`, `catalog`, `promote` — plus the mechanical guards | Nothing. **Usable standalone by any project with zero methodology attached** |
 | **3. Mechanism** | The bus, per-agent identity, worktrees, the decision allocator | `mcc` for identity injection |
 
 Layer 2 standing alone is not a nice-to-have; it is the generalization test in §0.5 made structural.
@@ -264,7 +264,6 @@ plan            = "docs/sprints/sprint_{arc}/implementation_plan.md"
 decisions       = "docs/decisions_log.md"
 backlog         = "docs/concept_backlog.md"
 failure_catalog = "docs/failure_shapes.md"
-state           = "docs/sprints/sprint_{arc}/state.md"
 drive_record    = "docs/sprints/sprint_{arc}/drive_record.md"
 
 [artifacts.retired]
@@ -566,50 +565,70 @@ and **say which one is in force.**
 
 ---
 
-## 8. Handoff at context exhaustion — proven mechanics
+## 8. Compaction survival — the implementor outlives its own context
 
-Context loss is routine, not exceptional: four losses and three implementor relays in the evidence
-base. The spike established the full mechanism, end to end:
+Context exhaustion was routine in the evidence project: four losses and three implementor relays.
+Under MAMA it cost the Product Owner a chore every time — *"run `impl-end` and start a fresh
+implementor"* — when what they actually did was **compact it and say continue**.
 
-**PreCompact (`command` hook) snapshots → SessionStart (`source=compact`) injects the pointer.**
+**So there is nothing to replace.** Compaction is a *context* event, not a *process* event: the
+session is the same session, the monitor is the same process (measured — same pid across a cut), and
+every ledger is untouched. Only the conversation is shorter.
 
-Both halves observed in one run. `transcript_path` arrives on *both* sides of the cut, so either
-hook can read pre-compaction history. Three constraints the spike measured:
+### 8.1 The mechanism, measured end to end
 
-- **`prompt` and `agent` PreCompact hooks are refused, not absent** — *"Prompt stop hooks are not
-  yet supported outside REPL"*. Explicit and visible, so declaring them breaks nothing, and the
-  blocker is temporal. Build the authoring step behind a seam so a `prompt` hook can take it over
-  later; don't put it on the critical path.
-- **Gate SessionStart output on `source`.** Post-compaction context is the most crowded injection
-  point in the system — three plugins' blocks landed together in the spike, one of them stale and
-  actively pulling against the summary. On `compact`: the handoff pointer and *nothing else*.
-- **Make the injector idempotent and treat `transcript_path` as optional** — an aborted compaction
-  appears to fire the same event with a degraded payload.
+**PreCompact (`command` hook) snapshots → SessionStart (`source=compact`) injects.**
 
-**Unclaimed lever, worth a graded test:** PreCompact's `additionalContext` is not ignored — it
-reaches the **compaction summarizer**, in its "Additional Instructions" block. That is a lever on
-*what survives the cut*, which for an implementor running to exhaustion is worth more than appending
-a pointer afterwards: the summary is what the next 200k tokens are built on. (Single first-hand
-observation; summarizer prompts aren't persisted, so it needs a sentinel test to grade.)
+- **PreCompact** writes mechanical facts: branch, HEAD, uncommitted files, undelivered bus messages.
+  Mechanical *only* — `prompt` and `agent` hooks are refused here (*"Prompt stop hooks are not yet
+  supported outside REPL"*), so a hook cannot author judgment. It is explicit about that in the file
+  rather than implying more than it knows.
+- **PreCompact also steers the summarizer.** Its stdout reaches the summarization sub-call's
+  instruction block, not the live session — a lever on *what survives the cut*, which is worth more
+  than a pointer appended afterwards because the summary is what the next context is built on. It
+  asks for decisions and their reasoning, what failed and why, claims believed but **unverified**,
+  and the next concrete step; and for tool transcripts to be compressed, since those re-derive from
+  disk. *(Single first-hand observation — additive, so it costs nothing if ignored.)*
+- **SessionStart injects on `source=compact` only.** Post-compaction context is the most crowded
+  injection point in the system; a stale block there competes with the summary the agent was just
+  handed. Verified silent on `startup`, `resume`, `clear`, `fork`.
 
-### 8.1 The shape of the state doc
+Two constraints the spike measured: an **aborted** compaction appears to fire the same event with a
+degraded payload, so the injector must be idempotent and treat `transcript_path` as optional.
 
-Non-negotiable, and it is what made three relays cost zero rework:
+### 8.2 What the injection says, and why that is the product change
 
-- **Leads with what is MISSING**, not the green numbers — *a suite that's green is exactly what
-  would hide the gap.*
-- The queue **in order**, and for each item **what the successor must not rediscover** — rulings
-  already made, options already closed **by name**, and the reason each is closed.
-- **Environment traps carry the day they cost.** A successor who reads *"a skip is not a pass"*
-  learns a rule; one who reads that 28 tests went dark while the suite printed `Failed: 0` learns to
-  distrust a green.
-- **Committed-but-inert code is labelled as such, in those words** — a committed file implies more
-  than it should.
-- The successor's first act is an **ACK with a read-back**; their first *working* act is
-  **verifying the inherited claim** rather than building on it. Two fresh implementors materially
-  improved the design they inherited by doing exactly this.
+> This is ROUTINE and requires nothing from anyone. **Context pressure is not a reason to stop, and
+> not a reason to ask the Product Owner to replace you.**
 
----
+That directly counter-teaches a behaviour the PO could not place the origin of — an implementor
+announcing exhaustion and asking for `impl-end` plus a fresh instance. **It learned that from MAMA's
+ceremony.** A methodology that made the human a lifecycle operator taught its agents to summon one.
+
+It closes by telling the agent to check whether a claim in the summary was **verified** or merely
+**remembered** — a summary flattens exactly the distinction that matters.
+
+### 8.3 The implementor state document is retired
+
+MAMA's implementor was launched per sprint, ended at sprint close, and kept no context. The state
+document existed to **approximate what compaction does** for an agent that had none.
+
+Every branch of that justification is now gone:
+
+| Shape | Continuity comes from |
+|---|---|
+| Independent session that keeps running | **Compaction** |
+| Subagent | **Its parent** |
+| Session that genuinely ended | **`mcc <name>`** resumes it with its context |
+
+And it had become a **fourth ledger**: rulings duplicated the decisions log, environment traps the
+failure catalog, progress the tracker. That is the same triplication that killed the per-arc
+implementation log, rebuilt under a new name — which is why it ships in `[artifacts.retired]` with
+its reason rather than merely being left out. A project migrating from MAMA has one, and the refusal
+is what stops it coming back.
+
+**What outlives a context goes on a ledger**, which survives anything rather than just this cut, and
+is readable by an agent that was never here.
 
 ## 9. Urgency, not blocking — the consult question dissolves
 
@@ -754,7 +773,6 @@ project's own vocabulary. If they say *batch* or *cycle*, their skill says that 
 | `plumb:ceremony` | Author a **project procedure** as a project-owned skill. Refuses one that is really a norm, or really a one-off | *A ceremony that lives only in the record of the one time we ran it is indistinguishable from a ceremony, until the second time* |
 | `plumb:design-gate` | Impl **brings the read**, arch **rules**. Enforces the asymmetry both ways | Three decisions had their central premise overturned by the read. One found six silently-destructive database behaviours nobody would have quoted correctly from memory |
 | `plumb:drive` | Anchors named **before** the surface is opened, measured on the day, parity as an equality between two **live** reads | Every arc that ran one found defects in closed, tested, green work. One found four, two of them P1s. Another's *proof failed on its first attempt* — **reading a plan is order-insensitive where execution is not** |
-| `plumb:handoff` | The state doc: what is MISSING first, closed options **by name**, traps carrying the day each cost | Three relays, zero rework — the arc *without* a state doc cost its successor a morning |
 | `plumb:catalog` | A failure-shape entry: *what happened / why it hid / the tell, as something to TRY / how it differs from its nearest kin.* **Refuses an entry that is only a bug report** | 41 entries; highest-value use was **prospective** — one designed a test before the code existed |
 | `plumb:promote` | Review the reflection log for observations that have recurred enough to become norms; move them into the process document | Every good norm in the source project arrived this way. Left to memory, they stay in the log where nobody reads them |
 
@@ -814,7 +832,7 @@ than a blocking primitive, because the blocking was a workaround for a channel w
    depends on it, and it is the Sprint 14 guard.
 2. ✅ **The guards** (§5). Highest value per line, zero process alignment needed. **Layer 2 — useful
    to a project that adopts nothing else**, which is §0.5 made concrete.
-3. ✅ **`drive`, `design-gate`, `handoff`, `catalog`** (§11.2) — the four skills attached to the
+3. ✅ **`drive`, `design-gate`, `catalog`** (§11.2) — the four skills attached to the
    deepest scars. Also layer 2, also standalone.
 4. ✅ **`establish` + `ceremony` + the pattern library** (§11.1–11.3) — the process negotiation.
 5. **The bus** (§7.1a/b). **Ahead of the adapters, deliberately**: it is what turns the independent

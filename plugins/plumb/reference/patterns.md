@@ -239,22 +239,28 @@ waiting on anyone's turn to end — **and by an agent that was not running when 
 
 ---
 
-## handoff-state — A state document that leads with what is missing
+## ledger-over-handover — What outlives a context goes on a ledger, not in a handover file
 
-**Practice.** At a context boundary, write a document that opens with **what is missing**, then the
-queue in order, what the successor must not rediscover (with closed options named *by name*),
-environment traps carrying the day each cost, and committed-but-inert code labelled as such.
+**Practice.** When something must survive a session boundary, write it to the durable
+record it belongs to — a ruling to the decisions log, an environment trap to the failure
+catalog, progress to the tracker. Do not write a per-session state document.
 
-**The scar.** Three relays across live arcs cost **zero rework**. The one arc that had no state
-document cost its successor a morning.
+**The scar.** Under an older methodology the implementor was launched per sprint and kept
+no context, so it wrote a state document to **approximate what compaction does**. That
+justification is gone: a running session compacts, a subagent has its parent as
+continuity, and an ended session resumes with its context intact.
 
-**Applies when.** Sessions end before the work does — which, at any real scale, is always.
+What the document had become was a **fourth ledger** — duplicating the decisions log, the
+failure catalog and the tracker at once, which is the same triplication that killed the
+per-arc implementation log.
 
-**Costs.** Half an hour at exactly the moment you are out of room.
+**Applies when.** Always, once sessions are durable.
 
-**How you'd know it's wrong for you.** Work that reliably fits in one session.
+**Costs.** None. It removes work.
 
----
+**How you'd know it's wrong for you.** Your agents genuinely cannot compact or resume —
+a constrained harness, a hard per-run boundary. Then something has to carry the position
+across, and it is worth writing.
 
 ## provider-consumer — Norms for depending on, or serving, another team
 

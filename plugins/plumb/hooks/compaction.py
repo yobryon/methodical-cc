@@ -20,9 +20,9 @@ Two hooks, both using mechanisms measured in the spike:
 
 What this CANNOT do is author judgment. `prompt` and `agent` hooks are refused
 at PreCompact ("Prompt stop hooks are not yet supported outside REPL"), so the
-snapshot is mechanical facts only. The substance belongs in the handoff document
-the agent writes with plumb:handoff — which is why the injection points at it
-rather than trying to replace it.
+snapshot is mechanical facts only. Nor does it need to. What outlives a context belongs on a ledger,
+which survives compaction untouched and is readable by an agent that was never
+here.
 """
 
 import json
@@ -52,24 +52,6 @@ def snapshot_path(cwd, session):
     return d / f"compaction-{(session or 'anon')[:8]}.md"
 
 
-def handoff_hint(cwd):
-    """Where this project keeps its state document, if it declares one.
-
-    Asked by ROLE. If the project retired the role, we say nothing rather than
-    inventing a path — a compaction is not the moment to reintroduce an
-    artifact the project killed.
-    """
-    try:
-        import plumb
-        mf = plumb.Manifest.load(cwd, required=False)
-        if not mf or "state" not in mf.roles:
-            return None
-        tmpl = mf.roles["state"]
-        return f"(role `state` → {tmpl})" if "{arc}" in tmpl else str(mf.resolve("state"))
-    except Exception:
-        return None
-
-
 def write_snapshot(cwd, session, trigger):
     """Mechanical facts only — the things a fresh context cannot re-derive cheaply."""
     branch = _git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
@@ -84,8 +66,8 @@ def write_snapshot(cwd, session, trigger):
         f"({trigger or 'unknown'} compaction).",
         "",
         "**Mechanical facts only.** A hook cannot author judgment — what you were "
-        "*thinking* is not here. If that matters, it belongs in the state document "
-        "(`plumb:handoff`), written before you run out of room rather than after.",
+        "*thinking* is not here. If that matters it belongs on a ledger, where it "
+        "survives anything rather than just this cut.",
         "",
         "## Repository",
         "",
@@ -183,11 +165,9 @@ def on_session_start(payload):
     if snap.exists():
         out += ["", f"Mechanical snapshot from just before the cut: {snap}",
                 "  (branch, HEAD, uncommitted files, undelivered bus messages)"]
-    hint = handoff_hint(cwd)
-    if hint:
-        out += ["", f"This project's state document: {hint}",
-                "  If you wrote one, read it — it holds what the snapshot cannot: "
-                "what you were thinking, and what you had ruled out."]
+    out += ["", "Anything that outlives a context belongs on a LEDGER, not in a "
+            "handover file: rulings in the decisions log, traps in the failure "
+            "catalog, progress in the tracker. Read those if the summary is thin."]
     out += ["", "Before building on anything the summary asserts, check whether it "
             "was VERIFIED or merely remembered. A summary flattens that distinction, "
             "and it is the one that matters."]
