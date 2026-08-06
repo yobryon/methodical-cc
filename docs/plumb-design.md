@@ -1,42 +1,117 @@
 # PLUMB — Design Document
 
-**Status:** Design — pinning the architecture before any skill is written
+**Status:** Design
 **Date:** 2026-08-05
 **Authors:** Bryon (Product Owner) + Claude (design partner)
-**Sources:** a field proposal from the Architect of a sixteen-arc effort (§0 below), that project's
-living way-of-working document, and a throwaway spike that measured what the plugin surface can
-actually do (`tmp/spike-plumb/FINDINGS.md`).
 
-PLUMB is MAMA's successor. It keeps MAMA's bones — architect and implementor as separate
-instances, an arc rhythm between them — and replaces MAMA's ceremony with **mechanical guards, a
-pluggable execution ledger, and a process that lives in the project rather than in the plugin.**
+PLUMB is MAMA's successor. **It is not a better methodology. It is a host for a methodology the
+project authors and evolves** — plus an evidence layer that works whether or not the project adopts
+any methodology at all.
 
 ---
 
-## 0. Where this comes from
+## 0. The problem
 
-The proposal PLUMB is built on was not written from theory. It came from a project that ran
-**sixteen arcs over roughly six months**: four context losses, three implementor relays, ~1,150
-tests, 48 decisions, 41 catalogued failure shapes. Every recommendation in it is traced to
-something that actually happened, usually more than once.
+### 0.1 MAMA got in the way, and the reason is specific
 
-That matters for what PLUMB is allowed to contain. The proposal's own framing, which this document
-adopts as its acceptance test:
+MAMA served well early and then began to cost more than it returned as the models improved. The
+diagnosis is not "the process was wrong" — most of MAMA's content was right. It is:
+
+> **MAMA made a constant out of something where the right answer is a variable.**
+
+Two projects (a Linear clone and a grid component) ran to substantial v1 with **no methodology at
+all** — self-directed, fan-out workflows, no persistent implementor — and did excellently. A third
+was told to *invent its own way of working* and did excellently by a completely different route,
+producing sixteen arcs of evidence discipline. MAMA-as-written, imposed uniformly and up front,
+produced increasing friction.
+
+**The common factor in the successes is not the amount of process. It is that the agent chose it.**
+
+### 0.2 The friction that actually costs the Product Owner
+
+The PO is usually the bottleneck, and that is **correct** when the question is consequential — a
+direction to set, a product call, a boundary to move. It is **pure friction** when it is a chore.
+
+The canonical instance, and the one that matters most:
+
+> The Architect stops and asks the PO to *"run `impl-end` and start a fresh implementor"* — when
+> what the PO actually does is compact the implementor and tell the Architect to continue.
+
+Stated as the finding it is:
+
+> **The cost of the independent implementor is not the implementor. It is that the PO became its
+> lifecycle operator.**
+
+The separate-instance implementor is defended on context and permission grounds, and those are real.
+**But nothing in that argument requires the PO to be the one who starts and refreshes it.** If
+session lifecycle were agent-drivable, the independent implementor would keep its benefits and shed
+nearly all of its friction.
+
+So PLUMB's product goal, in one line:
+
+> **Keep the PO as the decider. Remove the PO as the operator.**
+
+This is *the* acceptance test for the product. A feature that makes the methodology tidier while
+leaving the PO running session chores has not paid for itself.
+
+### 0.3 The pivot
+
+> **MAMA's skills answer *"what do I do now?"* PLUMB's answer *"is what I just did true?"***
+
+Orchestration → verification. This generation of models does not need to be told what is next; they
+are excellent at driving. What they still need is **something that cannot flatter them** — which is
+also why the name works. A plumb line builds nothing; it tells you whether what you built is
+straight.
+
+### 0.4 The three layers, deliberately separable
+
+| Layer | What it is | Depends on |
+|---|---|---|
+| **1. Process host** | The project's way-of-working document as the single source of truth; the manifest; role resolution; retired-ceremony refusal; the pattern library; `establish` | Nothing |
+| **2. Evidence layer** | The epistemic norms and the scar-attached skills — `design-gate`, `drive`, `handoff`, `catalog`, `promote` — plus the mechanical guards | Nothing. **Usable standalone by any project with zero methodology attached** |
+| **3. Mechanism** | The bus, per-agent identity, worktrees, the decision allocator | `mcc` for identity injection |
+
+Layer 2 standing alone is not a nice-to-have; it is the generalization test in §0.5 made structural.
+
+### 0.5 The standing generalization test
+
+Every candidate feature gets asked:
+
+> **Would this have helped the two projects that ran with no methodology at all?**
+
+If yes, it generalizes and PLUMB may ship it. If it only helps a project shaped like the one that
+produced our evidence, **it belongs in that project's own skills**, authored by `establish` (§11.1).
+
+This test exists because the richest evidence available to us came from *one* team, in *one* domain,
+and the failure mode of rich evidence is shipping it as law. The pre-commit guards, the drive
+protocol, and *a gate's green means nothing until you have seen its red* all pass. An arc-planning
+skill does not.
+
+---
+
+## 1. Evidence base, and what it is not
+
+The deepest input is a field proposal from the Architect of a project that ran **sixteen arcs over
+roughly six months**: four context losses, three implementor relays, ~1,150 tests, 48 decisions, 41
+catalogued failure shapes. Every recommendation in it traces to something that actually happened,
+usually more than once. Its companion is that project's living way-of-working document. A throwaway
+spike (`tmp/spike-plumb/FINDINGS.md`) measured what the plugin surface can actually do.
+
+**That proposal is evidence, not thesis.** It is magnificent and it is 41-failure-shapes deep in
+*one* codebase, written by an agent describing the methodology it needs. Built faithfully, we would
+ship that project's process as the new universal — which is MAMA's mistake again with better
+content. §0.5 is the guard against exactly that, and it has already caught three skills that were
+about to ship (§11.1).
+
+Its own framing, which PLUMB adopts as the test for **layer 2 specifically**:
 
 > **This plugin's job is not to help agents work. It is to make specific, repeatedly-observed
 > failures impossible or loud.** Every skill that is merely "a helpful template" should be cut. The
 > ones that survive are the ones attached to a scar.
 
-The name is a double meaning, both halves load-bearing. A **plumb line** is a reference a thing is
-trued against — it builds nothing, it tells you whether what you built is straight. And *to plumb*
-is to investigate to the bottom. One idea in two directions: **make claims that survive, and check
-them against something that cannot flatter you.**
+### 1.1 The governing constraint
 
----
-
-## 1. The governing constraint
-
-The single most important instruction in the proposal is §6:
+The single most important instruction in the proposal:
 
 > **Make PLUMB describe the process rather than embed it.**
 
@@ -47,12 +122,22 @@ earlier: an `implementation_log.md` per arc, the kickoff as a document section, 
 command ceremony. **Nobody decided any of it.** The scaffolding rode in attached to a tool, and the
 tell is that no one could point to when it was chosen.
 
-The project already had a name for this shape at other grains — *a pin outliving its reason*, *a
+That project already had a name for the shape at other grains — *a pin outliving its reason*, *a
 workaround outliving its cause*. Sprint 14 found it at process grain: **a process we evolved away
 from can return through a tool that still encodes it.**
 
-So PLUMB must be designed so it cannot do that to *its* successor. Everything in §2 follows from
-that.
+So PLUMB must be designed so it cannot do that to *its* successor. Everything in §2 follows.
+
+### 1.2 What PLUMB does not assume
+
+Held explicitly, because each was a MAMA fixture and none survives as one:
+
+| Not assumed | Why |
+|---|---|
+| **A separate implementor session** | A **delegation mode selected by work shape**, not a fixture. Whole arcs → an implementor; bounded tasks → subagents; fan-out-shaped work → workflows. Two of our three successful projects used none |
+| **An arc rhythm** | How work is bounded is asked, neutrally, at `establish`. Some projects flow |
+| **A tracker** | Pluggable, with an honest degradation table for projects without one (§4.3) |
+| **A design-partner role** | Asked, not assumed |
 
 ---
 
@@ -391,6 +476,64 @@ a question and keeps working sees nothing until it stops. This was misdiagnosed 
 Real consequences: one ruling crossed the implementor **three times**; five rulings arrived after
 the work they ruled on.
 
+### 7.1a Why we own the bus — it is what delivers §0.2
+
+The transport decision and *"is the independent implementor still right?"* are **the same question**,
+and this is the chain:
+
+> Teammates cannot spawn teammates → so the PO launches every session by hand → so the PO is the
+> implementor's lifecycle operator.
+>
+> **That constraint belongs to the harness's team protocol. If we own the bus, it is ours to
+> remove.**
+
+So the bus is not plumbing that messaging happens to need. **It is the mechanism that turns the
+independent implementor from a tax the PO pays in interruptions into a free project-level choice.**
+That is why it sits high in the build order rather than after the adapters.
+
+Three further arguments, each independently sufficient:
+
+- **It drops the `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` dependency.** Today the entire peer-messaging
+  story rides an experimental flag — the same class of fragility that killed bus v1 (channels gated
+  to claude.ai auth).
+- **It removes an available third ledger.** The harness task board became a de-facto ruling channel
+  in the evidence project, violating the two-ledger principle for no capability the tracker lacked.
+  Removing the affordance removes a documented process violation, not just noise.
+- **The harness inbox does not scale.** A flat JSON array, rewritten whole per send, never pruned:
+  O(n) rewrite per send and O(n) parse per poll, at 1 Hz. Measured on this box: 677 unread messages
+  accumulated in phantom-coordinator inboxes nobody will ever read.
+
+### 7.1b The architecture, as decided
+
+| Concern | Mechanism |
+|---|---|
+| **Send** | **MCP tools.** A tool description is guidance delivered *at the point of use* — the same argument as *lessons that can become guards, should.* A CLI's guidance lives in a skill that may not be loaded |
+| **Receive — `gating`** | **Monitor.** Plugin-shipped, auto-launching, interrupts mid-turn (measured: landed between two `Write` calls) |
+| **Receive — `normal`** | **Stop hook**, injecting via `additionalContext` at the turn boundary |
+| **Store** | **SQLite** at `.mcc/bus.db`, WAL. All three read and write it; **no IPC** |
+| **Identity** | **Env vars injected by `mcc`** at session launch. The same mechanism carries per-agent tracker credentials (§7.3) |
+
+SQLite is *why* this composes: three processes sharing one store need no socket, no listener
+lifecycle, no cleanup story. Measured at 50,000 messages / 114 MB: unread-lookup **2 µs**, send
+0.65 ms. At 1 Hz that is 0.00018% of a core.
+
+**Two columns, not one.** `delivered_at` is the honest field — we can know we injected; we can never
+know it was read. But for `gating`, add **`acked_at`**: *"a ruling was injected"* and *"the
+implementor has confirmed the ruling"* are different facts, and five rulings in the evidence project
+arrived after the work they governed. **An architect who can see delivered-but-unacked has a signal
+no discipline ever gave them.**
+
+**`--record` in the same call.** The send that carries a ruling writes the durable ledger copy in one
+operation, so it cannot be forgotten under momentum. This is the difference between a norm and a
+mechanism.
+
+**Open: liveness.** A monitor that silently stops receiving is *"silent in a way indistinguishable
+from healthy"* — the exact family this plugin exists to attack, and we would own it. Monitors do not
+appear in `TaskList`, so there is no liveness signal for free; the monitor must write its own
+heartbeat and something must notice its absence. **This needs an answer before the bus ships.**
+
+---
+
 All three answers are settled:
 
 - **Ruling-to-ledger by default.** A ruling posts to the issue *at ruling time*, and the bus message
@@ -482,7 +625,18 @@ at a turn boundary. The spike removed that constraint:
 > tool-armed, once plugin-armed. This is the fact the whole design rests on.
 
 Once an answer can reach a working agent, the asker has no reason to stop. So PLUMB does not ship a
-blocking primitive. It ships **urgency as a property of the message, set by the sender**:
+blocking primitive.
+
+**And the flag does not disappear — it changes what it controls**, which makes it a better primitive
+than blocking ever was:
+
+> From *"does the **sender** block?"* to *"does the **receiver** get interrupted?"*
+
+That is the question worth asking, because **the receiver's cost is the one that is real.**
+Interrupting is not strictly better than turn-end delivery — it trades *late* for *disruptive*. A
+message that barges in eight steps into a careful edit sequence derails work in a way a queued one
+never does. Turn-end delivery's one virtue is that it arrives at a coherent boundary, and that virtue
+is worth preserving for everything that does not need to land now.
 
 | Class | Delivery | Sender means |
 |---|---|---|
@@ -649,37 +803,41 @@ encourages. These are the one place PLUMB is permitted to state a norm, because 
 
 ## 12. Build order
 
-The proposal names the smallest useful version: *if I could have only three things — **the drive
+The proposal names its own smallest useful version: *if I could have only three things — **the drive
 protocol**, **the pre-commit guards**, and **a real blocking consult.** Everything else we carried by
-hand at acceptable cost.*
+hand at acceptable cost.* Quoted as written; the third is delivered as §9's urgency classes rather
+than a blocking primitive, because the blocking was a workaround for a channel we replaced.
 
-Quoted as written; the third item is delivered as §9's urgency classes rather than as a blocking
-primitive, because the blocking was a workaround for a channel we replaced. The *need* behind it —
-an answer that reaches a working agent — is met.
+**Ordered by §0.2 — what removes the PO from operator duty soonest — not by architectural tidiness.**
 
-1. **Manifest + artifact-role resolution + retired-artifact refusal** (§3). Everything else depends
-   on it, and it is the Sprint 14 guard.
-2. **The guards** (§5). Highest value per line, zero process alignment needed, independently useful
-   to a project that adopts nothing else.
-3. **`plumb:drive`, `plumb:design-gate`, `plumb:handoff`, `plumb:catalog`** (§11) — the four skills
-   attached to the deepest scars.
-4. **`plumb:establish` + `plumb:ceremony`** (§11) — the process negotiation. Promoted above the
-   adapters because everything above defers to a document that, today, only exists as a stub from
-   `plumb init`. Partial dependency on step 5: `establish` has to help the PO *choose* a ledger
-   adapter, but it only needs to name the choices, not run them.
-5. **The ledger interface + adapters** (§4). First tranche: **`markdown`** (no external dependency,
+1. ✅ **Manifest + artifact-role resolution + retired-artifact refusal** (§3). Everything else
+   depends on it, and it is the Sprint 14 guard.
+2. ✅ **The guards** (§5). Highest value per line, zero process alignment needed. **Layer 2 — useful
+   to a project that adopts nothing else**, which is §0.5 made concrete.
+3. ✅ **`drive`, `design-gate`, `handoff`, `catalog`** (§11.2) — the four skills attached to the
+   deepest scars. Also layer 2, also standalone.
+4. ✅ **`establish` + `ceremony` + the pattern library** (§11.1–11.3) — the process negotiation.
+5. **The bus** (§7.1a/b). **Ahead of the adapters, deliberately**: it is what turns the independent
+   implementor from a tax the PO pays in interruptions into a free project-level choice, which is
+   the product goal in §0.2. MCP send, monitor for `gating`, Stop hook for `normal`, SQLite store,
+   `mcc`-injected identity, `acked_at` on gating, `--record` in the same call.
+   **Liveness (§7.1b) is answered here, not deferred** — a bus that silently stops receiving is the
+   exact failure family this plugin exists to attack, and it would be ours.
+6. **Agent-drivable session lifecycle** — the payoff. Once the bus is ours, the Architect refreshing
+   the implementor no longer routes through the PO. This is the step that actually closes §0.2, and
+   it does not exist in the proposal at all, because that project could not see past the constraint.
+7. **The ledger interface + adapters** (§4). First tranche: **`markdown`** (no external dependency,
    and it forces the degradation question to be answered honestly), **`github`** (testable here via
-   `gh`), and **`nonlinear`** (the reference implementation — it is what the evidence base actually
-   ran on). Then **`jira`**, then `linear` shipped unverified and labelled.
-6. **`plumb:promote`** (§11.2) — the last shipped skill, and the mechanism by which a process
-   document is *supposed* to grow. Without it, log-then-promote has no tool. `arc-plan`,
-   `arc-kickoff` and `reconcile` are **not built** — see §11.1; they are authored per-project by
-   `establish`. `rule` and `consult` become CLI operations on the ledger and the bus.
-7. **The bus: two delivery classes, urgency declared per message by the sender** (§9), then
-   `plumb:consult` on top of it.
-8. **Monitors** (§6).
-9. **MAMA → PLUMB migration** — deliberately last. A migration written before PLUMB exists would be
-   a migration to a guess.
+   `gh`), and **`nonlinear`** (the reference implementation). Then **`jira`**, then `linear` shipped
+   unverified and labelled. Each ships **guidance**, not just code.
+8. **`plumb:promote`** (§11.2) — the last shipped skill, and the mechanism by which a process
+   document is *supposed* to grow. Without it, log-then-promote has no tool.
+9. **Monitors** (§6) — the drift detectors.
+10. **MAMA → PLUMB migration** — deliberately last. A migration written before PLUMB exists would be
+    a migration to a guess.
+
+`arc-plan`, `arc-kickoff` and `reconcile` are **not built** — see §11.1; they are authored
+per-project by `establish`. `rule` and `consult` are operations on the bus and the ledger.
 
 MAMA stays shipped and enable-able throughout; PLUMB is a separate plugin, not a replacement in
 place.
@@ -709,8 +867,9 @@ The honest summary of sixteen arcs, from the people who ran them:
 > The process works because **two agents with different jobs keep checking each other against
 > something neither controls** — a ledger, a measurement, a running product.
 
-MAMA gave the two-agent shape and the arc rhythm, and those were the right bones. What PLUMB adds is
-**evidence discipline**, and the part discipline keeps failing at: the mechanical guards, the honest
-channels, and a structure that does not quietly reinstate itself after we have moved on.
+MAMA gave the two-agent shape and the arc rhythm. It was right about the content and wrong to make
+it a constant. PLUMB keeps the evidence discipline, makes the shape a choice, and spends its
+mechanism budget on the one thing no discipline fixed: **getting the Product Owner out of the
+operator's chair without taking them out of the decisions.**
 
 **Claims decay. Build the expiry in.**
