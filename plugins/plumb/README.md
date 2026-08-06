@@ -173,8 +173,13 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
 
 - ✅ The ledger layer: guidance for nonlinear / GitHub / Jira / Linear, and a real `markdown`
   adapter for projects with no tracker
+- ✅ `promote` — the pass that moves earned observations into your norms, and expires norms whose
+  premise has died
 
-Next, in build order: `plumb:promote`, then the drift monitors, then MAMA → PLUMB migration.
+**All seven skills ship:** `establish`, `ceremony`, `promote` (about the methodology itself) and
+`design-gate`, `drive`, `catalog`, `bus` (portable, epistemic, usable with no methodology at all).
+
+Next: the drift monitors, then MAMA → PLUMB migration.
 **MAMA → PLUMB migration is deliberately last** — a migration written before PLUMB exists would be a
 migration to a guess.
 

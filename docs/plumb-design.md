@@ -891,8 +891,10 @@ than a blocking primitive, because the blocking was a workaround for a channel w
    and it forces the degradation question to be answered honestly), **`github`** (testable here via
    `gh`), and **`nonlinear`** (the reference implementation). Then **`jira`**, then `linear` shipped
    unverified and labelled. Each ships **guidance**, not just code.
-8. **`plumb:promote`** (§11.2) — the last shipped skill, and the mechanism by which a process
-   document is *supposed* to grow. Without it, log-then-promote has no tool.
+8. ✅ **`plumb:promote`** (§11.2) — the last shipped skill, and the mechanism by which a process
+   document is *supposed* to grow. It runs in **both** directions: observations graduate in, and
+   norms whose premise has died graduate out. The second half is what *claims decay, build the
+   expiry in* actually cashes out to.
 9. **Monitors** (§6) — the drift detectors.
 10. **MAMA → PLUMB migration** — deliberately last. A migration written before PLUMB exists would be
     a migration to a guess.
