@@ -1,0 +1,8 @@
+{
+  "name": "plumb",
+  "description": "The evolution of MAMA: architect and implementor as separate sessions with an arc rhythm, but with the process living in the project rather than in the plugin. Ships mechanical guards for repeatedly-observed failures, a pluggable execution ledger (nonlinear/GitHub/Jira/Linear/markdown), the drive protocol, read-before-rule design gates, and handoff at context exhaustion. Skills carry sequence; the project's own way-of-working document carries norms, and wins where they disagree.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Bryon Williams"
+  }
+}

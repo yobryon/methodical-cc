@@ -24,7 +24,7 @@ MCC_VERSION = "1.25.0"
 import json
 import time
 
-PLUGINS = ("pdt", "mam", "mama", "bus", "docs")
+PLUGINS = ("pdt", "mam", "mama", "bus", "docs", "plumb")
 MARKETPLACE = "methodical-cc"
 STATE_DIR_GLOBS = (".mcc", ".mcc-*")
 

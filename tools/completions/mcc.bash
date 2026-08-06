@@ -113,7 +113,7 @@ _mcc_complete() {
             COMPREPLY=( $(compgen -W "$items" -- "$cur") )
             return ;;
         --plugin)
-            COMPREPLY=( $(compgen -W "pdt mam mama bus docs" -- "$cur") )
+            COMPREPLY=( $(compgen -W "pdt mam mama bus docs plumb" -- "$cur") )
             return ;;
         --scope)
             local items
@@ -177,14 +177,14 @@ _mcc_complete() {
             }
             return ;;
         disable:)
-            (( pos_idx == 0 )) && COMPREPLY=( $(compgen -W "pdt mam mama bus docs" -- "$cur") )
+            (( pos_idx == 0 )) && COMPREPLY=( $(compgen -W "pdt mam mama bus docs plumb" -- "$cur") )
             return ;;
         docs:publish)
             compopt -o default 2>/dev/null
             COMPREPLY=()
             return ;;
         enable:)
-            (( pos_idx == 0 )) && COMPREPLY=( $(compgen -W "pdt mam mama bus docs" -- "$cur") )
+            (( pos_idx == 0 )) && COMPREPLY=( $(compgen -W "pdt mam mama bus docs plumb" -- "$cur") )
             return ;;
         reflect:scan)
             (( pos_idx == 0 )) && compopt -o default 2>/dev/null
