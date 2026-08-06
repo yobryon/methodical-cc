@@ -12,6 +12,20 @@ mid-turn.** It does not wait for their turn to end.
 The tools carry their own guidance — `bus_send`, `bus_inbox`, `bus_ack`, `bus_status`.
 This skill is the part that is not in a tool description.
 
+## Who is on it
+
+**Only sessions the user launched.** The Architect and the design partner always; an
+Implementor where the project chose a user-launched one.
+
+Not subagents — you get their answer as a return value. Not a CC team you are
+coordinating — that has the harness's own messaging. And **session lifecycle is the
+user's**: nothing here launches, refreshes or retires a session, and reaching for `mcc`
+to do so is crossing a boundary rather than removing friction.
+
+If your project's way of working is *the Architect drives everything with subagents and
+workflows*, the only traffic here is Architect ↔ design partner. That is a complete shape,
+not a degraded one.
+
 ---
 
 ## Choose urgency by the RECIPIENT's cost

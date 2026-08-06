@@ -490,6 +490,13 @@ So the bus is not plumbing that messaging happens to need. **It is the mechanism
 independent implementor from a tax the PO pays in interruptions into a free project-level choice.**
 That is why it sits high in the build order rather than after the adapters.
 
+**And it gives the harness's team protocol back.** `mcc` previously had to occupy that protocol to
+get peer messaging at all — every session launched believing it was the coordinator, with a phantom
+coordinator that never runs, because the protocol is designed for a lead that spawns and owns its
+teammates and forwards their permission prompts. With messaging moved onto our own bus, **the team
+protocol is free for its intended use**: an Architect that wants to run a team can simply be the
+coordinator of one. That is a capability we returned rather than removed.
+
 Three further arguments, each independently sufficient:
 
 - **It drops the `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` dependency.** Today the entire peer-messaging
@@ -501,6 +508,26 @@ Three further arguments, each independently sufficient:
 - **The harness inbox does not scale.** A flat JSON array, rewritten whole per send, never pruned:
   O(n) rewrite per send and O(n) parse per poll, at 1 Hz. Measured on this box: 677 unread messages
   accumulated in phantom-coordinator inboxes nobody will ever read.
+
+### 7.1a.1 Who spawns what — and what the bus is actually for
+
+This boundary has been blurred twice in design and is worth stating flatly.
+
+| Spawned by | What | They coordinate via |
+|---|---|---|
+| **The user** | Independent Claude Code sessions — `arch`, `pdt`, a user-launched `impl` — via `mcc <name>` (`= mcc session resume`) or `mcc term up` for several at once | **This bus** |
+| **The Architect** | Subagents (bounded tasks, crisp deliverables) | Their return value, in band |
+| **The Architect** | Fan-out workflows | In band |
+| **The Architect** | A **CC team**, with arch as coordinator, if the project wants to work that way | The harness's native team protocol |
+
+**`mcc` session control belongs to the user. The Architect does not launch, refresh, or retire a peer
+session** — those are independent sessions whose lifecycle the person owns, and an agent reaching for
+`mcc <name>` has crossed a boundary rather than removed friction.
+
+**The bus carries traffic between user-spawned sessions only.** `arch ↔ pdt` is the case every
+project has. `arch ↔ impl` exists only where the project chose a user-spawned implementor. A project
+whose way of working is *arch drives everything with subagents and workflows* has **no bus traffic
+at all beyond `arch ↔ pdt`** — and that is a perfectly good shape, not a degraded one.
 
 ### 7.1b The architecture, as decided
 
@@ -841,9 +868,11 @@ than a blocking primitive, because the blocking was a workaround for a channel w
    `mcc`-injected identity, `acked_at` on gating, `--record` in the same call.
    **Liveness (§7.1b) is answered here, not deferred** — a bus that silently stops receiving is the
    exact failure family this plugin exists to attack, and it would be ours.
-6. **Agent-drivable session lifecycle** — the payoff. Once the bus is ours, the Architect refreshing
-   the implementor no longer routes through the PO. This is the step that actually closes §0.2, and
-   it does not exist in the proposal at all, because that project could not see past the constraint.
+6. **Compaction survival** (§8) — the step that actually closes §0.2, and it closes it by deleting
+   the chore rather than delegating it. There is nothing to refresh: the implementor compacts and
+   continues, and the injection tells it so in as many words. Note what this is *not* — the Architect
+   does **not** gain the ability to launch or refresh a peer session (§7.1a.1); `mcc` belongs to the
+   user. The friction went away because the operation stopped being necessary.
 7. **The ledger interface + adapters** (§4). First tranche: **`markdown`** (no external dependency,
    and it forces the degradation question to be answered honestly), **`github`** (testable here via
    `gh`), and **`nonlinear`** (the reference implementation). Then **`jira`**, then `linear` shipped

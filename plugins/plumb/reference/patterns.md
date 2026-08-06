@@ -52,6 +52,11 @@ with build output.
 **Applies when.** Work is sustained and permission-heavy; there is enough of it that one context
 cannot hold both the design and the building.
 
+**It is one of four delegation modes, not the default.** Subagents take bounded tasks with crisp
+deliverables; fan-out workflows take genuinely fan-out-shaped work; a CC team takes work the
+Architect wants to coordinate directly; a **user-launched peer session** takes whole arcs. Only the
+last needs the bus, and only the last costs the user a session to run.
+
 **Costs.** Two sessions to launch and keep alive. A messaging channel between them. Real coordination
 overhead — one project measured ~15 ledger comments plus ~15 messages for an 8-issue arc.
 

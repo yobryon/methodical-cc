@@ -3,16 +3,18 @@
 
 The harness's team protocol delivers a message only when the RECIPIENT's turn
 ends. An agent that asks a question and keeps working cannot see the answer
-until it stops. That single property is what forced "send and stop" discipline,
-what made a blocking consult look necessary, and — through a longer chain — what
-made the Product Owner the implementor's lifecycle operator:
+until it stops. That single property is what forced "send and stop" discipline
+and what made a blocking consult look necessary.
 
-    teammates cannot spawn teammates
-      -> the PO launches every session by hand
-        -> the PO is the one who refreshes the implementor
+This bus carries traffic between USER-SPAWNED sessions — arch and pdt always,
+plus an implementor where the project chose a user-launched one. It is not for
+subagents (their return value is in band) and not for a CC team (that has the
+harness's own protocol). Session lifecycle belongs to the user; nothing here
+launches, refreshes or retires a session.
 
-That constraint belongs to the harness. This bus is ours, so it is ours to
-remove.
+Moving messaging off the harness's team protocol also gives that protocol back:
+mcc previously had to occupy it, so an Architect could not run a team of its
+own. Now it can.
 
 Three processes, one SQLite store, no IPC:
 
