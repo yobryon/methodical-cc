@@ -1,7 +1,11 @@
 # PLUMB
 
-**The evolution of MAMA.** Architect and implementor as separate sessions with an arc rhythm — but
-the process lives in *your project*, not in this plugin.
+**The evolution of MAMA.** Not a better methodology — a **host** for a methodology your project
+authors and evolves, plus an evidence layer that works whether or not you adopt any methodology at
+all.
+
+It assumes nothing about your shape: not a separate implementor session, not an arc rhythm, not a
+tracker, not a design partner. Those are asked, never imposed.
 
 > A plumb line is the reference a thing is trued against: it builds nothing, it tells you whether
 > what you built is straight. And *to plumb* is to investigate to the bottom.
@@ -24,7 +28,19 @@ If something here looks like a helpful template, it is a bug. File it.
 
 ---
 
-## The one idea: norms in the project, procedures in the plugin
+## The product goal
+
+> **Keep the Product Owner as the decider. Remove them as the operator.**
+
+Being the bottleneck is *correct* for a consequential call and *pure friction* for a chore. MAMA
+made you its implementor's lifecycle operator — *"run `impl-end` and start a fresh one"* — when what
+you actually did was compact it and say continue. So PLUMB deletes that chore rather than
+automating it: the implementor compacts and continues, and is told in as many words that context
+pressure is not a reason to stop.
+
+---
+
+## The one idea: three homes, split by genre and by owner
 
 MAMA had a failure mode with a date. An Architect invoked `mama:arch-sprint-start` for its
 *substance* and inherited its *template* with it — silently reintroducing three practices the
