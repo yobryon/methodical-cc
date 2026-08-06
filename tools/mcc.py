@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.25.0"
+MCC_VERSION = "1.26.0"
 
 import json
 import time
@@ -4024,6 +4024,40 @@ def cmd_setup(args):
     print("  mcc switch mam|mama|off - swap implementation plugin")
 
 
+def _find_plumb_bus():
+    """Locate plumb's bus engine (bin/bus.py).
+
+    Prefer the checkout mcc itself lives in (dev repo or marketplace clone —
+    always version-matched to this mcc), then the newest installed plugin
+    cache. The tail viewer is read-only, so any recent version is safe.
+    """
+    sibling = Path(__file__).resolve().parent.parent / "plugins" / "plumb" / "bin" / "bus.py"
+    if sibling.is_file():
+        return sibling
+    def _ver(p):
+        try:
+            return tuple(int(x) for x in p.parent.parent.name.split("."))
+        except ValueError:
+            return (0,)
+    cached = sorted(Path.home().glob(
+        ".claude/plugins/cache/methodical-cc/plumb/*/bin/bus.py"), key=_ver)
+    return cached[-1] if cached else None
+
+
+def cmd_bus_tail(args):
+    engine = _find_plumb_bus()
+    if engine is None:
+        die("plumb's bus engine not found — is the plumb plugin installed? "
+            "(`mcc update` refreshes the marketplace)")
+    argv = ["python3", str(engine), "tail", "-n", str(args.lines)]
+    if args.no_follow:
+        argv.append("--no-follow")
+    try:
+        sys.exit(subprocess.run(argv).returncode)
+    except KeyboardInterrupt:
+        sys.exit(0)
+
+
 def cmd_version(args):
     print(f"mcc {MCC_VERSION}")
     print(f"  script: {Path(__file__).resolve()}")
@@ -5076,6 +5110,16 @@ def build_parser():
     pdocs_status = pdocs_sub.add_parser("status", help="show docs config and pending-feedback count")
     pdocs_status.set_defaults(func=cmd_docs_status)
 
+    # --- bus (plumb peer-bus utilities) ---
+    pbus = sub.add_parser("bus", help="peer-bus utilities (plumb): tail")
+    pbus_sub = pbus.add_subparsers(dest="bus_cmd", metavar="<verb>")
+    pbus_tail = pbus_sub.add_parser(
+        "tail", help="follow this project's bus traffic (read-only observer view)")
+    _arg(pbus_tail, "-n", "--lines", type=int, default=20,
+         help="how much backlog to show first (default 20)")
+    _arg(pbus_tail, "--no-follow", action="store_true", help="print backlog and exit")
+    pbus_tail.set_defaults(func=cmd_bus_tail)
+
     # --- completions ---
     pcomp = sub.add_parser("completions", help="shell tab-completion: install/emit")
     pcomp_sub = pcomp.add_subparsers(dest="completions_cmd", metavar="<verb>")
@@ -5140,6 +5184,7 @@ TOP_HELP_GROUPS = [
         ("term",    "Render .mcc/term into a terminal (`mcc term -h`)"),
         ("team",    "Bus team setup/status (`mcc team -h`)"),
         ("docs",    "Stakeholder docs publish/pull (`mcc docs -h`)"),
+        ("bus",     "Peer-bus utilities: tail traffic (`mcc bus -h`)"),
         ("migrate", "Migrate legacy .mam/.mama/.pdt[-scope]/ state dirs"),
     ]),
     ("Plugins", [

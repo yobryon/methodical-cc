@@ -1,5 +1,21 @@
 #!/usr/bin/env python3
-"""Boundary sweep — the bus's level-triggered backstop, at every turn boundary.
+"""Boundary sweep — the bus's SILENT STANDBY, at every turn boundary.
+
+The monitor is the primary delivery vehicle, and deliberately so: hook-injected
+context prints on the USER's console in the agent's voice, poorly
+differentiated from real output, while monitor delivery is visible to the
+agent and (bar a one-line stamp) invisible to the user — which is the correct
+default for peer traffic. So this sweep STEPS ASIDE whenever this session's
+monitor is healthy, and delivers only where the monitor cannot:
+
+  - headless sessions (monitors are interactive-only; this is the ONLY path)
+  - a monitor that died or went stale mid-session (heartbeat + pid checked;
+    self-healing in both directions — the monitor coming back silences the
+    sweep again)
+  - at SessionStart, only when no monitor is COMING: an interactive session's
+    monitor launches with it and will deliver within seconds, so sweeping
+    there would just re-create the on-screen print at the one moment it was
+    most visible. The harness registry's own `kind` field says which.
 
 Registered for three hook events, because a boundary has two edges and a
 session has a beginning:
@@ -66,6 +82,17 @@ def main():
     conn = bus.connect(db)
     try:
         me = bus.whoami()
+
+        # Standby gate: a healthy monitor owns delivery. (The claim transaction
+        # makes the race harmless either way; this gate is about keeping hook
+        # output off the user's console, not about correctness.)
+        if bus.agent_liveness(conn, me)["monitor"] == "alive":
+            sys.exit(0)
+        if event == "SessionStart":
+            entry = bus._my_registry_entry()
+            if entry and entry.get("kind") == "interactive":
+                sys.exit(0)  # a monitor launches with this session; let it deliver
+
         sink = io.StringIO()
         rows = bus.claim_and_emit(
             conn, me, via=f"hook:{event}", out=sink,

@@ -583,7 +583,7 @@ at all beyond `arch ↔ pdt`** — and that is a perfectly good shape, not a deg
 | **Send** | **MCP tools.** A tool description is guidance delivered *at the point of use* — the same argument as *lessons that can become guards, should.* A CLI's guidance lives in a skill that may not be loaded |
 | **Receive — recipient mid-turn** | **Monitor** delivers `gating` only, interrupting (measured: landed between two `Write` calls); `normal` waits for a boundary |
 | **Receive — recipient idle** | **Monitor** delivers *everything*, batched, waking the session — see §9.3 |
-| **Receive — boundaries** | **Hook sweep** at turn end (Stop), turn start (UserPromptSubmit — pending mail lands *before* the turn's work), and session start (startup\|resume — a peer launched after the send gets into action immediately) |
+| **Receive — boundaries** | **Hook sweep** at turn end (Stop), turn start (UserPromptSubmit), and session start (startup\|resume) — as **silent standby** (0.5.0): hook-injected context prints on the user's console in the agent's voice, so the sweep steps aside whenever this session's monitor is healthy (heartbeat + pid) and delivers only where a monitor cannot — headless sessions (which write no registry entry, so the SessionStart defer-if-interactive check can never mis-fire there) and monitors dead or stale mid-session. Self-healing in both directions. The user's window on traffic is `mcc bus tail`, a deliberate read-only observer view replacing the accidental one |
 | **Store** | **SQLite** at `.mcc/bus.db`, WAL. All three read and write it; **no IPC** |
 | **Identity** | **Env vars injected by `mcc`** at session launch. The same mechanism carries per-agent tracker credentials (§7.3) |
 

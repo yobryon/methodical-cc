@@ -12,7 +12,7 @@ _mcc_complete() {
 
     # ---- Top level: subcommands ∪ registered session names ----
     if (( cword == 1 )); then
-        local subs="completions create disable docs enable list migrate reflect session setup status switch team term update version vscode help"
+        local subs="bus completions create disable docs enable list migrate reflect session setup status switch team term update version vscode help"
         local sessions
         sessions=$(mcc complete --kind session 2>/dev/null)
         COMPREPLY=( $(compgen -W "${subs} ${sessions}" -- "${cur}") )
@@ -25,6 +25,14 @@ _mcc_complete() {
 
     # ---- Two-level nouns ----
     case "$cmd1" in
+        bus)
+            if (( cword == 2 )); then
+                COMPREPLY=( $(compgen -W "tail" -- "$cur") )
+                return
+            fi
+            cmd2="${words[2]}"
+            args_start=3
+            ;;
         completions)
             if (( cword == 2 )); then
                 COMPREPLY=( $(compgen -W "bash emit install print uninstall verify zsh" -- "$cur") )
@@ -123,7 +131,7 @@ _mcc_complete() {
         --shell)
             COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
             return ;;
-        --kind|--name|--repo|--terminal)
+        --kind|--lines|--name|--repo|--terminal)
             return ;;
     esac
 
@@ -131,6 +139,7 @@ _mcc_complete() {
     if [[ "$cur" == -* ]]; then
         local flags=""
         case "$cmd1:$cmd2" in
+            bus:tail)  flags="--lines --no-follow" ;;
             complete:)  flags="--kind" ;;
             completions:emit)  flags="--output" ;;
             completions:install)  flags="--rc-file --shell" ;;
@@ -158,7 +167,7 @@ _mcc_complete() {
     for ((i=args_start; i<cword; i++)); do
         w="${words[$i]}"
         case "$w" in
-            --group|--group-by|--kind|--name|--output|--persona|--plugin|--rc-file|--repo|--scope|--shell|--terminal)
+            --group|--group-by|--kind|--lines|--name|--output|--persona|--plugin|--rc-file|--repo|--scope|--shell|--terminal)
                 ((i++)) ;;
             --*)
                 ;;

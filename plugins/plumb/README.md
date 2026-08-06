@@ -191,8 +191,10 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
   MCP tools and to humans as the CLI
 - **The bus** — MCP send with two delivery classes, turn-state-aware monitor (`gating` interrupts
   mid-turn; an **idle** session is woken by anything pending — urgency rations derailment, and
-  idle has none to ration), boundary sweeps at turn end, turn start, and session start, SQLite
-  store, `mcc`-injected identity
+  idle has none to ration), SQLite store, `mcc`-injected identity. The monitor is the primary
+  vehicle; boundary sweeps (turn end, turn start, session start) are **silent standby** — they
+  deliver only where a monitor cannot (headless sessions, or one that died mid-session), so peer
+  traffic stays off the user's console. The user watches traffic deliberately via `mcc bus tail`
 - **Compaction survival** — PreCompact snapshots and steers the summarizer; SessionStart re-orients
   on `source=compact` only
 - **All five guards**, and two drift detectors (unanswered gating rulings, decision-number

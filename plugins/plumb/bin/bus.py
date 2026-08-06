@@ -25,8 +25,13 @@ Three processes, one SQLite store, no IPC:
                      in send order (a gating message may depend on the
                      normal messages sent before it)
                    session idle -> EVERYTHING, batched — wakes the session
-    hook sweep   every boundary — turn end (Stop), turn start
-                 (UserPromptSubmit), session start (startup|resume)
+    hook sweep   SILENT STANDBY at every boundary — turn end (Stop), turn
+                 start (UserPromptSubmit), session start (startup|resume).
+                 Steps aside while the monitor is healthy: hook-injected
+                 context prints on the USER's console, monitor delivery does
+                 not, and peer traffic is the agent's mail. Delivers only
+                 where the monitor cannot — headless sessions, and a monitor
+                 that died or went stale mid-session.
 
 Urgency rations DERAILMENT. `normal` defers only to protect in-flight work;
 an idle session has none, so the class distinction collapses there and both
@@ -51,7 +56,7 @@ import sys
 import time
 from pathlib import Path
 
-BUS_VERSION = "0.4.1"
+BUS_VERSION = "0.5.0"
 DEFAULT_DB = ".mcc/bus.db"
 MAX_ATTEMPTS = 5
 # A monitor ticks at 1 Hz, so this is ten missed ticks — tight enough that a
@@ -276,7 +281,8 @@ def ack(conn, msg_id, agent):
 # There is nothing of OURS to go stale: a dead session's frozen 'busy' fails
 # the pid check, and its mail delivers at the next SessionStart sweep.
 
-SESSIONS_REGISTRY = Path.home() / ".claude" / "sessions"
+SESSIONS_REGISTRY = Path(os.environ.get("PLUMB_SESSIONS_REGISTRY")
+                         or Path.home() / ".claude" / "sessions")
 TRANSCRIPT_QUIET_IDLE_S = 300.0  # mtime fallback: quiet this long = idle
 
 
@@ -673,6 +679,63 @@ def cmd_ack(args):
     conn.close()
 
 
+def _tail_line(r):
+    ts = time.strftime("%H:%M:%S", time.localtime(r["created_at"]))
+    mark = "!" if r["urgency"] == "gating" else " "
+    if r["quarantined"]:
+        state = "QUARANTINED"
+    elif r["delivered_at"]:
+        state = f"delivered:{r['delivered_by']}" + ("  acked" if r["acked_at"] else "")
+    else:
+        state = "pending"
+    head = f"{ts} {mark}#{r['id']} @{r['sender']} → @{r['recipient']}  [{state}]"
+    if r["thread"]:
+        head += f"  (thread {r['thread']})"
+    if r["record_ref"]:
+        head += f"  rec:{r['record_ref']}"
+    body = "\n".join("    " + ln for ln in r["body"].splitlines())
+    return f"{head}\n{body}"
+
+
+def cmd_tail(args):
+    """Observer's window on the bus — read-only, for the USER, from outside.
+
+    Deliberate replacement for the accidental observability the hook sweeps
+    used to provide by printing messages on the session console. The console
+    now carries only the monitor's one-line stamp; anyone who wants the
+    traffic itself watches it here, on their own terms.
+    """
+    conn = connect(db_path(args.db))
+    rows = conn.execute("SELECT * FROM messages ORDER BY id DESC LIMIT ?",
+                        (args.lines,)).fetchall()
+    last_id = 0
+    for r in reversed(rows):
+        print(_tail_line(r))
+        last_id = max(last_id, r["id"])
+    sys.stdout.flush()
+    if args.no_follow:
+        conn.close()
+        return
+    try:
+        while True:
+            time.sleep(args.interval)
+            try:
+                fresh = conn.execute(
+                    "SELECT * FROM messages WHERE id>? ORDER BY id",
+                    (last_id,)).fetchall()
+            except sqlite3.OperationalError:
+                continue  # writer held the lock; next tick
+            for r in fresh:
+                print(_tail_line(r))
+                last_id = r["id"]
+            if fresh:
+                sys.stdout.flush()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        conn.close()
+
+
 def cmd_status(args):
     conn = connect(db_path(args.db))
     rows = status(conn)
@@ -727,6 +790,14 @@ def build_parser():
 
     s = sub.add_parser("sweep", parents=[common], help="Stop-hook backstop: everything undelivered")
     s.set_defaults(func=cmd_sweep)
+
+    s = sub.add_parser("tail", parents=[common],
+                       help="follow bus traffic (read-only observer view)")
+    s.add_argument("-n", "--lines", type=int, default=20,
+                   help="how much backlog to show first (default 20)")
+    s.add_argument("--no-follow", action="store_true", help="print backlog and exit")
+    s.add_argument("--interval", type=float, default=1.0)
+    s.set_defaults(func=cmd_tail)
 
     s = sub.add_parser("ack", parents=[common])
     s.add_argument("id", type=int)
