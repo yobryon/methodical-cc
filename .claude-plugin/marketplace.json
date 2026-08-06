@@ -38,8 +38,8 @@
     {
       "name": "plumb",
       "source": "./plugins/plumb",
-      "description": "MAMA's successor: not a better methodology, but a host for a methodology the project authors and evolves, plus an evidence layer that works with no methodology at all. Keeps the Product Owner as decider and removes them as lifecycle operator. Ships mechanical guards for repeatedly-observed failures, an interrupting peer-messaging bus, a pluggable execution ledger (nonlinear/GitHub/Jira/Linear/markdown), the drive protocol, read-before-rule design gates, and handoff at context exhaustion. Skills carry sequence; the project's own way-of-working document carries norms, and wins where they disagree.",
-      "version": "0.1.0"
+      "description": "MAMA's successor: not a better methodology, but a host for a methodology the project authors and evolves, plus an evidence layer that works with no methodology at all. Keeps the Product Owner as decider and removes them as lifecycle operator. Ships mechanical guards for repeatedly-observed failures, an interrupting peer-messaging bus, a process host surfaced as MCP tools (roles, norms, decision numbers \u2014 with retired-role refusals), a pluggable execution ledger (nonlinear/GitHub/Jira/Linear/markdown), the drive protocol, read-before-rule design gates, and compaction survival. Skills carry sequence; the project's own way-of-working document carries norms, and wins where they disagree.",
+      "version": "0.2.0"
     }
   ]
 }

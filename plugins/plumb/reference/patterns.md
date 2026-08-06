@@ -267,6 +267,34 @@ per-arc implementation log.
 a constrained harness, a hard per-run boundary. Then something has to carry the position
 across, and it is worth writing.
 
+## relay-handoff — When a genuine relay happens, hand off a position, not a promise
+
+**Practice.** When work genuinely passes from one agent to a *different* one — not a compaction,
+not a resume, but a true relay to a successor — the handoff leads with **what is missing**, never
+the green numbers (*a suite that is green is exactly what would hide the gap*). Then: the queue in
+order; for each item **what the successor must not rediscover** — rulings already made, options
+already closed **named by name** so they cannot be reopened as fresh; environment traps carrying
+**the day each one cost**; committed-but-inert code labelled as such, in those words. The
+successor's first act is an acknowledgment with a read-back, and their first *working* act is
+**verifying the inherited claim** rather than building on it.
+
+**The scar.** Three relays across live arcs, zero rework — every one of them shaped this way. The
+one arc without it cost the successor a morning. And twice, a fresh successor *materially improved
+the design* by verifying the inherited claim instead of trusting it.
+
+**Applies when.** A real relay: a new session or a different agent takes over mid-flight. This is
+rarer than it used to be — see `ledger-over-handover` for why durable sessions removed the standing
+state document. The relay is the case that remains, and the shape above goes in the *handoff
+message and the ledgers*, not in a per-session state file.
+
+**Costs.** Writing an honest boundary instead of a hopeful one, at the moment you most want to
+claim more.
+
+**How you'd know it's wrong for you.** No relays — one durable session end to end. Writing this
+continuously "just in case" recreates the fourth ledger that `ledger-over-handover` retired.
+
+---
+
 ## provider-consumer — Norms for depending on, or serving, another team
 
 **Practice.** Search their tracker before filing. **File questions before feature requests** —

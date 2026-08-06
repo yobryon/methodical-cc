@@ -310,6 +310,14 @@ The rule in one line: **specify the frame, show real exemplars, never draft
 the project's own words.** Where content is universal, plumb ships the skill
 itself; where content is project-specific, plumb ships judgment and exemplars.
 
+*(Sourcing decision, settled: no real project had authored ceremony skills yet,
+and asking one to produce them on demand would manufacture the friction plumb
+exists to remove. So v1's exemplars are written from an **illustrative**
+project — "Kiln", fictional, honestly labelled as such in the exemplars' own
+README — with a domain and vocabulary deliberately far from any real project's
+so nothing reads as a default. They set the quality bar until real projects
+contribute real ones, which replace them.)*
+
 ### 5.8 What plumb must not do
 
 - **Not generate the design.** Templated rulings are worse than a read plus a
@@ -361,6 +369,13 @@ no equivalent of.
   numbers. Queue in order. For each item, what the successor must not
   rediscover, with closed options named **by name**. Environment traps carry the
   day each cost. Committed-but-inert code labelled as such.
+  *(Qualified during the rewrite: the standing per-session state document is
+  retired — it existed to approximate compaction for an agent that had none,
+  and durable sessions + the PreCompact snapshot killed the premise; kept as a
+  document it becomes a fourth ledger. What survives is the **relay** case — a
+  genuine handover to a different agent — and the shape above lives in the
+  pattern library as `relay-handoff`, applied to the handoff message and the
+  ledgers, not to a standing file.)*
 - **The failure-shape catalog.** Entries ordered by *why they hid*, not by what
   broke. An entry earns its place by being portable — it tells you what to *try*.
   Its highest use is prospective.
@@ -659,3 +674,8 @@ Claims decay — build the expiry in.**
 4. **Layer 2** — the evidence layer as skills.
 5. **The mama → plumb migration**, designed last, once we know what migrating
    actually means.
+6. **Plank adopts plumb** — the first real onboarding of an in-flight project,
+   PO-guided, prescriptive. Also the first live test of `migrate` +
+   `establish`-as-re-run against a project that already owns a mature
+   way-of-working document; what it teaches feeds straight back into the
+   plugin.

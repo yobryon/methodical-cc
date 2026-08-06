@@ -70,12 +70,14 @@ A skill with no norms in it has no norms to smuggle.
 ## Getting started
 
 ```bash
-plumb init          # scaffolds .plumb.toml + a starter process document
-plumb doctor        # validates the manifest against the filesystem
+plumb init          # scaffolds .plumb.toml + a process document — both deliberately EMPTY
+plumb doctor        # validates the manifest; fails until establish has run — that's the design
 ```
 
-Both files belong in version control. Then make the process document *yours* — it is the source of
-truth, and the starter is only a shape.
+Then run the **`plumb:establish` skill with the Product Owner.** The scaffold declares nothing —
+no roles, no artifacts, no pre-written process — because a declaration nobody made is a suggestion,
+and suggestions become obligations. Everything in both files arrives from that conversation:
+`doctor` passing is the conversation's exit criterion. Both files belong in version control.
 
 ### The manifest: `.plumb.toml`
 
@@ -125,9 +127,17 @@ Add entries as you kill things. Never delete them — the entry *is* the guard.
 | `plumb doctor` | Validate the manifest against the filesystem |
 | `plumb ceremony list` | List this project's own procedures |
 | `plumb ceremony new <name>` | Scaffold a project procedure in `.claude/skills/` |
+| `plumb exemplars [name]` | Ceremony-skill exemplars from one project — calibrate, don't copy |
+| `plumb patterns [name]` | Practices with their costs measured — consult after the interview |
 | `plumb ledger guide` | How an arc and the states map onto your tracker |
 | `plumb ledger states` | The normalized state vocabulary |
 | `plumb migrate scan` | Inventory a MAMA project's artifacts and how alive each one is |
+
+**The agent contract is the MCP server, not this CLI.** Agents get `bus_send` / `bus_inbox` /
+`bus_ack` / `bus_status` (the bus) and `process_path` / `process_read` / `decision_next` (the
+process host) as tools whose descriptions carry the guidance — the contract travels with the
+session instead of depending on a skill being loaded. The CLI is the engine (monitors, hooks) and
+the human surface; the retired-role refusal is the same utterance on both.
 
 ---
 
@@ -174,38 +184,23 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
 
 ## Status
 
-**0.1.0 — foundations.** Built and tested:
+**0.2.0.** Everything below is built and, where it touches the harness, verified live:
 
-- ✅ The process host: manifest, role resolution, retired-role refusal, process reader, decision
-  allocator, `doctor`
-- ✅ All five guards
-- ✅ The skills attached to the deepest scars: `drive`, `design-gate`, `catalog`
-- ✅ The process negotiation: `establish` (author the way of working *with* the PO) and `ceremony`
-  (give a project procedure a home), plus `plumb ceremony list|new`
-
-- ✅ The bus: MCP send, monitor for `gating` (interrupts mid-turn), Stop hook for `normal`, SQLite
-  store, `mcc`-injected identity — verified live
-- ✅ Compaction survival: PreCompact snapshots and steers the summarizer; SessionStart re-orients on
-  `source=compact` only
-
-- ✅ The ledger layer: guidance for nonlinear / GitHub / Jira / Linear, and a real `markdown`
-  adapter for projects with no tracker
-- ✅ `promote` — the pass that moves earned observations into your norms, and expires norms whose
-  premise has died
-
-**All seven skills ship:** `establish`, `ceremony`, `promote` (about the methodology itself) and
-`design-gate`, `drive`, `catalog`, `bus` (portable, epistemic, usable with no methodology at all).
-
-- ✅ Drift detectors — unanswered gating rulings, and decision-number collisions — running inside
-  the bus monitor's tick, emitting once per finding
-
-- ✅ `migrate` — inventory a MAMA project, separate what was chosen from what arrived as
-  scaffolding, and carry across only what someone actually reads
-
-**Build order complete.** Everything in the design document is built and, where it touches the
-harness, verified live.
-**MAMA → PLUMB migration is deliberately last** — a migration written before PLUMB exists would be a
-migration to a guess.
+- **The process host** — empty-by-design genesis (`init` → `establish`), role resolution with the
+  retired-role refusal, the process reader, decision allocator, `doctor` — surfaced to agents as
+  MCP tools and to humans as the CLI
+- **The bus** — MCP send with two delivery classes, monitor for `gating` (interrupts mid-turn),
+  Stop-hook sweep for the rest, SQLite store, `mcc`-injected identity
+- **Compaction survival** — PreCompact snapshots and steers the summarizer; SessionStart re-orients
+  on `source=compact` only
+- **All five guards**, and two drift detectors (unanswered gating rulings, decision-number
+  collisions) inside the monitor's tick
+- **Seven skills** — `establish`, `ceremony`, `promote` (about the methodology itself);
+  `design-gate`, `drive`, `catalog`, `bus` (portable, epistemic, usable with no methodology at all)
+- **The reference shelf** — the pattern library (costs measured, rejection criteria first-class)
+  and the ceremony-skill exemplars (calibrate, don't copy)
+- **The ledger layer** — guidance for nonlinear / GitHub / Jira / Linear, a real `markdown` adapter
+- **`migrate`** — re-opens the process question for a MAMA project rather than porting its answers
 
 MAMA stays shipped and enable-able. PLUMB is a separate plugin, not a replacement in place.
 

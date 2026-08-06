@@ -18,9 +18,10 @@ This skill is the part that is not in a tool description.
 Implementor where the project chose a user-launched one.
 
 Not subagents — you get their answer as a return value. Not a CC team you are
-coordinating — that has the harness's own messaging. And **session lifecycle is the
-user's**: nothing here launches, refreshes or retires a session, and reaching for `mcc`
-to do so is crossing a boundary rather than removing friction.
+coordinating — that has the harness's own messaging. And the bus itself is **chat, not
+control**: nothing here launches, refreshes or retires a session. Session lifecycle
+belongs to the user *by default* — if your project's way of working assigns some of it
+elsewhere, that is the document's call to make, not this skill's to forbid.
 
 If your project's way of working is *the Architect drives everything with subagents and
 workflows*, the only traffic here is Architect ↔ design partner. That is a complete shape,

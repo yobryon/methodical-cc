@@ -105,10 +105,13 @@ plumb init --document <path they chose>   # scaffolds both; skips an existing do
 plumb doctor                              # then make it pass
 ```
 
-Then edit both to match the conversation. Rules:
+Both files come out of the scaffold **deliberately empty** — no roles, no artifacts, no pre-written
+process. That is the design, not an omission: a declaration nobody made is a suggestion, and
+suggestions become obligations. Everything you now add comes from the conversation. Rules:
 
-- **`[artifacts]` contains only roles this project actually has.** Delete the scaffold's suggestions
-  it does not use. An unused role is a suggestion, and suggestions become obligations.
+- **`[artifacts]` contains only roles this project actually has.** Every entry you write should
+  trace to something the PO named in Step 2. If you cannot say who told you a role exists, it
+  does not go in.
 - **`[artifacts.retired]` carries reasons, in the PO's own words where possible.** The reason is what
   makes the refusal teach instead of merely block.
 - **The process document holds only what they actually said.** Do not fill sections to make it look
@@ -178,8 +181,13 @@ So if Step 2's question 3 produced a rhythm, this is where it gets a home:
 - a skill for the **kickoff**, if roles are split (and remember: a kickoff is a *message*; a skill
   that writes it to a file has already misunderstood it)
 
-Seed them from `plumb patterns` where a pattern fits, but **write them in the project's own
-vocabulary** — if they say "batch" or "cycle" or "chunk", the skill says that, not "arc".
+**Before writing the first one, read an exemplar** — `plumb exemplars` shows two real-shaped
+ceremony skills from one (illustrative) project, with the checklist of properties that make a
+ceremony skill good. They exist to calibrate your sense of grain and discipline — how thin, how
+much doc-pointing, what an in-place amendment looks like. **They are not starters**: the first
+draft of your project's skill comes from your project's reality, in your project's vocabulary, or
+it is inherited rather than owned. If the PO says "batch" or "cycle" or "chunk", the skill says
+that — and a pattern from `plumb patterns` may inform *what* a ceremony covers, never its words.
 
 Plus whatever came out of Step 2's question 8, and what `git log` showed you:
 
@@ -202,15 +210,12 @@ later: the second time you run something, that is `plumb:ceremony`.
 
 ## Step 5 — If this is an existing MAMA project
 
-Full migration is a separate piece of work and is deliberately not built yet. What you can do now:
+Switch to the `plumb:migrate` skill — it runs this same establish conversation *plus* the
+MAMA-specific work: inventorying the old artifacts, separating what was chosen from what arrived as
+scaffolding (the distinguishing question: **can anyone point to when this was decided?**), and
+emitting the `[artifacts.retired]` entries the project has earned (`plumb migrate retired`).
 
-- **Read the MAMA artifacts as evidence of the de facto process**, and say plainly which parts were
-  *chosen* versus which arrived as scaffolding. The distinguishing question is the one that caught
-  it last time: **can anyone point to when this was decided?** If not, it is a candidate for
-  `[artifacts.retired]`, not for carrying forward.
-- Anything MAMA created that the project stopped maintaining goes straight into the retired table
-  with the reason. That is the migration's most valuable half and it costs nothing.
-- Do **not** delete MAMA state or disable the plugin. Both can coexist; say so.
+Do **not** delete MAMA state or disable the plugin. Both can coexist; say so.
 
 ---
 

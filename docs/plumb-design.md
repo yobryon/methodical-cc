@@ -242,6 +242,15 @@ Rule 4 needs a mechanism, not an intention. That mechanism is the manifest.
 `.plumb.toml` at the project root — the project's declaration of its own way of working. Small,
 hand-editable, versioned in the repo.
 
+> **The genesis is empty by design.** The example below is an *established* project's manifest.
+> `plumb init` writes none of it: no roles, no artifacts, no retired entries, no pre-written
+> process prose — syntax shown only through commented examples with deliberately fake names. A
+> declaration nobody made is a suggestion, and suggestions become obligations; a starter that must
+> be "adapted" is a template that gets inherited while looking chosen. Everything in a real
+> manifest arrives from the `establish` conversation, so every entry can be traced to something
+> the project actually said. (MAMA's retired entries are emitted by `plumb migrate retired` — on
+> the projects where they are actually true.)
+
 > **Why not `.mcc/process.toml`?** `.mcc/` is operational state and is gitignored. The manifest is
 > the opposite: it is design memory, it belongs in Ledger 2, and it must travel with the code it
 > describes. A root dotfile also makes *"is this a PLUMB project?"* a one-line check.
@@ -309,6 +318,13 @@ migration notes, not silent behaviour changes.
 > are* and *what is dead*. It does not declare *how to work*; that is prose, in the document, where
 > a human wrote it. The moment the manifest starts encoding process semantics, PLUMB has embedded
 > the process again through a side door.
+
+**The process host's agent surface is MCP, like the bus's.** `process_path` (role resolution,
+carrying the retired-role refusal verbatim), `process_read` (the way-of-working document, with the
+document-wins rule in the tool description), and `decision_next` ship as tools on the same server
+as the bus — because the refusal is PLUMB's most important utterance and its discoverability must
+not depend on a skill being loaded. The CLI remains the engine (monitors, hooks) and the human
+surface; both speak the same refusal text from one implementation.
 
 ---
 
@@ -584,18 +600,23 @@ no discipline ever gave them.**
 operation, so it cannot be forgotten under momentum. This is the difference between a norm and a
 mechanism.
 
-**Open: liveness.** A monitor that silently stops receiving is *"silent in a way indistinguishable
-from healthy"* — the exact family this plugin exists to attack, and we would own it. Monitors do not
-appear in `TaskList`, so there is no liveness signal for free; the monitor must write its own
-heartbeat and something must notice its absence. **This needs an answer before the bus ships.**
+**Liveness — answered in the build.** A monitor that silently stops receiving is *"silent in a way
+indistinguishable from healthy"* — the exact family this plugin exists to attack, and we own it.
+The answer has four parts: the monitor writes its own **heartbeat** into the store each tick;
+`bus_status` reports each peer's monitor as live / `stale` / `dead` (pid gone); **`bus_send` warns
+the sender at send time** when the recipient cannot be interrupted; and the **Stop-hook sweep**
+delivers everything undelivered at the recipient's next turn boundary regardless — late, and
+saying so, but never lost.
 
 ---
 
 All three answers are settled:
 
 - **Ruling-to-ledger by default.** A ruling posts to the issue *at ruling time*, and the bus message
-  is only the notification. In PLUMB this stops being a norm and becomes the `plumb:rule` skill's
-  mechanics: ledger first, notify second, in that order, in one step.
+  is only the notification. In PLUMB this lives in `bus_send`'s own contract: the `record` field
+  carries the ledger reference, the tool description says ledger-first in as many words, and a
+  `gating` send without a `record` is answered with a nudge. (A dedicated ruling skill was
+  considered and dropped — a ceremony that thin is a tool contract, not a skill.)
 - **A non-blocking variant that says so** — *"proceeding unless countermanded"* as a message **type**
   rather than a convention people remember.
 - **Urgency, in place of blocking.** See §9 — the proposal asked for a blocking consult, and the

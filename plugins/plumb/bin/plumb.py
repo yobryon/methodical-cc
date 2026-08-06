@@ -213,10 +213,11 @@ def die(msg, code=EXIT_ERROR):
     sys.exit(code)
 
 
-def report_retired(exc):
-    """The Sprint 14 guard, spoken out loud."""
-    print(
-        f"plumb: artifact role '{exc.role}' is RETIRED — this project does not have one.\n"
+def retired_text(exc):
+    """The Sprint 14 guard, spoken out loud. Shared by the CLI and the MCP
+    server so the refusal is the same utterance on every surface."""
+    return (
+        f"artifact role '{exc.role}' is RETIRED — this project does not have one.\n"
         f"\n"
         f"  Reason on record: {exc.reason}\n"
         f"\n"
@@ -225,22 +226,28 @@ def report_retired(exc):
         f"  away from returning through a tool that still encodes it.\n"
         f"\n"
         f"  If the role should genuinely return, that is a PROCESS CHANGE, not a\n"
-        f"  workaround: say so in the process document, then edit {MANIFEST_NAME}.",
-        file=sys.stderr,
+        f"  workaround: say so in the process document, then edit {MANIFEST_NAME}."
     )
+
+
+def unknown_text(exc):
+    live = ", ".join(exc.live) or "(none declared)"
+    return (
+        f"no artifact role named '{exc.role}'.\n"
+        f"  Declared roles: {live}\n"
+        + (f"  Retired roles: {', '.join(exc.retired)}\n" if exc.retired else "")
+        + f"  Skills address artifacts by role, never by filename. If this project\n"
+          f"  needs a new one, declare it in {MANIFEST_NAME}."
+    )
+
+
+def report_retired(exc):
+    print(f"plumb: {retired_text(exc)}", file=sys.stderr)
     sys.exit(EXIT_RETIRED)
 
 
 def report_unknown(exc):
-    live = ", ".join(exc.live) or "(none declared)"
-    print(
-        f"plumb: no artifact role named '{exc.role}'.\n"
-        f"  Declared roles: {live}\n"
-        + (f"  Retired roles: {', '.join(exc.retired)}\n" if exc.retired else "")
-        + f"  Skills address artifacts by role, never by filename. If this project\n"
-          f"  needs a new one, declare it in {MANIFEST_NAME}.",
-        file=sys.stderr,
-    )
+    print(f"plumb: {unknown_text(exc)}", file=sys.stderr)
     sys.exit(EXIT_UNKNOWN_ROLE)
 
 
@@ -291,8 +298,11 @@ def cmd_init(args):
         print(f"wrote {doc_path}  (starter process document — make it yours)")
     else:
         print(f"kept  {doc_path}  (already exists)")
-    print("\nBoth files belong in version control. The manifest declares WHERE things\n"
-          "are and WHAT IS DEAD; the document holds the norms. Skills read both.")
+    print("\nBoth files belong in version control, and both start deliberately EMPTY —\n"
+          "no roles, no artifacts, no pre-written process. They are filled from a\n"
+          "conversation, not from a template: run the `plumb:establish` skill with the\n"
+          "Product Owner. `plumb doctor` will fail until the manifest is coherent;\n"
+          "that is the establish conversation's exit criterion, not an error in init.")
 
 
 def cmd_path(args):
@@ -398,7 +408,8 @@ description: {description}
 
      Two rules this file inherits from PLUMB, and the first is mechanical:
 
-     1. Address artifacts by ROLE, never by filename — `plumb path <role>`. A skill
+     1. Address artifacts by ROLE, never by filename — the `process_path` tool,
+        or `plumb path <role>` in a shell; same contract, same refusal. A skill
         that names a file can reinstate a file the project retired, and this is the
         exact drift PLUMB exists to prevent. Your own skills are not exempt; they are
         the likeliest place for it to come back.
@@ -465,6 +476,30 @@ def cmd_patterns(args):
     if body is None:
         die(f"no pattern matching '{args.name}' — run `plumb patterns` to list them")
     print(body)
+
+
+def exemplars_dir():
+    return Path(__file__).resolve().parent.parent / "reference" / "exemplars"
+
+
+def cmd_exemplars(args):
+    """Real-shaped ceremony skills from one (illustrative) project — to calibrate against."""
+    d = exemplars_dir()
+    if not d.is_dir():
+        die(f"exemplars directory not found at {d}")
+    if not args.name:
+        print((d / "README.md").read_text(encoding="utf-8"))
+        print("\nExemplars:")
+        for f in sorted(d.glob("*.md")):
+            if f.name != "README.md":
+                print(f"  {f.stem}")
+        print("\n  plumb exemplars <name>   # read one in full")
+        return
+    target = d / f"{args.name}.md"
+    if not target.is_file():
+        names = ", ".join(f.stem for f in sorted(d.glob("*.md")) if f.name != "README.md")
+        die(f"no exemplar named '{args.name}'. Available: {names}")
+    print(target.read_text(encoding="utf-8"))
 
 
 def cmd_ceremony_list(args):
@@ -551,7 +586,7 @@ def cmd_doctor(args):
 
     adapter = mf.ledger.get("adapter")
     if not adapter:
-        problems.append("no ledger adapter declared")
+        problems.append("no ledger adapter declared (the establish interview settles this)")
     elif adapter == "markdown":
         notes.append("ledger adapter 'markdown': running WITHOUT the cross-team half of "
                      "the methodology (see the adapter's degradation table)")
@@ -579,35 +614,36 @@ MANIFEST_TEMPLATE = '''\
 # This file declares WHERE the project's artifacts live and WHAT IS DEAD.
 # It does not declare how to work; that is prose, in the document below,
 # where a human wrote it.
+#
+# It starts EMPTY on purpose. Nothing is pre-declared, because a declaration
+# nobody made is a suggestion, and suggestions become obligations. The
+# `plumb:establish` skill fills this in from a conversation with the Product
+# Owner — every entry should trace to something THIS project actually said,
+# not to what a template guessed.
 
 process_version = 1
 document = "{document}"
 
-[roles]
-architect   = "arch"
-implementor = "impl"
-design      = "pdt"
-
 [ledger]
-# nonlinear | github | jira | linear | markdown
-adapter = "markdown"
-# space = "PROJ"
+# Settled during establish. One of: nonlinear | github | jira | linear | markdown
+# Syntax (values are examples of FORM, not suggestions):
+#   adapter = "markdown"
+#   space   = "PROJ"
 
 [artifacts]
-plan            = "docs/arcs/arc_{{arc}}/implementation_plan.md"
-drive_record    = "docs/arcs/arc_{{arc}}/drive_record.md"
-decisions       = "docs/decisions_log.md"
-backlog         = "docs/concept_backlog.md"
-failure_catalog = "docs/failure_shapes.md"
-roadmap         = "docs/roadmap.md"
+# Artifact ROLES this project actually has. Skills ask for a role by name;
+# this table resolves it to a path — skills never hardcode filenames.
+# Syntax (names and paths are your project's own, not these):
+#   some_role     = "docs/some_doc.md"
+#   per_arc_role  = "docs/arcs/arc_{{arc}}/some_doc.md"    # resolved with --arc
 
 [artifacts.retired]
 # A role listed here becomes a REFUSAL carrying its reason. This is how a
 # process you evolved away from is stopped from returning through a tool that
 # still encodes it. Add entries as you kill things; never delete them.
-implementation_log = "Died with MAMA: triplication. Issue comments are the play-by-play."
-brief              = "Died with MAMA: folded into the plan doc plus the kickoff message."
-implementor_state  = "Died with MAMA: it existed to APPROXIMATE compaction for an agent that had none. A running session compacts; a subagent has its parent as continuity; an ended session is resumed with its context. It was also a fourth ledger — rulings belong in the decisions log, environment traps in the failure catalog, progress in the tracker."
+# (Migrating from MAMA? `plumb migrate retired` emits the entries you earned.)
+# Syntax:
+#   some_dead_role = "Why it died, in the words of whoever killed it."
 '''
 
 PROCESS_DOC_TEMPLATE = '''\
@@ -616,38 +652,27 @@ PROCESS_DOC_TEMPLATE = '''\
 **Status:** Living
 **Process version:** 1
 
+<!-- This document is THIS PROJECT'S. Nothing below the next paragraph was
+     written by a plugin author; everything here should be something someone
+     on this project actually said, did, or decided — with roles, rhythms and
+     principles arriving from the establish conversation, not from a template.
+     Empty sections are honest, not incomplete. -->
+
 This document holds the project's **norms** — standing behaviours, always on,
 checked by habit. It is the source of truth for how this project works.
-
-PLUMB skills hold the **procedures** — ordered sequences run rarely, consulted
-by name at the moment of need. A skill reads this document for judgment and
-defers to it. **Where a skill's guidance and this document disagree, this
-document wins, and the skill should say so rather than quietly proceed.**
-
-## Roles
-
-| Role | Identity | What they are |
-|---|---|---|
-| Product Owner | the human | Direction, decisions, domain knowledge, external actions |
-| Architect | `arch` | Design coherence, arc planning, reconciliation |
-| Implementor | `impl` | Executes arcs. A **separate session**, not a subagent |
-
-## The Two-Ledger Principle
-
-Execution state and design memory live in different systems, each shaped for
-its job.
-
-- **Ledger 1 — the tracker.** Work items, states, the play-by-play of doing.
-- **Ledger 2 — the repo.** Docs, decisions, backlog, one plan per arc.
-
-The boundary: *why / what / how-it-should-be* is a doc. *who / when / status /
-what-happened* is an issue.
+Procedures — ordered sequences run rarely — live as **skills**: PLUMB's own for
+the universal ones, this project's own (in `.claude/skills/`) for the rest. A
+skill reads this document for judgment and defers to it. **Where a skill's
+guidance and this document disagree, this document wins, and the skill should
+say so rather than quietly proceed.**
 
 ## Norms
 
-<!-- Add yours here as they are earned. The rhythm that works: log an
-     observation as an instance; promote it to a norm once it has recurred.
-     `plumb:promote` runs that pass. -->
+<!-- Standing behaviours this project has earned. The rhythm that works: log an
+     observation as an instance in the Reflection Log; promote it here once it
+     has recurred. `plumb:promote` runs that pass. Empty at the start is
+     correct — a norms section written before any work has happened is a guess
+     wearing a document's clothes. -->
 
 ## Reflection Log
 
@@ -701,6 +726,11 @@ def build_parser():
     s = sub.add_parser("patterns", parents=[common], help="practices with their costs measured (consult AFTER the interview)")
     s.add_argument("name", nargs="?", help="pattern to show in full")
     s.set_defaults(func=cmd_patterns)
+
+    s = sub.add_parser("exemplars", parents=[common],
+                       help="ceremony-skill exemplars from one project — calibrate, don't copy")
+    s.add_argument("name", nargs="?", help="exemplar to show in full")
+    s.set_defaults(func=cmd_exemplars)
 
     s = sub.add_parser("ceremony", parents=[common], help="project-authored procedures (skills in .claude/skills/)")
     csub = s.add_subparsers(dest="subcmd", required=True)

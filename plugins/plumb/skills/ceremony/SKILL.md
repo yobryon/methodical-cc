@@ -61,9 +61,12 @@ one instance behind it rather than five.
 
 ---
 
-## Step 2 — Scaffold it
+## Step 2 — Calibrate, then scaffold
 
 ```bash
+plumb exemplars                     # first time authoring one? read an exemplar for the GRAIN —
+                                    #   how thin, how much doc-pointing, what an amendment looks like.
+                                    #   Calibrate against it; do not copy it.
 plumb ceremony list                 # what this project already has — check for a near-duplicate
 plumb ceremony new <name> --description "<when to reach for this>"
 ```
@@ -79,7 +82,7 @@ remembering it exists. Write it as *when*, not *what*.
 
 ```bash
 plumb roles                         # what this project declares
-plumb path <role> [--arc N]
+plumb path <role> [--arc N]         # or the `process_path` tool — same contract, same refusal
 ```
 
 **This is mechanical and non-negotiable, and your own skills are the likeliest place for it to be

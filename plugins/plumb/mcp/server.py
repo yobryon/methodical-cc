@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
-"""plumb bus — MCP server (stdio, JSON-RPC 2.0, stdlib only).
+"""plumb — MCP server (stdio, JSON-RPC 2.0, stdlib only).
 
-Why MCP for the send side rather than a CLI:
+The plugin's agent-facing contract: the bus (peer messaging) and the process
+host's read surface (role resolution, the way-of-working document, decision
+numbers). The CLI in bin/ is the ENGINE (monitors, hooks) and the human
+surface; agents get these tools.
+
+Why MCP rather than a CLI for the agent surface:
 
     A tool description is guidance delivered at the POINT OF USE. A CLI's
-    guidance lives in a skill that may not be loaded, mediated by memory.
+    guidance lives in a skill that may not be loaded, mediated by memory —
+    and the contract travels with the session either way.
 
 For a plugin whose thesis is *make failures impossible or loud*, that is the
 same argument as **lessons that can become guards, should** — so the tool
 descriptions below are not documentation, they are the guard. They are where an
-agent learns that `gating` costs the recipient an interruption, and that a
-ruling belongs on the ledger before it belongs on the wire.
+agent learns that `gating` costs the recipient an interruption, that a ruling
+belongs on the ledger before it belongs on the wire, and that a retired role's
+refusal is a process statement rather than an error.
 
-Deliberately NO subject field. A schema with a subject invites the model to pack
-meaning into it — the field is there, it looks important, and nothing makes the
-size felt until the send fails. That is a tool-shape problem, and owning the
-contract is how we decline to have it.
+Deliberately NO subject field on the bus. A schema with a subject invites the
+model to pack meaning into it — the field is there, it looks important, and
+nothing makes the size felt until the send fails. That is a tool-shape problem,
+and owning the contract is how we decline to have it.
 
 No third-party dependencies: the protocol is small and the repo's
 pure-Python/no-build-step property is what let the last bus rewrite ship.
@@ -28,9 +35,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bin"))
 import bus  # noqa: E402
+import plumb  # noqa: E402
 
 PROTOCOL_VERSION = "2024-11-05"
-SERVER_INFO = {"name": "plumb-bus", "version": bus.BUS_VERSION}
+SERVER_INFO = {"name": "plumb", "version": bus.BUS_VERSION}
 
 TOOLS = [
     {
@@ -106,6 +114,70 @@ TOOLS = [
                                   "description": "Message id, shown with the message."}},
             "required": ["id"],
         },
+    },
+    {
+        "name": "process_path",
+        "description": (
+            "Resolve one of this project's artifact ROLES to its path — 'plan', "
+            "'decisions', whatever this project declares in .plumb.toml. Use this "
+            "instead of remembering or guessing filenames: skills and agents address "
+            "artifacts by role, never by filename, so a file the project retired "
+            "cannot be quietly recreated.\n\n"
+            "A RETIRED role returns a refusal carrying the reason on record. That "
+            "refusal is a PROCESS STATEMENT, not an error to work around — do not "
+            "create the file by another route. If the role should genuinely return, "
+            "that is a process change: the way-of-working document first, then the "
+            "manifest."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "role": {"type": "string",
+                         "description": "The artifact role name, e.g. 'plan' or "
+                                        "'decisions'. Unknown names return the "
+                                        "declared list."},
+                "arc": {"type": "string",
+                        "description": "Arc/cycle identifier, for roles whose path "
+                                       "is per-arc (contains {arc})."},
+            },
+            "required": ["role"],
+        },
+    },
+    {
+        "name": "process_read",
+        "description": (
+            "Read this project's way-of-working document — its NORMS, the source of "
+            "truth for how this project works. Pass `section` to read one section by "
+            "heading; omit it for the whole document; pass list=true for the table of "
+            "contents.\n\n"
+            "Consult it before making a process-shaped judgment (how work is bounded, "
+            "who decides what, where things are recorded). Where guidance you are "
+            "carrying — including a skill's — disagrees with this document, THE "
+            "DOCUMENT WINS, and you should say so rather than quietly proceed."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "section": {"type": "string",
+                            "description": "Heading substring, e.g. 'Norms'."},
+                "list": {"type": "boolean",
+                         "description": "List section headings instead of content."},
+            },
+        },
+    },
+    {
+        "name": "decision_next",
+        "description": (
+            "The next unclaimed decision number, read from this project's decisions "
+            "log at this moment.\n\n"
+            "Numbers are claimed by the LOG, never from memory — two agents ruling in "
+            "parallel have collided by remembering. Call this immediately before "
+            "writing the entry, not when you start composing it; in prose that "
+            "anticipates a ruling, say 'resolves as the next D-number' rather than "
+            "reserving one. On a collision, commit order is the tiebreak and both "
+            "entries carry a note pointing at each other."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "bus_status",
@@ -203,11 +275,82 @@ def tool_bus_status(_args):
         conn.close()
 
 
+NO_MANIFEST = ("This project has not declared a process — no .plumb.toml found. "
+               "Run `plumb init` and then the plumb:establish skill with the "
+               "Product Owner to author one. Until then there are no roles to "
+               "resolve and no document to read.")
+
+
+def _manifest():
+    return plumb.Manifest.load(required=False)
+
+
+def tool_process_path(args):
+    mf = _manifest()
+    if mf is None:
+        return NO_MANIFEST
+    try:
+        return str(mf.resolve(args["role"], arc=args.get("arc")))
+    except plumb.Retired as exc:
+        return plumb.retired_text(exc)
+    except plumb.UnknownRole as exc:
+        return plumb.unknown_text(exc)
+    except ValueError as exc:
+        return str(exc)
+
+
+def tool_process_read(args):
+    mf = _manifest()
+    if mf is None:
+        return NO_MANIFEST
+    doc = mf.document
+    if doc is None or not doc.is_file():
+        return (f"the manifest declares no readable process document "
+                f"({doc}). The establish conversation writes it.")
+    text = doc.read_text(encoding="utf-8")
+    if args.get("list"):
+        import re
+        heads = [f"{'  ' * (len(m.group(1)) - 1)}{m.group(2).strip()}"
+                 for m in re.finditer(r"^(#{1,6})\s+(.*)$", text, re.MULTILINE)]
+        return "Sections:\n" + "\n".join(heads)
+    section = args.get("section")
+    if not section:
+        return f"<!-- {doc} (process v{mf.process_version}) -->\n{text}"
+    body, headings = plumb.read_section(text, section)
+    if body is None:
+        return (f"no section matching '{section}'. "
+                f"Sections: {', '.join(headings)}")
+    return (f"<!-- {doc} § (process v{mf.process_version}) — "
+            f"the project's own words -->\n{body}")
+
+
+def tool_decision_next(_args):
+    mf = _manifest()
+    if mf is None:
+        return NO_MANIFEST
+    try:
+        log = mf.resolve("decisions")
+    except (plumb.Retired, plumb.UnknownRole):
+        return ("this project declares no 'decisions' role — nothing to "
+                "allocate against. If it keeps a decisions log under another "
+                "name, resolve that role instead and read its tail.")
+    if not log.is_file():
+        return "D-1 (the log does not exist yet — this is the first)"
+    used = plumb.scan_decision_numbers(log.read_text(encoding="utf-8"))
+    nxt = (used[-1] + 1) if used else 1
+    high = f"D-{used[-1]}" if used else "(none)"
+    return (f"D-{nxt}  (highest on record: {high} in {log}). Claimed by the "
+            f"log only — write the entry now, not later.")
+
+
 HANDLERS = {
     "bus_send": tool_bus_send,
     "bus_inbox": tool_bus_inbox,
     "bus_ack": tool_bus_ack,
     "bus_status": tool_bus_status,
+    "process_path": tool_process_path,
+    "process_read": tool_process_read,
+    "decision_next": tool_decision_next,
 }
 
 
