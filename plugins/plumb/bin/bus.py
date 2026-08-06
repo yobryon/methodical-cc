@@ -333,7 +333,19 @@ def cmd_watch(args):
     the next one catches it; die and come back, and everything undelivered is
     still there.
     """
-    me = whoami(args.agent)
+    me = args.agent or os.environ.get("PLUMB_AGENT")
+    if not me:
+        # Plugin-shipped monitors auto-launch in EVERY session, including ones
+        # not started through mcc. Dying with a traceback would leave the
+        # session with no monitor and no explanation — silent, and
+        # indistinguishable from healthy. Say it once, plainly, and stop.
+        print("[plumb bus] Monitor not started: this session has no identity "
+              "($PLUMB_AGENT is unset).\n"
+              "  Launch via `mcc <name>` to join the bus. Until then this session "
+              "cannot be interrupted by gating messages, and senders addressing it "
+              "will be told so.")
+        sys.stdout.flush()
+        return
     conn = connect(db_path(args.db))
     pid = os.getpid()
     while True:
