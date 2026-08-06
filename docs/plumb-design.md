@@ -299,7 +299,7 @@ detector below corresponds to a drift that actually happened.
 | Monitor | Detects | Incident |
 |---|---|---|
 | **Ledger-state drift** | Issues whose recorded state disagrees with observable activity | ~16 issues sat in Triage while their work shipped; the PO caught it, not the agents |
-| **Unanswered consult** | A blocking question with no answer after N turns | The turn-bounded-delivery failure mode, made visible |
+| **Unanswered consult** | A `gating` question with no answer after N turns | The turn-bounded-delivery failure mode, made visible |
 | **Plan-vs-delivery** | Committed phases with no closed issue as an arc approaches close | One arc's committed scope went undelivered and was nearly re-labelled silently |
 | **Decision-number collision** | Two entries claiming one number | 2× — once twice in one evening |
 | **Stale pin** | A pin/override/workaround whose stated reason no longer holds | A dependency override outlived its cause and its failure mode **inverted**, from "fixes a 404" to "silently installs a version skew" |
@@ -326,16 +326,15 @@ a question and keeps working sees nothing until it stops. This was misdiagnosed 
 Real consequences: one ruling crossed the implementor **three times**; five rulings arrived after
 the work they ruled on.
 
-Two of the three answers are settled and already shipped in `bus` 1.1.0 as norms:
+All three answers are settled:
 
 - **Ruling-to-ledger by default.** A ruling posts to the issue *at ruling time*, and the bus message
   is only the notification. In PLUMB this stops being a norm and becomes the `plumb:rule` skill's
   mechanics: ledger first, notify second, in that order, in one step.
 - **A non-blocking variant that says so** — *"proceeding unless countermanded"* as a message **type**
   rather than a convention people remember.
-
-The third — **a genuinely blocking consult, where the asker stops and the answer wakes them** — is
-the one open item. See §9.
+- **Urgency, in place of blocking.** See §9 — the proposal asked for a blocking consult, and the
+  answer is that the question dissolves.
 
 ### 7.2 Decision-number allocator
 
@@ -404,24 +403,56 @@ Non-negotiable, and it is what made three relays cost zero rework:
 
 ---
 
-## 9. Open: the blocking consult
+## 9. Urgency, not blocking — the consult question dissolves
 
-The proposal's question 1, and the one it says to answer first: *can the harness actually block on a
+The proposal's question 1, the one it says to answer first: *can the harness actually block on a
 consult?* If not, everything in §7.1 stays convention.
 
-**Held for discussion — this is the item the PO wants to talk through before it is spiked.** What
-needs deciding is not the transport (the spike settled that: SQLite ledger + monitor + Stop-hook
-sweep, no experimental flags, stdlib only) but **what "blocking" should mean to the agent that
-does it.** The candidate readings differ materially in what they cost and what they risk:
+**The question dissolves, and the answer is that it was never the requirement.** Blocking was a
+workaround for turn-bounded delivery. The asker had to stop because stopping was *the only moment an
+answer could reach it* — a "blocking consult" is what you ask for when your channel can only deliver
+at a turn boundary. The spike removed that constraint:
 
-- The asker ends its turn and a monitor event wakes it (cheap, already proven, but "blocked" is
-  indistinguishable from "idle" to a watching human).
-- The asker holds inside a tool call until answered (true blocking, but burns the session on a wait
-  and dies badly if the answerer never comes).
-- The asker parks the work as a ledger item and picks up something else (honest, but it's a
-  scheduler, and now PLUMB has opinions about what to work on next).
+> **Monitor events interrupt mid-turn.** Landed *between two `Write` tool calls*, twice — once
+> tool-armed, once plugin-armed. This is the fact the whole design rests on.
 
-Not spiking until that conversation happens.
+Once an answer can reach a working agent, the asker has no reason to stop. So PLUMB does not ship a
+blocking primitive. It ships **urgency as a property of the message, set by the sender**:
+
+| Class | Delivery | Sender means |
+|---|---|---|
+| `gating` | Monitor → **interrupts the recipient mid-turn** | *This changes what you are doing right now.* |
+| `normal` | Stop-hook sweep → arrives at the recipient's next turn boundary | *This is for when you surface.* |
+
+Two classes suffice; the spike tested a third and found no use for it (a `normal` message sat
+undelivered for two minutes beside a live gating-only monitor, which is the behaviour we want, not a
+gap).
+
+### 9.1 The one mechanism this needs: reply class is inherited from the thread
+
+The sender sets urgency — but on a *question*, the party who knows it is blocking is the **asker**,
+while the message that must interrupt is the **answer**, sent by someone who may have no idea anyone
+is waiting. Left alone, that asymmetry reintroduces the original failure with extra steps.
+
+**Rule: a reply on a `gating` thread is `gating` by default.** Urgency is carried by the thread, not
+re-decided per message. The answerer can downgrade deliberately; they cannot downgrade by not
+thinking about it.
+
+### 9.2 What survives of "send and STOP"
+
+The norm narrows rather than disappearing, and it is worth stating precisely because the reasoning
+changed underneath it:
+
+- **Before:** stop, because continuing means acting on your own judgment while the ruling sits
+  undelivered for as long as your turn runs.
+- **Now:** the window between asking and being interrupted is bounded by *the answerer's* latency,
+  not by your own turn length. Stop only when a wrong step inside that window is expensive or hard
+  to reverse — which is a normal engineering judgment, not a workaround for a channel.
+
+**Never infer loss from silence** survives untouched, and **rulings still land on the ledger at
+ruling time.** The bus is the notification; the ledger is the record. That was never about latency —
+it is about durability, and a durable record is readable by an agent that was not even running when
+the ruling was made.
 
 ---
 
@@ -455,7 +486,7 @@ paths.
 | `plumb:reconcile` | **Checks rather than prompts**: diffs issues against the decisions log, flags decisions referenced but unlogged, issues closed without a state change, plan phases never delivered | The sacred step. One arc's committed scope went undelivered and was nearly re-labelled silently |
 | `plumb:handoff` | The state doc in the shape of §8.1 | Three relays, zero rework — the arc *without* a state doc cost its successor a morning |
 | `plumb:catalog` | A failure-shape entry: *what happened / why it hid / the tell, phrased as something to try / how it differs from its nearest kin.* **Refuses an entry that is only a bug report** | 41 entries; highest-value use was **prospective** — an entry used to design a test before the code existed |
-| `plumb:consult` | A blocking question to the design partner or architect. Records question **and answer** on the ledger, not only in the message | §9 |
+| `plumb:consult` | A `gating` question to the design partner or architect. Records question **and answer** on the ledger, not only in the message | §9 |
 | `plumb:promote` | Reviews the reflection log for observations that have recurred enough to become norms, and moves them into the process document | Every good norm in the evidence project's process doc arrived this way. Left to memory, they stay in the log where nobody reads them |
 
 **Five norms go in the plugin's own prompts** — not as skills, as the character the tooling
@@ -484,6 +515,10 @@ The proposal names the smallest useful version: *if I could have only three thin
 protocol**, **the pre-commit guards**, and **a real blocking consult.** Everything else we carried by
 hand at acceptable cost.*
 
+Quoted as written; the third item is delivered as §9's urgency classes rather than as a blocking
+primitive, because the blocking was a workaround for a channel we replaced. The *need* behind it —
+an answer that reaches a working agent — is met.
+
 1. **Manifest + artifact-role resolution + retired-artifact refusal** (§3). Everything else depends
    on it, and it is the Sprint 14 guard.
 2. **The guards** (§5). Highest value per line, zero process alignment needed, independently useful
@@ -492,7 +527,8 @@ hand at acceptable cost.*
    attached to the deepest scars.
 4. **The ledger interface + `github` and `markdown` adapters** (§4), then `nonlinear`, `jira`,
    `linear`.
-5. **Blocking consult** (§9) — after the design discussion.
+5. **The bus: two delivery classes + thread-inherited urgency** (§9), then `plumb:consult` and
+   `plumb:rule` on top of it.
 6. **Monitors** (§6).
 7. **MAMA → PLUMB migration** — deliberately last. A migration written before PLUMB exists would be
    a migration to a guess.
@@ -504,7 +540,9 @@ place.
 
 ## 13. Open questions
 
-1. **What does "blocking" mean to a blocked agent?** (§9) — held for discussion before any spike.
+1. ~~**Can the harness block on a consult?**~~ **Closed** (§9) — the question dissolved. Blocking was
+   a workaround for turn-bounded delivery; monitor-class messages interrupt mid-turn, so urgency on
+   the message covers the space and a blocking primitive is not built.
 2. **Are per-agent worktrees compatible with a shared dev environment?** (§5.1) — opt-in until
    answered, with a compatibility checklist.
 3. **How much should the design-partner boundary be encoded?** The arch ↔ design-partner split works
