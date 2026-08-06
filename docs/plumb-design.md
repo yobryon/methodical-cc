@@ -913,10 +913,21 @@ than a blocking primitive, because the blocking was a workaround for a channel w
    norms whose premise has died graduate out. The second half is what *claims decay, build the
    expiry in* actually cashes out to.
 9. **Monitors** (§6) — the drift detectors.
-10. ✅ **MAMA → PLUMB migration** — deliberately last, and worth the wait: written against a PLUMB
-    that exists, it turned out not to be a file conversion at all but a judgment on each artifact
-    (*can anyone point to when this was chosen?*), with the inventory supplying evidence so the
-    judgment is not made from memory.
+10. ✅ **MAMA → PLUMB migration** — deliberately last, and worth the wait. It is not a port. An
+    in-flight MAMA project has been running a process **it never chose**, so the migration is the
+    conversation it never had: re-open the structural assumptions MAMA imposed *before* looking at
+    any artifact, because starting from the artifacts lets them set the frame.
+
+    The first draft got this wrong in an instructive way — it asked *"can anyone point to when this
+    was chosen?"* of every **artifact** and never of **the process itself**, which is the thing MAMA
+    imposed. That is the drift, one level up: carrying a shape forward because it is what was there.
+    Two facts make re-opening necessary rather than ceremonial: **the models changed** (MAMA was
+    built for a collaborator that needed telling what to do next), and **what happened is evidence of
+    what happened, not of what is needed.**
+
+    Re-adopting most of what they had is a good outcome; the difference is that afterwards someone
+    can say why. **The measure of a good migration is not how much carried over — it is whether
+    anyone can say why each thing is there.**
 
 `arc-plan`, `arc-kickoff` and `reconcile` are **not built** — see §11.1; they are authored
 per-project by `establish`. `rule` and `consult` are operations on the bus and the ledger.
