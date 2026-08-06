@@ -18,16 +18,26 @@ own. Now it can.
 
 Three processes, one SQLite store, no IPC:
 
-    MCP server   writes messages            (identity from $PLUMB_AGENT)
-    monitor      reads MY undelivered gating -> interrupts mid-turn
-    Stop hook    reads MY undelivered ANY    -> injects at the turn boundary
+    MCP server   writes messages             (identity from $PLUMB_AGENT)
+    monitor      turn-state-aware delivery:
+                   session busy -> gating only, interrupts mid-turn
+                   session idle -> EVERYTHING, batched — wakes the session
+    hook sweep   every boundary — turn end (Stop), turn start
+                 (UserPromptSubmit), session start (startup|resume)
 
-The Stop hook deliberately sweeps *everything*, not just `normal`. If the
-monitor is dead, gating messages still arrive — late rather than never. That
-converts a silent LOSS into a silent LATENESS, and `delivered_by` plus the
-heartbeat then make the lateness loud. A bus that stops receiving quietly is
-"silent in a way indistinguishable from healthy", which is the exact failure
-family this plugin exists to attack; we do not get to ship one.
+Urgency rations DERAILMENT. `normal` defers only to protect in-flight work;
+an idle session has none, so the class distinction collapses there and both
+classes deliver immediately. Without the idle-wake, a `normal` message to an
+idle peer waits for a turn boundary that never comes — and the user is back
+to couriering their agents awake. (Turn state comes from the harness's own
+session registry; see session_turn_state.)
+
+The sweeps deliberately carry *everything*, not just `normal`. If the monitor
+is dead, gating messages still arrive — late rather than never. That converts
+a silent LOSS into a silent LATENESS, and `delivered_by` plus the heartbeat
+then make the lateness loud. A bus that stops receiving quietly is "silent in
+a way indistinguishable from healthy", which is the exact failure family this
+plugin exists to attack; we do not get to ship one.
 """
 
 import argparse
@@ -38,7 +48,7 @@ import sys
 import time
 from pathlib import Path
 
-BUS_VERSION = "0.1.0"
+BUS_VERSION = "0.3.0"
 DEFAULT_DB = ".mcc/bus.db"
 MAX_ATTEMPTS = 5
 # A monitor ticks at 1 Hz, so this is ten missed ticks — tight enough that a
@@ -238,6 +248,121 @@ def ack(conn, msg_id, agent):
     return cur.rowcount
 
 
+# ------------------------------------------------- session turn state (idle?)
+
+# Urgency rations DERAILMENT: `normal` defers only to protect in-flight work.
+# An idle session has no work to derail — the class distinction collapses, and
+# every message should deliver immediately (waking the session). Without this,
+# a `normal` message to an idle peer waits for a turn boundary that never
+# comes, and the user is back to couriering their agents awake.
+#
+# The discriminator is the harness's own session registry:
+# ~/.claude/sessions/<pid>.json carries {"sessionId", "cwd", "procStart",
+# "status": "busy", "statusUpdatedAt", ...}, transition-stamped per turn.
+# It is UNDOCUMENTED and version-dependent (observed on 2.1.223; absent in
+# older entries), and entries are not cleaned on exit — so every read is
+# validated (pid alive) and the whole thing is layered:
+#
+#   1. registry status   — 'busy' means busy; anything else on a LIVE pid is
+#                          idle (robust to whatever the idle-side word is)
+#   2. transcript mtime  — old harness (no status field): quiet-for-minutes
+#                          means idle. Coarse: mid-turn gaps run ~1-2 min
+#   3. 'unknown'         — deliver gating only: exactly today's behaviour,
+#                          the never-worse floor
+#
+# There is nothing of OURS to go stale: a dead session's frozen 'busy' fails
+# the pid check, and its mail delivers at the next SessionStart sweep.
+
+SESSIONS_REGISTRY = Path.home() / ".claude" / "sessions"
+TRANSCRIPT_QUIET_IDLE_S = 300.0  # mtime fallback: quiet this long = idle
+
+
+def _pid_alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def _my_registry_entry():
+    """Find the harness registry entry for THIS session's process.
+
+    Chain: match $CLAUDE_CODE_SESSION_ID (propagated to subprocesses) →
+    walk our own parent chain looking for a registered pid (linux /proc) →
+    the only live entry whose cwd is this project. None if ambiguous."""
+    if not SESSIONS_REGISTRY.is_dir():
+        return None
+    entries = []
+    for f in SESSIONS_REGISTRY.glob("*.json"):
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if _pid_alive(d.get("pid")):
+            entries.append(d)
+    if not entries:
+        return None
+
+    sid = (os.environ.get("CLAUDE_CODE_SESSION_ID")
+           or os.environ.get("CLAUDE_SESSION_ID"))
+    if sid:
+        for d in entries:
+            if d.get("sessionId") == sid:
+                return d
+
+    pid = os.getpid()
+    for _ in range(6):  # monitor → shell → claude is a short chain
+        hit = next((d for d in entries if d.get("pid") == pid), None)
+        if hit:
+            return hit
+        try:
+            with open(f"/proc/{pid}/stat") as fh:
+                pid = int(fh.read().split(")")[-1].split()[1])  # ppid, field 4
+        except (OSError, ValueError, IndexError):
+            break
+        if pid <= 1:
+            break
+
+    root = str(Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()).resolve())
+    here = [d for d in entries if d.get("cwd") == root]
+    return here[0] if len(here) == 1 else None
+
+
+def _transcript_quiet_for(entry):
+    """Seconds since the harness last wrote this session's transcript, or None."""
+    sid, cwd = entry.get("sessionId"), entry.get("cwd")
+    if not sid or not cwd:
+        return None
+    import re
+    slug = re.sub(r"[^a-zA-Z0-9]", "-", cwd)
+    t = Path.home() / ".claude" / "projects" / slug / f"{sid}.jsonl"
+    try:
+        return max(0.0, time.time() - t.stat().st_mtime)
+    except OSError:
+        return None
+
+
+def session_turn_state():
+    """('busy'|'idle'|'unknown', idle_for_seconds_or_None) for THIS session."""
+    entry = _my_registry_entry()
+    if entry is None:
+        return "unknown", None
+    status = entry.get("status")
+    if status is not None:
+        if status == "busy":
+            return "busy", None
+        since = entry.get("statusUpdatedAt")
+        idle_for = max(0.0, time.time() - since / 1000.0) if since else None
+        return "idle", idle_for
+    quiet = _transcript_quiet_for(entry)  # old harness: no status field
+    if quiet is None:
+        return "unknown", None
+    if quiet >= TRANSCRIPT_QUIET_IDLE_S:
+        return "idle", quiet
+    return "busy", None
+
+
 # ---------------------------------------------------- the load-bearing read
 
 def claim_and_emit(conn, recipient, via, urgency=None, render=None, out=None):
@@ -364,16 +489,18 @@ def delivery_note(conn, recipient):
         return None
     if live["monitor"] == "dead":
         return (f"@{recipient}'s bus monitor is NOT RUNNING (pid {live['pid']} is gone). "
-                f"This will not interrupt them — it will arrive at their next turn "
-                f"boundary, and they will be told their monitor is down.")
+                f"This cannot interrupt or wake them — it will arrive at their next "
+                f"turn boundary or session start, and they will be told their monitor "
+                f"is down.")
     if live["monitor"] == "never-seen":
         return (f"@{recipient} has never checked in on this bus. They may not be "
-                f"running, or may be a headless session (which cannot run monitors "
-                f"at all). A gating message will not interrupt them; it will arrive "
-                f"whenever they next end a turn — if they are running.")
+                f"running yet, or may be a headless session (which cannot run "
+                f"monitors at all). Nothing can interrupt or wake them; this will "
+                f"arrive when they next start a session or hit a turn boundary. "
+                f"If this needs them NOW, ask the user to launch them.")
     return (f"@{recipient}'s monitor has not checked in for {live['stale_for']}s. "
-            f"Gating messages will NOT interrupt them — this will arrive at their "
-            f"next turn boundary instead.")
+            f"This cannot interrupt or wake them right now — it will arrive at "
+            f"their next turn boundary or session start instead.")
 
 
 def status(conn):
@@ -427,6 +554,21 @@ def cmd_watch(args):
     when it fires. A poll that re-reads the table is self-healing — miss a tick,
     the next one catches it; die and come back, and everything undelivered is
     still there.
+
+    Delivery is TURN-STATE-AWARE (see session_turn_state):
+
+      busy     -> gating only. `normal` waits for a boundary, which is the
+                  whole point of the class — don't derail in-flight work.
+      idle     -> EVERYTHING, batched in one wake. Idleness is a coherent
+                  moment; deferring protects nothing and a `normal` message
+                  to an idle peer would otherwise wait for a turn boundary
+                  that never comes.
+      unknown  -> gating only: exactly the pre-state-awareness behaviour,
+                  the never-worse floor. Boundary sweeps still deliver.
+
+    A short idle grace avoids racing the boundary sweeps around a transition;
+    over-delivery is impossible either way — every path goes through the same
+    transactional claim in claim_and_emit.
     """
     me = args.agent or os.environ.get("PLUMB_AGENT")
     if not me:
@@ -465,7 +607,16 @@ def cmd_watch(args):
                 sys.stdout.flush()
                 return
             heartbeat(conn, me, pid=pid, session=session, started=started)
-            claim_and_emit(conn, me, via="monitor", urgency=args.urgency)
+            if args.urgency:
+                # explicit override (debugging / forced-old-behaviour)
+                claim_and_emit(conn, me, via="monitor", urgency=args.urgency)
+            else:
+                state, idle_for = session_turn_state()
+                if state == "idle" and (idle_for is None or idle_for >= args.idle_grace):
+                    # wake with everything pending, gating first, one batch
+                    claim_and_emit(conn, me, via="monitor-wake")
+                else:
+                    claim_and_emit(conn, me, via="monitor", urgency="gating")
 
             # Drift runs in THIS process on a slow cadence rather than as its own
             # monitor: the harness stops monitors that produce too many events,
@@ -547,9 +698,13 @@ def build_parser():
     s.add_argument("--record", help="durable record reference (issue id, doc path)")
     s.set_defaults(func=cmd_send)
 
-    s = sub.add_parser("watch", parents=[common], help="monitor loop: gating messages for me")
-    s.add_argument("--urgency", choices=("gating", "normal"))
+    s = sub.add_parser("watch", parents=[common],
+                       help="monitor loop: turn-state-aware delivery (gating always; everything when idle)")
+    s.add_argument("--urgency", choices=("gating", "normal"),
+                   help="override: deliver ONLY this class, ignoring turn state (debugging)")
     s.add_argument("--interval", type=float, default=1.0)
+    s.add_argument("--idle-grace", type=float, default=5.0,
+                   help="seconds a session must be idle before normal traffic wakes it")
     s.add_argument("--no-drift", action="store_true", help="skip the drift detectors")
     s.set_defaults(func=cmd_watch)
 

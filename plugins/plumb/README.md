@@ -189,8 +189,10 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
 - **The process host** — empty-by-design genesis (`init` → `establish`), role resolution with the
   retired-role refusal, the process reader, decision allocator, `doctor` — surfaced to agents as
   MCP tools and to humans as the CLI
-- **The bus** — MCP send with two delivery classes, monitor for `gating` (interrupts mid-turn),
-  Stop-hook sweep for the rest, SQLite store, `mcc`-injected identity
+- **The bus** — MCP send with two delivery classes, turn-state-aware monitor (`gating` interrupts
+  mid-turn; an **idle** session is woken by anything pending — urgency rations derailment, and
+  idle has none to ration), boundary sweeps at turn end, turn start, and session start, SQLite
+  store, `mcc`-injected identity
 - **Compaction survival** — PreCompact snapshots and steers the summarizer; SessionStart re-orients
   on `source=compact` only
 - **All five guards**, and two drift detectors (unanswered gating rulings, decision-number

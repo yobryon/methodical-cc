@@ -581,8 +581,9 @@ at all beyond `arch ↔ pdt`** — and that is a perfectly good shape, not a deg
 | Concern | Mechanism |
 |---|---|
 | **Send** | **MCP tools.** A tool description is guidance delivered *at the point of use* — the same argument as *lessons that can become guards, should.* A CLI's guidance lives in a skill that may not be loaded |
-| **Receive — `gating`** | **Monitor.** Plugin-shipped, auto-launching, interrupts mid-turn (measured: landed between two `Write` calls) |
-| **Receive — `normal`** | **Stop hook**, injecting via `additionalContext` at the turn boundary |
+| **Receive — recipient mid-turn** | **Monitor** delivers `gating` only, interrupting (measured: landed between two `Write` calls); `normal` waits for a boundary |
+| **Receive — recipient idle** | **Monitor** delivers *everything*, batched, waking the session — see §9.3 |
+| **Receive — boundaries** | **Hook sweep** at turn end (Stop), turn start (UserPromptSubmit — pending mail lands *before* the turn's work), and session start (startup\|resume — a peer launched after the send gets into action immediately) |
 | **Store** | **SQLite** at `.mcc/bus.db`, WAL. All three read and write it; **no IPC** |
 | **Identity** | **Env vars injected by `mcc`** at session launch. The same mechanism carries per-agent tracker credentials (§7.3) |
 
@@ -796,6 +797,43 @@ changed underneath it:
 ruling time.** The bus is the notification; the ledger is the record. That was never about latency —
 it is about durability, and a durable record is readable by an agent that was not even running when
 the ruling was made.
+
+### 9.3 The idle column — urgency rations derailment, and idle has none to ration
+
+Caught by the first real adopter on their first real use: a `normal` FYI sent to **idle**
+teammates. The Stop hook fires at a turn's end; an idle agent takes no turns; the message was
+undelivered indefinitely. The delivery classes had been designed against one dimension (interrupt
+vs. boundary, *relative to an active turn*) and the recipient's *state* is a second dimension the
+design conflated:
+
+| | Recipient mid-turn | Recipient idle | Not running |
+|---|---|---|---|
+| `gating` | interrupt now | wake now | next session start |
+| `normal` | next turn boundary | **wake now** | next session start |
+
+The principle, stated completely: **deliver every message at the earliest moment that does not
+derail in-flight work.** `normal` defers only to protect work in progress; an idle session has no
+work to derail, so the class distinction collapses in that column and everything delivers
+immediately, waking the session. Without this, any autonomous flow deadlocks on an idle recipient
+until the user pokes the session — user-as-courier resurrected at the delivery layer.
+
+**The discriminator is the harness's own, not ours.** `~/.claude/sessions/<pid>.json` carries a
+transition-stamped `status` (`"busy"` observed) with `statusUpdatedAt` — undocumented, so the read
+is layered: registry status on a live pid (anything-not-busy = idle, robust to the idle-side
+vocabulary) → transcript-mtime for old harnesses (quiet-for-minutes = idle) → `unknown`, which
+gets exactly the pre-idle-aware behaviour as the never-worse floor. Entries are not cleaned on
+exit, so every read validates the pid; a dead session's frozen `busy` fails that check, and its
+mail delivers at the next SessionStart sweep. Nothing of ours can go stale because nothing of ours
+is stored. A short idle-grace (default 5 s) keeps the monitor from racing the boundary sweeps at a
+transition, and the sender surface is unchanged — still two classes; the state dimension is the
+system's to observe, not the sender's to guess.
+
+**Boundaries have two edges, and a session has a birth.** The same incident exposed that delivery
+ran only at turn *end*. Now the sweep runs at turn end (Stop), turn start (UserPromptSubmit —
+pending mail lands *before* the engaged turn's work, not after it), and session start
+(startup|resume — the "peer wasn't running" case: launch them and they get into action
+immediately). Over-delivery across all paths is impossible by construction: every path claims
+through the same transaction, so whichever wins the race, the rest find nothing.
 
 ---
 

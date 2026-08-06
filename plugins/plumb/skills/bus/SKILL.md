@@ -32,17 +32,27 @@ not a degraded one.
 ## Choose urgency by the RECIPIENT's cost
 
 The question is not *"am I blocked?"* It is **"does this change what they are doing
-right now?"**
+right now?"** — and it only matters while they are actually doing something:
 
-| | Lands | Send it when |
-|---|---|---|
-| `gating` | **Interrupts them, now** | A ruling that redirects work; a stop; a correction that makes their current step wrong |
-| `normal` | Their next turn boundary | Everything else. **This is the default** |
+| | Recipient mid-turn | Recipient idle | Not running |
+|---|---|---|---|
+| `gating` | **Interrupts them, now** | Wakes them, now | Next session start |
+| `normal` | Their next turn boundary | **Wakes them, now** | Next session start |
 
-Interrupting is not free. A message that arrives eight steps into a careful edit
-sequence derails work in a way a queued one never does. Turn-boundary delivery has one
-real virtue — it arrives at a coherent moment — and that is worth keeping for anything
-that does not need to land immediately.
+**Urgency rations derailment, and an idle peer has no work to derail** — so both
+classes deliver immediately to an idle session, waking it. That is what lets peers
+activate each other and work drive itself without the user couriering sessions awake.
+A `normal` message never means "may sit forever"; it means "don't derail work in
+progress."
+
+Interrupting mid-turn is not free. A message that arrives eight steps into a careful
+edit sequence derails work in a way a queued one never does. Turn-boundary delivery
+has one real virtue — it arrives at a coherent moment — and that is worth keeping for
+anything that does not need to land immediately.
+
+A peer who is not running receives at their next session start (the sweep runs at
+session birth, turn start, and turn end). If your message needs them *now*, ask the
+user to launch them — nothing can wake a session that does not exist.
 
 **You declare it, per message.** There is no inheritance from a thread, and a reply does
 not become urgent because the question was. Only the sender knows whether the answer is
@@ -90,8 +100,9 @@ whether their ruling actually landed.
 ## If a peer's monitor is down
 
 `bus_status` will say `dead` or `stale`, and `bus_send` warns you at send time. It means
-gating messages **will not interrupt them** — those arrive at that session's next turn
-boundary instead, carrying a warning that tells the recipient their monitor is down.
+nothing can **interrupt or wake** that session — messages arrive at its next turn
+boundary or session start instead, carrying a warning that tells the recipient their
+monitor is down.
 
 Nothing is lost. It is late, and it says so.
 

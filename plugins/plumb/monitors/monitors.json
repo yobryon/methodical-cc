@@ -1,8 +1,8 @@
 [
   {
     "name": "plumb-bus",
-    "description": "plumb bus: gating messages addressed to this session (interrupts mid-turn)",
-    "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/bin/bus.py watch --agent \"${PLUMB_AGENT}\" --urgency gating --interval 1",
+    "description": "plumb bus: turn-state-aware delivery — gating interrupts mid-turn; when the session is idle, everything pending wakes it",
+    "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/bin/bus.py watch --agent \"${PLUMB_AGENT}\" --interval 1",
     "when": "always"
   }
 ]

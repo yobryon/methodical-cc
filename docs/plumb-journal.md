@@ -528,6 +528,20 @@ working*. But the flag survives with a **changed meaning**: not "does the sender
 block" but "does the receiver get interrupted" — which is the cost that is
 actually real.
 
+*(Completed after the first real adopter tripped the gap: the classes govern
+delivery relative to an active turn, and an **idle** recipient has no turns —
+a `normal` message to an idle peer waited forever. The full principle: urgency
+rations derailment, and idle has none to ration — so both classes deliver
+immediately to an idle session, waking it; that is what lets peers activate
+each other without the PO couriering sessions awake. The busy/idle
+discriminator is the harness's own session registry
+(`~/.claude/sessions/<pid>.json`, transition-stamped `status`), layered over a
+transcript-mtime fallback and a gating-only floor — nothing of ours stored,
+nothing of ours to go stale. And boundaries have two edges plus a birth: the
+sweep now runs at turn end, turn start, and session start, all through the one
+transactional claim so over-delivery is impossible. Sender surface unchanged —
+still two classes.)*
+
 ### 7.6 Architecture
 
 Three processes, one store, **no IPC and no domain socket**:
