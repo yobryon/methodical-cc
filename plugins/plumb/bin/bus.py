@@ -44,7 +44,16 @@ MAX_ATTEMPTS = 5
 # pid check below is the exact signal; this only backstops it.
 HEARTBEAT_STALE_S = 10.0
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+# Additive changes MIGRATE; only a genuinely incompatible store is refused.
+# Refusing on every schema bump would make the honest thing (versioning the
+# store) the hostile thing, and would train people to delete their bus to make
+# an error go away — which is how a real message gets thrown out with a
+# cosmetic change.
+MIGRATIONS = {
+    2: ["ALTER TABLE agents ADD COLUMN monitor_started REAL"],
+}
 
 SCHEMA = """
 PRAGMA journal_mode=WAL;
@@ -71,6 +80,7 @@ CREATE TABLE IF NOT EXISTS agents(
   agent        TEXT PRIMARY KEY,
   last_seen    REAL NOT NULL,
   monitor_pid  INTEGER,
+  monitor_started REAL,
   session      TEXT
 );
 """
@@ -105,6 +115,17 @@ def connect(path):
     conn = sqlite3.connect(str(path), timeout=10.0, isolation_level=None)
     conn.row_factory = sqlite3.Row
     found = conn.execute("PRAGMA user_version").fetchone()[0]
+    if not fresh and 0 < found < SCHEMA_VERSION and all(
+            v in MIGRATIONS for v in range(found + 1, SCHEMA_VERSION + 1)):
+        for v in range(found + 1, SCHEMA_VERSION + 1):
+            for stmt in MIGRATIONS[v]:
+                try:
+                    conn.execute(stmt)
+                except sqlite3.OperationalError as exc:
+                    if "duplicate column" not in str(exc):
+                        raise
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        found = SCHEMA_VERSION
     if not fresh and found != SCHEMA_VERSION:
         conn.close()
         raise SystemExit(
@@ -157,13 +178,55 @@ def send(conn, sender, recipient, body, urgency="normal", thread=None,
     return cur.lastrowid
 
 
-def heartbeat(conn, agent, pid=None, session=None):
+def heartbeat(conn, agent, pid=None, session=None, started=None):
     conn.execute(
-        "INSERT INTO agents(agent,last_seen,monitor_pid,session) VALUES(?,?,?,?) "
+        "INSERT INTO agents(agent,last_seen,monitor_pid,monitor_started,session) "
+        "VALUES(?,?,?,?,?) "
         "ON CONFLICT(agent) DO UPDATE SET last_seen=excluded.last_seen, "
         "monitor_pid=COALESCE(excluded.monitor_pid, agents.monitor_pid), "
+        "monitor_started=COALESCE(excluded.monitor_started, agents.monitor_started), "
         "session=COALESCE(excluded.session, agents.session)",
-        (agent, time.time(), pid, session))
+        (agent, time.time(), pid, started, session))
+
+
+def claim_monitor(conn, agent, pid, started, session=None):
+    """Take ownership of an agent name for this monitor, newest start wins.
+
+    A monitor OUTLIVES ITS SESSION — observed: one ran 3.5 hours across a
+    terminal crash and several relaunches. That matters more than it looks,
+    because a monitor heartbeats under its agent name and CLAIMS messages for
+    it. An orphan from a dead session therefore reports `alive`, consumes
+    gating messages addressed to that name, and writes them to a pipe nobody
+    reads: silent loss behind a healthy-looking status — the exact shape this
+    bus exists not to have.
+
+    So identity is a claim, and the most recently started monitor holds it.
+    An older one discovers it has been superseded and exits.
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        row = conn.execute("SELECT monitor_pid, monitor_started FROM agents "
+                           "WHERE agent=?", (agent,)).fetchone()
+        if row and row["monitor_started"] and row["monitor_started"] > started:
+            conn.execute("COMMIT")
+            return False
+        conn.execute(
+            "INSERT INTO agents(agent,last_seen,monitor_pid,monitor_started,session) "
+            "VALUES(?,?,?,?,?) ON CONFLICT(agent) DO UPDATE SET "
+            "last_seen=excluded.last_seen, monitor_pid=excluded.monitor_pid, "
+            "monitor_started=excluded.monitor_started, session=excluded.session",
+            (agent, time.time(), pid, started, session))
+        conn.execute("COMMIT")
+        return True
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def still_mine(conn, agent, pid):
+    row = conn.execute("SELECT monitor_pid FROM agents WHERE agent=?",
+                       (agent,)).fetchone()
+    return row is None or row["monitor_pid"] == pid
 
 
 def ack(conn, msg_id, agent):
@@ -377,10 +440,23 @@ def cmd_watch(args):
         sys.stdout.flush()
         return
     conn = connect(db_path(args.db))
-    pid = os.getpid()
+    pid, started = os.getpid(), time.time()
+    session = os.environ.get("CLAUDE_SESSION_ID")
+    if not claim_monitor(conn, me, pid, started, session):
+        print(f"[plumb bus] Monitor for @{me} not started: a newer monitor already "
+              f"holds this identity. This session will receive at turn boundaries "
+              f"via the Stop hook.")
+        sys.stdout.flush()
+        return
     while True:
         try:
-            heartbeat(conn, me, pid=pid, session=os.environ.get("CLAUDE_SESSION_ID"))
+            if not still_mine(conn, me, pid):
+                print(f"[plumb bus] Monitor for @{me} standing down: a newer session "
+                      f"has taken this identity. Gating messages now interrupt THAT "
+                      f"session, not this one.")
+                sys.stdout.flush()
+                return
+            heartbeat(conn, me, pid=pid, session=session, started=started)
             claim_and_emit(conn, me, via="monitor", urgency=args.urgency)
         except sqlite3.OperationalError:
             pass  # a writer held the lock; next tick re-derives. Never fatal.
