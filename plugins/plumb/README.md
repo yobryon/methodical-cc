@@ -111,6 +111,7 @@ Add entries as you kill things. Never delete them — the entry *is* the guard.
 | `plumb ceremony new <name>` | Scaffold a project procedure in `.claude/skills/` |
 | `plumb ledger guide` | How an arc and the states map onto your tracker |
 | `plumb ledger states` | The normalized state vocabulary |
+| `plumb migrate scan` | Inventory a MAMA project's artifacts and how alive each one is |
 
 ---
 
@@ -182,7 +183,11 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
 - ✅ Drift detectors — unanswered gating rulings, and decision-number collisions — running inside
   the bus monitor's tick, emitting once per finding
 
-Next: MAMA → PLUMB migration, deliberately last.
+- ✅ `migrate` — inventory a MAMA project, separate what was chosen from what arrived as
+  scaffolding, and carry across only what someone actually reads
+
+**Build order complete.** Everything in the design document is built and, where it touches the
+harness, verified live.
 **MAMA → PLUMB migration is deliberately last** — a migration written before PLUMB exists would be a
 migration to a guess.
 

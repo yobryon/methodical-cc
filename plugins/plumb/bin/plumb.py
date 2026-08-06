@@ -513,6 +513,15 @@ def cmd_ledger(args):
     sys.exit(ledger.main(argv or ["guide"]))
 
 
+def cmd_migrate(args):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import migrate
+    argv = list(args.rest or [])
+    if args.root and "--root" not in argv:
+        argv += ["--root", str(args.root)]
+    sys.exit(migrate.main(argv or ["scan"]))
+
+
 def cmd_doctor(args):
     mf = Manifest.load(args.root)
     problems, notes = [], []
@@ -707,6 +716,11 @@ def build_parser():
                        help="tracker guidance, state vocabulary, and the markdown adapter")
     s.add_argument("rest", nargs=argparse.REMAINDER)
     s.set_defaults(func=cmd_ledger)
+
+    s = sub.add_parser("migrate", parents=[common], add_help=False,
+                       help="inventory a MAMA project's artifacts and what replaces its commands")
+    s.add_argument("rest", nargs=argparse.REMAINDER)
+    s.set_defaults(func=cmd_migrate)
 
     s = sub.add_parser("doctor", parents=[common], help="validate the manifest against the filesystem")
     s.set_defaults(func=cmd_doctor)

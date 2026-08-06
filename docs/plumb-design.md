@@ -913,8 +913,10 @@ than a blocking primitive, because the blocking was a workaround for a channel w
    norms whose premise has died graduate out. The second half is what *claims decay, build the
    expiry in* actually cashes out to.
 9. **Monitors** (§6) — the drift detectors.
-10. **MAMA → PLUMB migration** — deliberately last. A migration written before PLUMB exists would be
-    a migration to a guess.
+10. ✅ **MAMA → PLUMB migration** — deliberately last, and worth the wait: written against a PLUMB
+    that exists, it turned out not to be a file conversion at all but a judgment on each artifact
+    (*can anyone point to when this was chosen?*), with the inventory supplying evidence so the
+    judgment is not made from memory.
 
 `arc-plan`, `arc-kickoff` and `reconcile` are **not built** — see §11.1; they are authored
 per-project by `establish`. `rule` and `consult` are operations on the bus and the ledger.
