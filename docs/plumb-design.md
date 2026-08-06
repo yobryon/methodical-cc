@@ -56,7 +56,7 @@ that.
 
 ---
 
-## 2. The core architectural idea: norms live in the project, procedures live in the plugin
+## 2. The core architectural idea: three homes, split by genre and by owner
 
 The project that produced the proposal also produced, in its final reflection entries, an open
 question it deliberately declined to answer:
@@ -71,16 +71,42 @@ question it deliberately declined to answer:
 **PLUMB's answer: they are different genres, and the plugin/project boundary is exactly where the
 seam falls.**
 
-| | Norms | Procedures |
-|---|---|---|
-| What | Standing behavior, always on | An ordered sequence, run rarely |
-| Read | By habit, continuously | At the moment of need, by name |
-| Lives in | **The project's own process document** (Ledger 2, versioned with the code) | **A PLUMB skill** (invoked by name, at the moment of need) |
-| Example | *evidence outranks argument*; *send-and-stop when the answer changes your next move* | *how to run a drive*; *how to close an arc* |
+| | Norms | Methodology procedures | **Project procedures** |
+|---|---|---|---|
+| What | Standing behaviour, always on | An ordered sequence, run rarely | An ordered sequence, run rarely, **specific to this project** |
+| Read | By habit, continuously | At the moment of need, by name | At the moment of need, by name |
+| Lives in | **The project's process document** (Ledger 2) | **A PLUMB skill** (shipped) | **A project-authored skill** in `.claude/skills/` (Ledger 2) |
+| Example | *evidence outranks argument* | *how to run a drive*; *how to close an arc* | *the grain-change ceremony*; *how we cut a release here* |
+| Authored by | The PO, over time | Us | **The PO and the agent together** (`plumb:establish`, `plumb:ceremony`) |
 
 A skill is, structurally, already the procedures genre: named, invoked deliberately, consulted only
-when you're about to do the thing. That's the genre match, and it resolves the open question
-without inventing a fourth document surface.
+when you're about to do the thing. That is the genre match.
+
+### 2.0a The third column is not optional — an earlier draft omitted it and reopened the question
+
+This design document originally had two columns and claimed they resolved the source project's open
+question *"do rarely-run ordered sequences need their own genre?"* **They resolve half of it.**
+
+The question was raised by a concrete homeless artifact: a **grain-change ceremony** that existed
+only as prose in a roadmap and inside the record of the one sprint that ran it. It is not a norm —
+it is an ordered sequence, consulted at the moment of need. And it is not something PLUMB can ship,
+because PLUMB has never heard of grain changes. With two columns it stays exactly where it was:
+
+> **A ceremony that lives only in the record of the one time we ran it is indistinguishable from a
+> ceremony, until the second time.**
+
+And the trap is self-reinforcing: that project's lesson *was* that its ruled steps had missed a part,
+and it wrote that lesson into a retro and a record — **which is where a procedure goes to not be
+followed.**
+
+So project procedures get a real home: **skills the project authors for itself**, living in its own
+`.claude/skills/`, versioned with the code, invocable by name. Same genre as a PLUMB skill, same
+invocation, different owner. The PO gets shorthand through their own established workflow; the
+ceremony gets a place where it is consulted rather than remembered.
+
+This also means **the shipped skill set is a floor, not a ceiling** — and that the process
+negotiation which produces a project's way of working must produce *its skills too*, not just its
+document. That is `plumb:establish` (§11).
 
 The rule that falls out, and it is the whole defence against Sprint 14:
 
@@ -526,6 +552,8 @@ paths.
 
 | Skill | What it sequences | Scar |
 |---|---|---|
+| `plumb:establish` | **Negotiate this project's way of working.** New project: interview the PO and draft it. Existing project: read what is there (docs, git history, CLAUDE.md, any MAMA artifacts), infer the *de facto* process, propose it back, negotiate. Produces the manifest, the process document, **and the project's own skills.** Re-runnable — process evolves, and an establishing step that only runs once is a template with extra steps | The entire architecture defers to a document. Shipping a mechanism that assumes a good one exists, with only a stub template to bootstrap it, leaves the most important artifact in the system unauthored |
+| `plumb:ceremony` | Author or update a **project procedure** as a project-owned skill in `.claude/skills/`. Refuses one that is really a norm (belongs in the document) or really a one-off (belongs in a record) | *A ceremony that lives only in the record of the one time we ran it is indistinguishable from a ceremony, until the second time.* The grain ceremony existed only as roadmap prose and one sprint record; a proposed amendment to it had nowhere to go |
 | `plumb:arc-plan` | Tracker arc + issues + the plan doc. **Out-of-scope is a required field** | Arcs that used *"optional"* and *"if time permits"* had those items exploited as skippable and accumulated as debt. **Every phase in a plan is committed scope; if you aren't ready to commit, leave it out** |
 | `plumb:arc-kickoff` | Composes and **sends** the kickoff. **Must not write a file** | The kickoff is a *message* — writing it to a file records a thing whose value was that it was said at a moment |
 | `plumb:design-gate` | Impl **brings the read**, arch **rules**. Enforces the asymmetry both ways | *The highest-value single addition; MAMA had no equivalent.* D-31, D-43, D-45 all had their central premise overturned by the read. D-45's found six silently-destructive database behaviours nobody would have quoted correctly from memory |
@@ -573,12 +601,16 @@ an answer that reaches a working agent — is met.
    to a project that adopts nothing else.
 3. **`plumb:drive`, `plumb:design-gate`, `plumb:handoff`, `plumb:catalog`** (§11) — the four skills
    attached to the deepest scars.
-4. **The ledger interface + `github` and `markdown` adapters** (§4), then `nonlinear`, `jira`,
+4. **`plumb:establish` + `plumb:ceremony`** (§11) — the process negotiation. Promoted above the
+   adapters because everything above defers to a document that, today, only exists as a stub from
+   `plumb init`. Partial dependency on step 5: `establish` has to help the PO *choose* a ledger
+   adapter, but it only needs to name the choices, not run them.
+5. **The ledger interface + `github` and `markdown` adapters** (§4), then `nonlinear`, `jira`,
    `linear`.
-5. **The bus: two delivery classes, urgency declared per message by the sender** (§9), then
+6. **The bus: two delivery classes, urgency declared per message by the sender** (§9), then
    `plumb:consult` and `plumb:rule` on top of it.
-6. **Monitors** (§6).
-7. **MAMA → PLUMB migration** — deliberately last. A migration written before PLUMB exists would be
+7. **Monitors** (§6).
+8. **MAMA → PLUMB migration** — deliberately last. A migration written before PLUMB exists would be
    a migration to a guess.
 
 MAMA stays shipped and enable-able throughout; PLUMB is a separate plugin, not a replacement in
