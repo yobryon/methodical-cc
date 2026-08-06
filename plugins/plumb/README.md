@@ -108,6 +108,8 @@ Add entries as you kill things. Never delete them — the entry *is* the guard.
 | `plumb process [section]` | Print your process document, or one section — how skills consult your norms |
 | `plumb decision next` | The next unclaimed decision number, read from the log |
 | `plumb doctor` | Validate the manifest against the filesystem |
+| `plumb ceremony list` | List this project's own procedures |
+| `plumb ceremony new <name>` | Scaffold a project procedure in `.claude/skills/` |
 
 ---
 
@@ -160,10 +162,11 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
   allocator, `doctor`
 - ✅ All five guards
 - ✅ The four skills attached to the deepest scars: `drive`, `design-gate`, `handoff`, `catalog`
+- ✅ The process negotiation: `establish` (author the way of working *with* the PO) and `ceremony`
+  (give a project procedure a home), plus `plumb ceremony list|new`
 
-Next, in build order: **`plumb:establish` + `plumb:ceremony`** (the process negotiation — the
-architecture defers to a document that today only exists as a stub), then the ledger adapters, then
-the bus (two delivery classes, urgency declared per message by the sender), then the drift monitors.
+Next, in build order: the ledger adapters, then the bus (two delivery classes, urgency declared per
+message by the sender), then the drift monitors.
 **MAMA → PLUMB migration is deliberately last** — a migration written before PLUMB exists would be a
 migration to a guess.
 

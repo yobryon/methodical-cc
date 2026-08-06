@@ -384,6 +384,100 @@ def cmd_decision_next(args):
     print(nxt)
 
 
+SKILL_STUB = """\
+---
+name: {name}
+description: {description}
+---
+
+# {title}
+
+<!-- A PROJECT PROCEDURE: an ordered sequence, run rarely, specific to this project.
+     Written because a ceremony that lives only in the record of the one time you ran
+     it is indistinguishable from a ceremony, until the second time.
+
+     Two rules this file inherits from PLUMB, and the first is mechanical:
+
+     1. Address artifacts by ROLE, never by filename — `plumb path <role>`. A skill
+        that names a file can reinstate a file the project retired, and this is the
+        exact drift PLUMB exists to prevent. Your own skills are not exempt; they are
+        the likeliest place for it to come back.
+     2. Carry SEQUENCE. Standing behaviours belong in the process document, where they
+        are read by habit. If a step here is really "always do X", move it. -->
+
+## When to run this
+
+<!-- The trigger. Prefer a condition over a slot: a trigger naming a sprint number
+     expires when the numbering moves under it. -->
+
+## Steps
+
+1.
+
+## Done when
+
+<!-- How you know it worked — checkable, not felt. -->
+"""
+
+
+def project_skills_dir(root):
+    return Path(root) / ".claude" / "skills"
+
+
+def read_skill_meta(skill_md):
+    """Pull name/description out of a SKILL.md's frontmatter, cheaply."""
+    meta = {}
+    try:
+        lines = skill_md.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return meta
+    if not lines or lines[0].strip() != "---":
+        return meta
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        key, sep, val = line.partition(":")
+        if sep and not key.startswith(" "):
+            meta[key.strip()] = val.strip()
+    return meta
+
+
+def cmd_ceremony_list(args):
+    mf = Manifest.load(args.root, required=False)
+    root = mf.root if mf else find_project_root(args.root)
+    d = project_skills_dir(root)
+    found = sorted(d.glob("*/SKILL.md")) if d.is_dir() else []
+    if not found:
+        print(f"No project-authored skills in {d}.\n"
+              f"  Project procedures live here — ordered sequences specific to this\n"
+              f"  project, invocable by name. `plumb ceremony new <name>` scaffolds one.")
+        return
+    print(f"Project procedures in {d}:\n")
+    for skill in found:
+        meta = read_skill_meta(skill)
+        print(f"  {meta.get('name', skill.parent.name)}")
+        if meta.get("description"):
+            print(f"    {meta['description'][:150]}")
+
+
+def cmd_ceremony_new(args):
+    mf = Manifest.load(args.root, required=False)
+    root = mf.root if mf else find_project_root(args.root)
+    name = args.name.strip().lower().replace(" ", "-")
+    target = project_skills_dir(root) / name / "SKILL.md"
+    if target.exists() and not args.force:
+        die(f"{target} already exists (use --force to overwrite)")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(SKILL_STUB.format(
+        name=name,
+        description=args.description or "TODO: when to reach for this, in one line.",
+        title=name.replace("-", " ").title(),
+    ), encoding="utf-8")
+    print(f"wrote {target}")
+    print("\nFill in the sequence. Commit it — a project procedure is design memory\n"
+          "and belongs in version control beside the process document.")
+
+
 def cmd_doctor(args):
     mf = Manifest.load(args.root)
     problems, notes = [], []
@@ -555,6 +649,16 @@ def build_parser():
     d = dsub.add_parser("next", help="the next unclaimed decision number")
     d.add_argument("-v", "--verbose", action="store_true")
     d.set_defaults(func=cmd_decision_next)
+
+    s = sub.add_parser("ceremony", help="project-authored procedures (skills in .claude/skills/)")
+    csub = s.add_subparsers(dest="subcmd", required=True)
+    c = csub.add_parser("list", help="list this project's own procedures")
+    c.set_defaults(func=cmd_ceremony_list)
+    c = csub.add_parser("new", help="scaffold a project procedure")
+    c.add_argument("name")
+    c.add_argument("--description", help="one line: when to reach for this")
+    c.add_argument("--force", action="store_true")
+    c.set_defaults(func=cmd_ceremony_new)
 
     s = sub.add_parser("doctor", help="validate the manifest against the filesystem")
     s.set_defaults(func=cmd_doctor)
