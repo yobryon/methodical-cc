@@ -1,7 +1,7 @@
 [
   {
     "name": "plumb-bus",
-    "description": "plumb bus: turn-state-aware delivery — gating interrupts mid-turn; when the session is idle, everything pending wakes it",
+    "description": "plumb bus delivery",
     "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/bin/bus.py watch --agent \"${PLUMB_AGENT}\" --interval 1",
     "when": "always"
   }

@@ -77,6 +77,18 @@ def main():
     if not rows:
         sys.exit(0)
 
+    if event == "SessionStart":
+        # PLAIN stdout, not the JSON envelope. Measured (2.1.223): the harness
+        # DROPS hookSpecificOutput.additionalContext from SessionStart hooks on
+        # source=resume — while injecting it fine on startup — and plain stdout
+        # injects on both. `mcc term up` RESUMES sessions, so the envelope path
+        # silently lost real messages after a transactionally-"successful"
+        # emit: delivered-but-unseen, our own catalog shape. Plain text is the
+        # path proven on every source. (compaction.py keeps its envelope: that
+        # runs only on source=compact, where the envelope is the proven path.)
+        print(sink.getvalue().rstrip())
+        sys.exit(0)
+
     json.dump({"hookSpecificOutput": {
         "hookEventName": event,
         "additionalContext": sink.getvalue().rstrip(),

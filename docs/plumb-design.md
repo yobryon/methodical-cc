@@ -835,6 +835,17 @@ pending mail lands *before* the engaged turn's work, not after it), and session 
 immediately). Over-delivery across all paths is impossible by construction: every path claims
 through the same transaction, so whichever wins the race, the rest find nothing.
 
+**And a measured injection asymmetry (0.3.1), earned the expensive way:** the harness *drops*
+`hookSpecificOutput.additionalContext` from SessionStart hooks on **`source=resume`** while
+honouring it on `startup` (and on `compact`, per the original spike) — and plain stdout injects on
+every source. `mcc term up` resumes, so the first live SessionStart sweep claimed two real
+messages, wrote an envelope the harness discarded, and marked them delivered: delivered-but-unseen,
+the transaction "succeeding" against a sink that wasn't listening. The sweep now emits **plain
+stdout for SessionStart** and keeps the envelope only where it is the proven path (Stop,
+UserPromptSubmit, and compaction.py's `compact` injection). The general lesson joins the catalog:
+**a successful write to a channel is not a successful delivery — the channel must be proven per
+event AND per source, because "supported" is not a single fact.**
+
 ---
 
 ## 10. What PLUMB must not do
