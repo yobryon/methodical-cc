@@ -450,6 +450,12 @@ def cmd_watch(args):
               f"via the Stop hook.")
         sys.stdout.flush()
         return
+    try:
+        import drift
+    except ImportError:
+        drift = None
+    last_drift = 0.0
+
     while True:
         try:
             if not still_mine(conn, me, pid):
@@ -460,6 +466,17 @@ def cmd_watch(args):
                 return
             heartbeat(conn, me, pid=pid, session=session, started=started)
             claim_and_emit(conn, me, via="monitor", urgency=args.urgency)
+
+            # Drift runs in THIS process on a slow cadence rather than as its own
+            # monitor: the harness stops monitors that produce too many events,
+            # so more processes emitting more often is how the one that actually
+            # matters gets shut off.
+            now = time.time()
+            if drift and not args.no_drift and now - last_drift > drift.DRIFT_INTERVAL_S:
+                last_drift = now
+                root = Path(db_path(args.db)).parent.parent
+                drift.run(conn, root, me, lambda s: (sys.stdout.write(s + "\n"),
+                                                     sys.stdout.flush()))
         except sqlite3.OperationalError:
             pass  # a writer held the lock; next tick re-derives. Never fatal.
         time.sleep(args.interval)
@@ -533,6 +550,7 @@ def build_parser():
     s = sub.add_parser("watch", parents=[common], help="monitor loop: gating messages for me")
     s.add_argument("--urgency", choices=("gating", "normal"))
     s.add_argument("--interval", type=float, default=1.0)
+    s.add_argument("--no-drift", action="store_true", help="skip the drift detectors")
     s.set_defaults(func=cmd_watch)
 
     s = sub.add_parser("sweep", parents=[common], help="Stop-hook backstop: everything undelivered")

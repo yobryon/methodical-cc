@@ -179,7 +179,10 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
 **All seven skills ship:** `establish`, `ceremony`, `promote` (about the methodology itself) and
 `design-gate`, `drive`, `catalog`, `bus` (portable, epistemic, usable with no methodology at all).
 
-Next: the drift monitors, then MAMA → PLUMB migration.
+- ✅ Drift detectors — unanswered gating rulings, and decision-number collisions — running inside
+  the bus monitor's tick, emitting once per finding
+
+Next: MAMA → PLUMB migration, deliberately last.
 **MAMA → PLUMB migration is deliberately last** — a migration written before PLUMB exists would be a
 migration to a guess.
 

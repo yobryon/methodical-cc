@@ -453,28 +453,45 @@ foreign-staged-entries guard is the shared-tree fallback and stays on either way
 
 ---
 
-## 6. Monitors — drift detectors
+## 6. Drift detectors
 
 The spike confirmed plugin-shipped monitors auto-launch, run at ~1 Hz in the session's working
-directory, survive compaction as the same process, and **interrupt a turn mid-flight**. Every
-detector below corresponds to a drift that actually happened.
+directory, survive compaction as the same process, and **interrupt a turn mid-flight** — all
+verified again live in the shipped plugin.
 
-| Monitor | Detects | Incident |
+### 6.1 Two detectors, not five — and why the other three are absent
+
+The proposal named five. Three are not shipped, and the reason is the same one that made the ledger
+layer guidance rather than a wrapper:
+
+| Not shipped | Why |
+|---|---|
+| **Ledger-state drift** | Requires reading the tracker. PLUMB does not proxy trackers (§4.0), so this could only work on one adapter — and a detector that works on one adapter is a detector whose *silence* means nothing on the others |
+| **Plan-vs-delivery** | Same, plus it needs the project's plan shape, which is project-defined |
+| **Stale pin** | Needs a project convention for what a pin looks like. Worth adopting — *a pin should carry its reason inline so its expiry is detectable* — but that is a norm for the process document, not something PLUMB can detect universally |
+
+**The silence is the product.** A check you cannot trust when it says nothing is worse than no check
+at all — it is the reporting surface that is silent in a way indistinguishable from healthy, which is
+the failure family this plugin exists to attack. So PLUMB ships only detectors whose silence is
+meaningful everywhere.
+
+### 6.2 What ships
+
+| Detector | Reads | Scar |
 |---|---|---|
-| **Ledger-state drift** | Issues whose recorded state disagrees with observable activity | ~16 issues sat in Triage while their work shipped; the PO caught it, not the agents |
-| **Unanswered consult** | A `gating` question with no answer after N turns | The turn-bounded-delivery failure mode, made visible |
-| **Plan-vs-delivery** | Committed phases with no closed issue as an arc approaches close | One arc's committed scope went undelivered and was nearly re-labelled silently |
-| **Decision-number collision** | Two entries claiming one number | 2× — once twice in one evening |
-| **Stale pin** | A pin/override/workaround whose stated reason no longer holds | A dependency override outlived its cause and its failure mode **inverted**, from "fixes a 404" to "silently installs a version skew" |
+| **Unanswered gating** | The bus, which we own | Five rulings arrived after the work they governed. An architect could not tell *delivered* from *acted on*, because nothing distinguished them. Reported **to the sender**, since it is their ruling that may not have landed |
+| **Decision collision** | The `decisions` role | Twice — once with both collisions in a single evening. Two agents ruling in parallel each read the log's tail and wrote the same next number |
 
-The stale-pin monitor implies a convention worth stating: **a pin carries its reason inline, so its
-expiry is detectable.**
+### 6.3 They run inside the bus monitor's tick
 
-Monitors are rate-limited by the harness (too many events → auto-stopped), so all of these batch
-and debounce. They are also **interactive-CLI only** — headless sessions get nothing, which the
-docs must say plainly.
+Not as separate monitors. The harness stops monitors that produce too many events, so more processes
+emitting more often is precisely how the one that actually matters gets shut off. One process, one
+heartbeat: bus every tick, drift on a slow cadence (120 s).
 
----
+**Emission is once per distinct finding.** A detector that re-announces the same drift every two
+minutes trains its reader to skip it — the same failure as not having it. But a finding that is
+resolved and later *recurs* is reported again, because suppressing forever is the other half of the
+same mistake.
 
 ## 7. Primitives — the things a plugin can do that a document cannot
 
