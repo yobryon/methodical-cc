@@ -428,15 +428,41 @@ Two classes suffice; the spike tested a third and found no use for it (a `normal
 undelivered for two minutes beside a live gating-only monitor, which is the behaviour we want, not a
 gap).
 
-### 9.1 The one mechanism this needs: reply class is inherited from the thread
+### 9.1 The sender declares urgency, per message, always
 
-The sender sets urgency — but on a *question*, the party who knows it is blocking is the **asker**,
-while the message that must interrupt is the **answer**, sent by someone who may have no idea anyone
-is waiting. Left alone, that asymmetry reintroduces the original failure with extra steps.
+No inheritance, no thread-carried urgency, no derivation from what a message is replying to.
 
-**Rule: a reply on a `gating` thread is `gating` by default.** Urgency is carried by the thread, not
-re-decided per message. The answerer can downgrade deliberately; they cannot downgrade by not
-thinking about it.
+This was argued the other way first — that a reply on a `gating` thread should default to `gating`,
+on the theory that the asker knows they are blocked while the answerer may not. That is wrong three
+times over, and the reasons are worth keeping because each one is a trap:
+
+1. **The most important interrupt replies to nothing.** The PO and Architect realising that the
+   Implementor is down the wrong path, and redirecting them, is unsolicited by construction. If
+   urgency can only arrive by inheritance, that case has no mechanism at all — so sender-declares
+   must exist regardless, and inheritance becomes extra machinery over a path that already works.
+2. **Threading is a tracking problem that fails silently.** Inheritance requires every reply to
+   correctly name what it answers. A mis-attributed reply does not error; it produces *quietly wrong
+   urgency*, which is worse than no mechanism. Threads already have a job here — grouping durable
+   consult artifacts — and routing delivery through them couples two concerns that fail differently.
+3. **It degrades what `gating` means.** The answerer is *better* positioned to judge urgency than
+   the asker, because the answerer knows the answer. Impl asking *"A or B?"* and proceeding with A
+   needs an interrupt when the ruling is **B** and does not when the ruling is **A**. Inheritance
+   fires on both. A class that interrupts for *"yes, carry on"* stops carrying information.
+
+The asker knows they are **waiting**; only the sender knows whether the answer is a **redirect**.
+Urgency is a property of the second, so it is declared by the party who holds it.
+
+**What catches a carelessly-marked message** is not a routing rule — inheritance would not have
+caught it either, since the answerer could still downgrade. It is the two things that were already
+load-bearing:
+
+- **Rulings land on the ledger at ruling time.** The ledger is readable without waiting on a turn
+  boundary, by an agent that was not even running when the ruling was made. This was always the real
+  fix; the bus is the notification.
+- **The unanswered-consult monitor** (§6) surfaces a `gating` question that never got an answer.
+
+What remains is a norm — *mark it `gating` if it changes what the recipient is doing right now* —
+and a norm belongs in the project's process document, not in the plugin. That is §2 working.
 
 ### 9.2 What survives of "send and STOP"
 
@@ -527,8 +553,8 @@ an answer that reaches a working agent — is met.
    attached to the deepest scars.
 4. **The ledger interface + `github` and `markdown` adapters** (§4), then `nonlinear`, `jira`,
    `linear`.
-5. **The bus: two delivery classes + thread-inherited urgency** (§9), then `plumb:consult` and
-   `plumb:rule` on top of it.
+5. **The bus: two delivery classes, urgency declared per message by the sender** (§9), then
+   `plumb:consult` and `plumb:rule` on top of it.
 6. **Monitors** (§6).
 7. **MAMA → PLUMB migration** — deliberately last. A migration written before PLUMB exists would be
    a migration to a guess.
