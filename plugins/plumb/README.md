@@ -154,10 +154,10 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
 - ✅ The process host: manifest, role resolution, retired-role refusal, process reader, decision
   allocator, `doctor`
 - ✅ All five guards
+- ✅ The four skills attached to the deepest scars: `drive`, `design-gate`, `handoff`, `catalog`
 
-Next, in build order: the four skills attached to the deepest scars (`drive`, `design-gate`,
-`handoff`, `catalog`), then the ledger adapters, then the bus (two delivery classes, urgency
-declared per message by the sender), then the drift monitors.
+Next, in build order: the ledger adapters, then the bus (two delivery classes, urgency declared per
+message by the sender), then the drift monitors.
 **MAMA → PLUMB migration is deliberately last** — a migration written before PLUMB exists would be a
 migration to a guess.
 

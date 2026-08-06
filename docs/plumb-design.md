@@ -84,11 +84,32 @@ without inventing a fourth document surface.
 
 The rule that falls out, and it is the whole defence against Sprint 14:
 
-> **A PLUMB skill carries sequence. It does not carry norms. When it needs a judgment, it reads the
-> project's process document and defers.**
+> **A PLUMB skill carries sequence. It does not carry PROCESS norms. When it needs a judgment about
+> how this project works, it reads the project's process document and defers.**
 
-A skill with no norms in it has no norms to smuggle. This is checkable by review, which is the
-point.
+### 2.0 The line, stated precisely enough to review against
+
+"Carries no norms" is too absolute to survive contact with a real skill — `plumb:drive` cannot
+usefully sequence a drive without saying *why* an anchor must be named before the surface is opened.
+The distinction that actually holds:
+
+| | **Epistemic** norms — PLUMB may state these | **Process** norms — the project's, always |
+|---|---|---|
+| About | How to know whether a claim is true | How *this project* works |
+| Example | *An invariant that survives a defect is not evidence.* | *An arc closes with reconciliation.* |
+| | *A gate's green means nothing until you've seen its red.* | *States move as work moves.* |
+| | *"I remember" and "I verified" are different claims.* | *Product calls route to the PO.* |
+| Portable? | **Yes** — true on any codebase, for anyone | **No** — earned here, expires here |
+
+The test: **would this sentence still be true on a project that had never heard of us?** If yes, it
+is epistemics and PLUMB may carry it — that is what the plugin is *named for*. If it describes an
+artifact, a role, a state, a cadence, or a routing rule, it is process, and PLUMB may only *read* it.
+
+**The mechanical half, and the one that actually stops Sprint 14 from recurring:** a skill may never
+name an artifact by filename. It asks for a *role*, the manifest resolves it, and a retired role
+resolves to a refusal (§3). A skill that cannot say `implementation_log.md` cannot reinstate one,
+regardless of what norms it carries. Epistemics have no templates attached; process does, and the
+templates are what rode in last time.
 
 ### 2.1 The consequences, stated as rules
 
@@ -133,6 +154,7 @@ decisions       = "docs/decisions_log.md"
 backlog         = "docs/concept_backlog.md"
 failure_catalog = "docs/failure_shapes.md"
 state           = "docs/sprints/sprint_{arc}/state.md"
+drive_record    = "docs/sprints/sprint_{arc}/drive_record.md"
 
 [artifacts.retired]
 implementation_log = "Died Sprint 3: triplication. Issue comments are the play-by-play."

@@ -458,6 +458,7 @@ adapter = "markdown"
 [artifacts]
 plan            = "docs/arcs/arc_{{arc}}/implementation_plan.md"
 state           = "docs/arcs/arc_{{arc}}/state.md"
+drive_record    = "docs/arcs/arc_{{arc}}/drive_record.md"
 decisions       = "docs/decisions_log.md"
 backlog         = "docs/concept_backlog.md"
 failure_catalog = "docs/failure_shapes.md"
