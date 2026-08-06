@@ -45,6 +45,12 @@ activate each other and work drive itself without the user couriering sessions a
 A `normal` message never means "may sit forever"; it means "don't derail work in
 progress."
 
+**Urgency decides *whether* an interruption happens; it never reorders messages.** When
+a `gating` message interrupts a working peer, everything else pending for them rides
+along in the same delivery, **in send order** — if you sent 1, 2 (`normal`) and then 3
+(`gating`), they read 1, 2, 3, because the gating message may depend on the context you
+sent before it. Batches are always chronological.
+
 Interrupting mid-turn is not free. A message that arrives eight steps into a careful
 edit sequence derails work in a way a queued one never does. Turn-boundary delivery
 has one real virtue — it arrives at a coherent moment — and that is worth keeping for

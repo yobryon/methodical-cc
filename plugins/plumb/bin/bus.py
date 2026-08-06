@@ -20,7 +20,10 @@ Three processes, one SQLite store, no IPC:
 
     MCP server   writes messages             (identity from $PLUMB_AGENT)
     monitor      turn-state-aware delivery:
-                   session busy -> gating only, interrupts mid-turn
+                   session busy -> interrupts only when something gating is
+                     pending; the interruption carries EVERYTHING pending,
+                     in send order (a gating message may depend on the
+                     normal messages sent before it)
                    session idle -> EVERYTHING, batched — wakes the session
     hook sweep   every boundary — turn end (Stop), turn start
                  (UserPromptSubmit), session start (startup|resume)
@@ -48,7 +51,7 @@ import sys
 import time
 from pathlib import Path
 
-BUS_VERSION = "0.3.0"
+BUS_VERSION = "0.4.1"
 DEFAULT_DB = ".mcc/bus.db"
 MAX_ATTEMPTS = 5
 # A monitor ticks at 1 Hz, so this is ten missed ticks — tight enough that a
@@ -389,7 +392,11 @@ def claim_and_emit(conn, recipient, via, urgency=None, render=None, out=None):
     if urgency:
         sql += " AND urgency=?"
         params.append(urgency)
-    sql += " ORDER BY CASE urgency WHEN 'gating' THEN 0 ELSE 1 END, id"
+    # SEND order, always. An earlier sort put gating first, which broke causal
+    # order: a gating message often depends on the normal messages sent before
+    # it, and reading "3!" before "1, 2" hands the recipient a conclusion
+    # before its premises. The GATING header already carries the importance.
+    sql += " ORDER BY id"
 
     conn.execute("BEGIN IMMEDIATE")
     try:
@@ -613,10 +620,20 @@ def cmd_watch(args):
             else:
                 state, idle_for = session_turn_state()
                 if state == "idle" and (idle_for is None or idle_for >= args.idle_grace):
-                    # wake with everything pending, gating first, one batch
+                    # wake with everything pending, in send order, one batch
                     claim_and_emit(conn, me, via="monitor-wake")
                 else:
-                    claim_and_emit(conn, me, via="monitor", urgency="gating")
+                    # Mid-turn: urgency decides WHETHER to interrupt; once an
+                    # interruption is happening, everything pending rides
+                    # along, in send order. If A sent 1, 2 (normal) then 3
+                    # (gating), delivering only 3 hands B a conclusion whose
+                    # premises are still held at the turn boundary.
+                    gating_waiting = conn.execute(
+                        "SELECT 1 FROM messages WHERE recipient=? AND "
+                        "delivered_at IS NULL AND quarantined=0 AND "
+                        "urgency='gating' LIMIT 1", (me,)).fetchone()
+                    if gating_waiting:
+                        claim_and_emit(conn, me, via="monitor")
 
             # Drift runs in THIS process on a slow cadence rather than as its own
             # monitor: the harness stops monitors that produce too many events,
