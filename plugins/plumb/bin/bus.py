@@ -44,6 +44,8 @@ MAX_ATTEMPTS = 5
 # pid check below is the exact signal; this only backstops it.
 HEARTBEAT_STALE_S = 10.0
 
+SCHEMA_VERSION = 1
+
 SCHEMA = """
 PRAGMA journal_mode=WAL;
 CREATE TABLE IF NOT EXISTS messages(
@@ -86,11 +88,39 @@ def db_path(explicit=None):
 
 
 def connect(path):
+    """Open the store, refusing an incompatible one loudly.
+
+    `CREATE TABLE IF NOT EXISTS` silently no-ops against a table of the same
+    name and a different shape, so a store written by an older schema does not
+    fail at open — it fails later, somewhere else, with a message about a
+    missing column. That is the stale-environment family: the thing on disk is
+    not the thing the code believes.
+
+    `PRAGMA user_version` is checked before anything reads the tables, so the
+    failure names itself and says what to do.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    fresh = not path.exists() or path.stat().st_size == 0
     conn = sqlite3.connect(str(path), timeout=10.0, isolation_level=None)
     conn.row_factory = sqlite3.Row
+    found = conn.execute("PRAGMA user_version").fetchone()[0]
+    if not fresh and found != SCHEMA_VERSION:
+        conn.close()
+        raise SystemExit(
+            f"plumb bus: {path} was written by schema v{found}, but this bus "
+            f"speaks v{SCHEMA_VERSION}.\n"
+            f"  Messages are ephemeral coordination — anything of lasting value "
+            f"belongs on a ledger, not here.\n"
+            f"  So the fix is to retire the old store — delete it AND its "
+            f"write-ahead sidecars, which is easy to miss:\n"
+            f"    rm -f {path} {path}-wal {path}-shm\n"
+            f"  A fresh store is created on the next call. Removing the .db "
+            f"alone leaves a WAL describing a database that no longer exists, "
+            f"and SQLite reports that as a disk I/O error rather than as the "
+            f"mismatch it is.")
     conn.executescript(SCHEMA)
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     return conn
 
 
@@ -400,13 +430,21 @@ def build_parser():
     p = argparse.ArgumentParser(prog="bus", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--version", action="version", version=f"plumb bus {BUS_VERSION}")
-    p.add_argument("--db", help=f"store path (default $PLUMB_BUS_DB or {DEFAULT_DB})")
-    p.add_argument("--agent", help="identity (default $PLUMB_AGENT)")
+    # Global options live on a PARENT parser so they are accepted on BOTH sides
+    # of the subcommand. argparse otherwise rejects `bus watch --agent X`, which
+    # is exactly how anyone writing the command from memory will type it — and
+    # it is how the shipped monitor command typed it, so the monitor died at
+    # argument parsing on its first real launch.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--db", help=f"store path (default $PLUMB_BUS_DB or {DEFAULT_DB})")
+    common.add_argument("--agent", help="identity (default $PLUMB_AGENT)")
+    p.add_argument("--db", help=argparse.SUPPRESS)
+    p.add_argument("--agent", help=argparse.SUPPRESS)
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("init"); s.set_defaults(func=cmd_init)
+    s = sub.add_parser("init", parents=[common]); s.set_defaults(func=cmd_init)
 
-    s = sub.add_parser("send")
+    s = sub.add_parser("send", parents=[common])
     s.add_argument("--to", required=True)
     s.add_argument("--body", help="message body, or '-' for stdin")
     s.add_argument("--urgency", choices=("gating", "normal"), default="normal")
@@ -414,19 +452,19 @@ def build_parser():
     s.add_argument("--record", help="durable record reference (issue id, doc path)")
     s.set_defaults(func=cmd_send)
 
-    s = sub.add_parser("watch", help="monitor loop: gating messages for me")
+    s = sub.add_parser("watch", parents=[common], help="monitor loop: gating messages for me")
     s.add_argument("--urgency", choices=("gating", "normal"))
     s.add_argument("--interval", type=float, default=1.0)
     s.set_defaults(func=cmd_watch)
 
-    s = sub.add_parser("sweep", help="Stop-hook backstop: everything undelivered")
+    s = sub.add_parser("sweep", parents=[common], help="Stop-hook backstop: everything undelivered")
     s.set_defaults(func=cmd_sweep)
 
-    s = sub.add_parser("ack")
+    s = sub.add_parser("ack", parents=[common])
     s.add_argument("id", type=int)
     s.set_defaults(func=cmd_ack)
 
-    s = sub.add_parser("status")
+    s = sub.add_parser("status", parents=[common])
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_status)
     return p

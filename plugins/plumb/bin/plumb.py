@@ -643,43 +643,47 @@ def build_parser():
     p = argparse.ArgumentParser(prog="plumb", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--version", action="version", version=f"plumb {PLUMB_VERSION}")
-    p.add_argument("--root", help="project root (default: discovered)")
+    # Same trap as bus.py: a global option defined only on the parent parser is
+    # rejected AFTER the subcommand, which is where everyone types it.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--root", help="project root (default: discovered)")
+    p.add_argument("--root", help=argparse.SUPPRESS)
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("init", help="scaffold a process manifest and starter document")
+    s = sub.add_parser("init", parents=[common], help="scaffold a process manifest and starter document")
     s.add_argument("--document", help="path for the process document")
     s.add_argument("--force", action="store_true")
     s.set_defaults(func=cmd_init)
 
-    s = sub.add_parser("path", help="resolve an artifact ROLE to a path")
+    s = sub.add_parser("path", parents=[common], help="resolve an artifact ROLE to a path")
     s.add_argument("role")
     s.add_argument("--arc", help="arc identifier, for arc-scoped roles")
     s.set_defaults(func=cmd_path)
 
-    s = sub.add_parser("roles", help="list declared and retired artifact roles")
+    s = sub.add_parser("roles", parents=[common], help="list declared and retired artifact roles")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_roles)
 
-    s = sub.add_parser("process", help="print the project's process document, or a section")
+    s = sub.add_parser("process", parents=[common], help="print the project's process document, or a section")
     s.add_argument("section", nargs="?", help="heading substring to extract")
     s.add_argument("--list", action="store_true", help="list section headings")
     s.set_defaults(func=cmd_process)
 
-    s = sub.add_parser("manifest", help="show the resolved manifest")
+    s = sub.add_parser("manifest", parents=[common], help="show the resolved manifest")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_manifest)
 
-    s = sub.add_parser("decision", help="decision-number operations")
+    s = sub.add_parser("decision", parents=[common], help="decision-number operations")
     dsub = s.add_subparsers(dest="subcmd", required=True)
     d = dsub.add_parser("next", help="the next unclaimed decision number")
     d.add_argument("-v", "--verbose", action="store_true")
     d.set_defaults(func=cmd_decision_next)
 
-    s = sub.add_parser("patterns", help="practices with their costs measured (consult AFTER the interview)")
+    s = sub.add_parser("patterns", parents=[common], help="practices with their costs measured (consult AFTER the interview)")
     s.add_argument("name", nargs="?", help="pattern to show in full")
     s.set_defaults(func=cmd_patterns)
 
-    s = sub.add_parser("ceremony", help="project-authored procedures (skills in .claude/skills/)")
+    s = sub.add_parser("ceremony", parents=[common], help="project-authored procedures (skills in .claude/skills/)")
     csub = s.add_subparsers(dest="subcmd", required=True)
     c = csub.add_parser("list", help="list this project's own procedures")
     c.set_defaults(func=cmd_ceremony_list)
@@ -689,7 +693,7 @@ def build_parser():
     c.add_argument("--force", action="store_true")
     c.set_defaults(func=cmd_ceremony_new)
 
-    s = sub.add_parser("doctor", help="validate the manifest against the filesystem")
+    s = sub.add_parser("doctor", parents=[common], help="validate the manifest against the filesystem")
     s.set_defaults(func=cmd_doctor)
 
     return p
