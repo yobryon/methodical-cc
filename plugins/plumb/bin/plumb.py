@@ -442,6 +442,31 @@ def read_skill_meta(skill_md):
     return meta
 
 
+def patterns_path():
+    return Path(__file__).resolve().parent.parent / "reference" / "patterns.md"
+
+
+def cmd_patterns(args):
+    """Practices with their costs measured — consulted AFTER the interview, never before."""
+    p = patterns_path()
+    if not p.is_file():
+        die(f"pattern library not found at {p}")
+    text = p.read_text(encoding="utf-8")
+    if not args.name:
+        print("Patterns — practices that have been run, with their costs measured.\n"
+              "NOT a menu of things you should do. Consult AFTER the PO has described\n"
+              "their project, offer one at a time, and read 'How you'd know it's wrong\n"
+              "for you' before offering anything.\n")
+        for m in re.finditer(r"^## ([a-z-]+) — (.*)$", text, re.MULTILINE):
+            print(f"  {m.group(1):<20} {m.group(2)}")
+        print(f"\n  plumb patterns <name>   # the full entry, including how to reject it")
+        return
+    body, _ = read_section(text, args.name)
+    if body is None:
+        die(f"no pattern matching '{args.name}' — run `plumb patterns` to list them")
+    print(body)
+
+
 def cmd_ceremony_list(args):
     mf = Manifest.load(args.root, required=False)
     root = mf.root if mf else find_project_root(args.root)
@@ -649,6 +674,10 @@ def build_parser():
     d = dsub.add_parser("next", help="the next unclaimed decision number")
     d.add_argument("-v", "--verbose", action="store_true")
     d.set_defaults(func=cmd_decision_next)
+
+    s = sub.add_parser("patterns", help="practices with their costs measured (consult AFTER the interview)")
+    s.add_argument("name", nargs="?", help="pattern to show in full")
+    s.set_defaults(func=cmd_patterns)
 
     s = sub.add_parser("ceremony", help="project-authored procedures (skills in .claude/skills/)")
     csub = s.add_subparsers(dest="subcmd", required=True)

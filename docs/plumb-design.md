@@ -564,23 +564,68 @@ Each of these is a refusal earned by an attempt that went badly:
 
 ## 11. The skill surface
 
-Thin by construction, per §2. Each reads the process document for judgment and the manifest for
-paths.
+### 11.1 The test for what PLUMB may ship
+
+The proposal listed ten skills. **That list was written by someone describing their own project**,
+and an earlier draft of this document imported it uncritically — which is the exact bias §0 warns
+about, committed in the section that decides what gets built.
+
+Applying §2.0's test to a *sequence* rather than a sentence: **would this sequence be the same on a
+project that had never heard of us?**
+
+| Ships with PLUMB | Why it passes |
+|---|---|
+| `establish`, `ceremony`, `promote` | **Meta.** About the methodology itself, not about any project's work |
+| `design-gate`, `drive`, `handoff`, `catalog` | **The sequence is portable and epistemic.** Anchors-before-surface, read-without-proposal, missing-before-green, why-it-hid — all true anywhere |
+
+| Does NOT ship | Why it fails |
+|---|---|
+| `arc-plan` | **What an arc *is* is project-defined** — its size, its boundary, what its plan contains. This is precisely the shape of `mama:arch-sprint-start`, *the skill that caused the drift.* Shipping it would rebuild the failure |
+| `arc-kickoff` | Content depends entirely on this project's roles, tracker, and plan shape. The only portable part — *a kickoff is a message, not a file* — is a one-line norm |
+| `reconcile` | Every step names a project artifact and a project cadence. The portable part is a mechanical diff (issues vs decisions log, closed-without-state-change, phases never delivered) — that is a **check**, not a procedure |
+| `rule`, `consult` | Mostly a norm plus a mechanical write. **CLI operations**, not skills |
+
+Those first three become **project-authored skills**, written during `plumb:establish` Step 4, in the
+project's own vocabulary. If they say *batch* or *cycle*, their skill says that — not *arc*.
+
+> **The shipped set is a floor.** PLUMB ships what is true anywhere and helps the project author what
+> is only true here. A methodology plugin that ships the second kind has confused its evidence for a
+> law.
+
+### 11.2 Shipped skills
 
 | Skill | What it sequences | Scar |
 |---|---|---|
-| `plumb:establish` | **Negotiate this project's way of working.** New project: interview the PO and draft it. Existing project: read what is there (docs, git history, CLAUDE.md, any MAMA artifacts), infer the *de facto* process, propose it back, negotiate. Produces the manifest, the process document, **and the project's own skills.** Re-runnable — process evolves, and an establishing step that only runs once is a template with extra steps | The entire architecture defers to a document. Shipping a mechanism that assumes a good one exists, with only a stub template to bootstrap it, leaves the most important artifact in the system unauthored |
-| `plumb:ceremony` | Author or update a **project procedure** as a project-owned skill in `.claude/skills/`. Refuses one that is really a norm (belongs in the document) or really a one-off (belongs in a record) | *A ceremony that lives only in the record of the one time we ran it is indistinguishable from a ceremony, until the second time.* The grain ceremony existed only as roadmap prose and one sprint record; a proposed amendment to it had nowhere to go |
-| `plumb:arc-plan` | Tracker arc + issues + the plan doc. **Out-of-scope is a required field** | Arcs that used *"optional"* and *"if time permits"* had those items exploited as skippable and accumulated as debt. **Every phase in a plan is committed scope; if you aren't ready to commit, leave it out** |
-| `plumb:arc-kickoff` | Composes and **sends** the kickoff. **Must not write a file** | The kickoff is a *message* — writing it to a file records a thing whose value was that it was said at a moment |
-| `plumb:design-gate` | Impl **brings the read**, arch **rules**. Enforces the asymmetry both ways | *The highest-value single addition; MAMA had no equivalent.* D-31, D-43, D-45 all had their central premise overturned by the read. D-45's found six silently-destructive database behaviours nobody would have quoted correctly from memory |
-| `plumb:drive` | The closing drive as protocol: anchors named **before** the surface is opened, measured on the day, parity as an equality between two **live** reads | Every arc that ran one found defects in closed, tested, green work. Sprint 14's found four, two of them P1s. Sprint 16's *proof failed on its first attempt* — **reading a plan is order-insensitive where execution is not** |
-| `plumb:rule` | Ledger first, notify second, atomically | Five rulings arrived after the work they ruled on |
-| `plumb:reconcile` | **Checks rather than prompts**: diffs issues against the decisions log, flags decisions referenced but unlogged, issues closed without a state change, plan phases never delivered | The sacred step. One arc's committed scope went undelivered and was nearly re-labelled silently |
-| `plumb:handoff` | The state doc in the shape of §8.1 | Three relays, zero rework — the arc *without* a state doc cost its successor a morning |
-| `plumb:catalog` | A failure-shape entry: *what happened / why it hid / the tell, phrased as something to try / how it differs from its nearest kin.* **Refuses an entry that is only a bug report** | 41 entries; highest-value use was **prospective** — an entry used to design a test before the code existed |
-| `plumb:consult` | A `gating` question to the design partner or architect. Records question **and answer** on the ledger, not only in the message | §9 |
-| `plumb:promote` | Reviews the reflection log for observations that have recurred enough to become norms, and moves them into the process document | Every good norm in the evidence project's process doc arrived this way. Left to memory, they stay in the log where nobody reads them |
+| `plumb:establish` | **Negotiate this project's way of working.** Reads before it asks; interviews; writes the *minimum*; offers patterns one at a time **after** the interview; authors the project's own skills. Re-runnable | The entire architecture defers to a document. Shipping a mechanism that assumes a good one exists leaves the most important artifact unauthored |
+| `plumb:ceremony` | Author a **project procedure** as a project-owned skill. Refuses one that is really a norm, or really a one-off | *A ceremony that lives only in the record of the one time we ran it is indistinguishable from a ceremony, until the second time* |
+| `plumb:design-gate` | Impl **brings the read**, arch **rules**. Enforces the asymmetry both ways | Three decisions had their central premise overturned by the read. One found six silently-destructive database behaviours nobody would have quoted correctly from memory |
+| `plumb:drive` | Anchors named **before** the surface is opened, measured on the day, parity as an equality between two **live** reads | Every arc that ran one found defects in closed, tested, green work. One found four, two of them P1s. Another's *proof failed on its first attempt* — **reading a plan is order-insensitive where execution is not** |
+| `plumb:handoff` | The state doc: what is MISSING first, closed options **by name**, traps carrying the day each cost | Three relays, zero rework — the arc *without* a state doc cost its successor a morning |
+| `plumb:catalog` | A failure-shape entry: *what happened / why it hid / the tell, as something to TRY / how it differs from its nearest kin.* **Refuses an entry that is only a bug report** | 41 entries; highest-value use was **prospective** — one designed a test before the code existed |
+| `plumb:promote` | Review the reflection log for observations that have recurred enough to become norms; move them into the process document | Every good norm in the source project arrived this way. Left to memory, they stay in the log where nobody reads them |
+
+### 11.3 The pattern library — how accumulated wisdom travels without becoming a template
+
+`plumb patterns` ships practices that have been run at scale **with their costs measured**. Each
+entry carries five fields, and the last is load-bearing: *practice / the scar / applies when / costs
+/ **how you'd know it's wrong for you***.
+
+**A pattern that cannot tell you how to reject it is a template.**
+
+Four rules make it a resource rather than a menu, and the first does most of the work:
+
+1. **Consulted after the interview, never before.** Offered before the PO has spoken it is a
+   proposal; offered after, it is a response to something they said.
+2. **One at a time, never as a set.** A menu gets taken wholesale, and wholesale adoption *is* the
+   failure — nobody could point to when it was chosen.
+3. **Adoption recorded with its reason**, in the PO's words. *A practice adopted without a recorded
+   reason is indistinguishable from scaffolding within one sprint.*
+4. **Declining recorded too** — a declined pattern re-offered every re-run is noise, and noise
+   teaches people to stop reading.
+
+The evidence base is deep but **narrow**: one team, one domain, one shape of product. The library
+says so, because a PO who knows the sample size weights the advice correctly and one who does not
+hears it as settled.
 
 **Five norms go in the plugin's own prompts** — not as skills, as the character the tooling
 encourages. These are the one place PLUMB is permitted to state a norm, because they are norms about
@@ -626,9 +671,10 @@ an answer that reaches a working agent — is met.
    and it forces the degradation question to be answered honestly), **`github`** (testable here via
    `gh`), and **`nonlinear`** (the reference implementation — it is what the evidence base actually
    ran on). Then **`jira`**, then `linear` shipped unverified and labelled.
-6. **The remaining skills** (§11): `plumb:promote` first — it is the mechanism by which a process
-   document is *supposed* to grow, and without it the log-then-promote rhythm has no tool. Then
-   `arc-plan`, `arc-kickoff`, `reconcile`, and `rule`.
+6. **`plumb:promote`** (§11.2) — the last shipped skill, and the mechanism by which a process
+   document is *supposed* to grow. Without it, log-then-promote has no tool. `arc-plan`,
+   `arc-kickoff` and `reconcile` are **not built** — see §11.1; they are authored per-project by
+   `establish`. `rule` and `consult` become CLI operations on the ledger and the bus.
 7. **The bus: two delivery classes, urgency declared per message by the sender** (§9), then
    `plumb:consult` on top of it.
 8. **Monitors** (§6).

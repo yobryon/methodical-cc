@@ -18,9 +18,15 @@ the product.
 
 Three things that will make this go wrong if you forget them:
 
-**1. Do not propose a methodology.** You are not here to sell an arc rhythm. If you arrive with a
-shape and collect agreement to it, you have written a template with extra steps — and a template
-arriving attached to a tool is the precise failure PLUMB exists to prevent.
+**1. Do not propose a methodology *as a package*.** You are not here to sell an arc rhythm. If you
+arrive with a shape and collect agreement to it, you have written a template with extra steps — and a
+template arriving attached to a tool is the precise failure PLUMB exists to prevent.
+
+But that is not a licence to withhold what has been learned. There *is* a pattern library
+(`plumb patterns`) — practices that have been run at scale with their costs measured — and Step 3½
+is when you use it. Four rules make it a resource rather than a template, and they are not optional:
+**consulted after the interview, never before; offered one at a time, never as a set; adoption
+recorded with its reason; declining recorded too.**
 
 **2. Write the minimum, and expect to be wrong.** A process document authored in one sitting, before
 any work has happened, is a guess wearing a document's clothes. Establish the *skeleton* — who does
@@ -61,8 +67,6 @@ squash-merge everything else — is that a rule or a habit?"* beats *"how do you
 ---
 
 ## Step 2 — Establish the skeleton, by asking
-
-Six things. Ask about what is not already answered by Step 1; confirm what is.
 
 Eight things. Ask about what is not already answered by Step 1; confirm what is.
 
@@ -116,6 +120,42 @@ the manifest and the one with the sharpest teeth.
 
 ---
 
+## Step 3½ — Offer patterns, one at a time, against what they told you
+
+**Only now.** The PO has described their project; you have written down what they said. This step
+asks whether anything learned elsewhere addresses a problem *they named*.
+
+```bash
+plumb patterns                  # the list
+plumb patterns <name>           # the full entry
+```
+
+How to offer one, and the shape matters more than the content:
+
+1. **Anchor it to something they said.** *"You mentioned nobody can tell which checklist ticks were
+   actually verified — there's a practice for that."* Never *"most projects do X."*
+2. **Lead with the scar, not the practice.** What it cost when it was absent is the evidence; the
+   practice is just the response to it.
+3. **Read them the cost, and the 'how you'd know it's wrong for you' field.** Out loud. A pattern
+   that cannot tell you how to reject it is a template, and that field is the reason these are not
+   templates.
+4. **One at a time.** Never present the list as a set to pick from — that is a menu, and a menu gets
+   taken wholesale.
+5. **Record the outcome either way.** Adopted → the process document says *why*, in their words, so
+   that later someone **can** point to when it was chosen. Declined → note it, so a re-run does not
+   re-offer it and teach them to stop reading.
+
+> **A practice adopted without a recorded reason is indistinguishable from scaffolding within one
+> sprint.** The reason is not paperwork; it is the thing that makes the practice *theirs*.
+
+The evidence base is deep but **narrow** — one team, one domain, one shape of product. Say so. A PO
+who knows the sample size weights the advice correctly; one who does not hears it as settled.
+
+**Offering nothing is a legitimate outcome.** If nothing they described matches a pattern, say that
+and move on.
+
+---
+
 ## Step 4 — Author the project's own skills
 
 **This is the half that distinguishes PLUMB from MAMA, and it is easy to skip.**
@@ -125,7 +165,23 @@ ceremony, the grain-change sequence, the way this team onboards a data source �
 project's own `.claude/skills/`, invocable by name, so the PO gets shorthand through *their* workflow
 rather than ours.
 
-From Step 2's question 5, and from what `git log` showed you:
+**This is where the project's *rhythm* becomes real.** PLUMB deliberately does **not** ship skills
+for planning an arc, kicking one off, or closing one — because what an arc *is*, what a kickoff
+contains, and what "closed" means are all project-defined. Shipping those would rebuild the exact
+template-attached-to-a-tool failure PLUMB exists to prevent. They belong here, authored by this
+project, in this project's words.
+
+So if Step 2's question 3 produced a rhythm, this is where it gets a home:
+
+- a skill for **opening** a unit of work — whatever this project calls one
+- a skill for **closing** one, including whatever their reconciliation actually is
+- a skill for the **kickoff**, if roles are split (and remember: a kickoff is a *message*; a skill
+  that writes it to a file has already misunderstood it)
+
+Seed them from `plumb patterns` where a pattern fits, but **write them in the project's own
+vocabulary** — if they say "batch" or "cycle" or "chunk", the skill says that, not "arc".
+
+Plus whatever came out of Step 2's question 8, and what `git log` showed you:
 
 ```bash
 plumb ceremony new <name> --description "<when to reach for it>"
