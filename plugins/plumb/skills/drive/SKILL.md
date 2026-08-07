@@ -78,6 +78,16 @@ Never quote a number forward. Three sharpenings, each earned by a separate failu
 - If a surface cannot be reached the way a user reaches it, that *is* a finding — record it.
 - **Reading is how you confirm what you already believe; running is how you find out.**
 
+**Where possible, the observer should not be the one who caused the state.** A session
+that performs an action and then looks **cannot distinguish *persisted* from *still in
+the response*** — not through care, not through better anchors; the two states are
+identical from inside that session. A refusal that renders correctly but rides the
+response and evaporates on reload *is passing* to the session that produced it. Some
+defects live exactly at the session's horizon, and only a second observer — a peer, a
+fresh session, the PO's own hands — separates them. This is not a trust question (the
+record that surfaced it was accurate and honest throughout); it is a horizon question,
+and it generalises to anything cached, session-scoped, or optimistically rendered.
+
 Watch for the family that only driving crosses — a signal that is **silent in a way
 indistinguishable from healthy**:
 
@@ -86,6 +96,8 @@ indistinguishable from healthy**:
 - A console that cannot say which version of the code it ran.
 - A response that reads identically on success and on failure.
 - A skip condition that lies.
+- **A write that is still in the response** — observed as present by the session that
+  performed it, unpersisted everywhere else.
 
 ## Step 4 — Assert parity as an equality between two live reads
 
