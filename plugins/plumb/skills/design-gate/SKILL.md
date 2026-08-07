@@ -30,12 +30,21 @@ Two roles, and they do not blur:
 
 | | Brings | Must not |
 |---|---|---|
-| **Implementor** | The **read** — what the code and the world *actually do*, measured | Propose the design |
-| **Architect** | The **ruling** | Rule without a read |
+| **The reader** — whoever owns the evidence | The **read** — what the code and the world *actually do*, measured | Propose the design |
+| **The ruler** — whoever owns the decision | The **ruling** | Rule without a read |
 
-State which role you are before you start. The failure mode is a read that contains a proposal, and
-it is a failure because a read is trusted differently from an argument — once a measurement arrives
-wearing a recommendation, the reader cannot separate what was found from what was wanted.
+Implementor-reads / architect-rules is the common pairing, **but the asymmetry is not about those
+roles** — it is between *the party who owns a constraint and the party who wrote a document that
+must live inside it*, whichever seats those are today. In practice the gate has run in every
+direction: an implementor's reads overturning an architect's rulings four times in one evening (the
+builder's **evidence outranks the ruler's reasoning** — that is the point, not a malfunction), and
+an architect fencing a product designer's ruling by reading the intent document adversarially
+against a constraint the designer did not own. State which seat you hold *for this gate* before you
+start.
+
+The failure mode is a read that contains a proposal, and it is a failure because a read is trusted
+differently from an argument — once a measurement arrives wearing a recommendation, the reader
+cannot separate what was found from what was wanted.
 
 The mirror failure is a ruling written from memory. **Reading a schema and reading the data are
 different acts** — one ruling declared a column inert from a reading of its schema; the count found

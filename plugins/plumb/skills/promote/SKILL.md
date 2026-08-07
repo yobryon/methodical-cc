@@ -29,6 +29,12 @@ plumb process "norms"
 You are looking at two surfaces: the **log** (instances, dated, accumulating) and the **norms**
 (standing behaviour, always on). This pass moves things between them.
 
+> **A process document is most attractive to write to at exactly the moment its content is least
+> reliable** — right after a vivid incident, when the sentence is good and the evidence is one
+> event. A fresh scar is evidence of one event; a norm is a claim about many. One adopter promoted
+> a drive norm the morning it was observed and corrected it twice within four hours — the log was
+> where it belonged until it recurred.
+
 ---
 
 ## Step 1 — Find what has recurred

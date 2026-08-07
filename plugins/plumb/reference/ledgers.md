@@ -36,6 +36,12 @@ the kind a monitor makes free (§6).
 Where a tracker cannot express one of these, the adapter guidance says so rather than approximating
 silently.
 
+**And one thing no tracker vocabulary has a word for:** *waiting on a person who is not tracking
+it.* Any process that separates deciding from building accumulates items whose true state is
+exactly that — and they render as ordinary waiting states, indistinguishable from work in motion.
+The cheapest fix observed is a review question, not a new state: **for every waiting-state issue,
+name who it is waiting on, out loud. If you cannot, that is the finding.**
+
 ---
 
 ## `nonlinear` — the reference implementation

@@ -31,6 +31,7 @@ pure-Python/no-build-step property is what let the last bus rewrite ship.
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bin"))
@@ -105,24 +106,6 @@ TOOLS = [
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
-        "name": "bus_ack",
-        "description": (
-            "Acknowledge a gating message once you have ACTED on it — not merely read "
-            "it.\n\n"
-            "'A ruling was delivered' and 'the recipient has acted on the ruling' are "
-            "different facts. The sender can see delivered-but-unacked, which is the "
-            "signal that tells them whether their ruling actually landed. Rulings "
-            "arriving after the work they governed is a documented, repeated failure; "
-            "this is what makes it visible."
-        ),
-        "inputSchema": {
-            "type": "object",
-            "properties": {"id": {"type": "integer",
-                                  "description": "Message id, shown with the message."}},
-            "required": ["id"],
-        },
-    },
-    {
         "name": "process_path",
         "description": (
             "Resolve one of this project's artifact ROLES to its path — 'plan', "
@@ -194,13 +177,15 @@ TOOLS = [
     {
         "name": "bus_status",
         "description": (
-            "Who is on this bus, whether their monitor is actually running, what is "
-            "pending, and what has been delivered but not acknowledged.\n\n"
-            "A recipient whose monitor is 'dead' or 'stale' cannot be interrupted — "
-            "gating messages to them will arrive late, at their next turn boundary. "
-            "Check here when a peer seems unresponsive, before concluding a message "
-            "was lost. Silence usually means someone is mid-turn; it never means the "
-            "bus dropped something."
+            "Who is on this bus, whether their monitor is actually running, and what "
+            "is pending for each of them.\n\n"
+            "A recipient whose monitor is 'dead' or 'stale' cannot be interrupted or "
+            "woken — messages to them arrive at their next turn boundary or session "
+            "start. Check here when a peer seems unresponsive, before concluding a "
+            "message was lost. Silence usually means someone is mid-turn; it never "
+            "means the bus dropped something. For chronology — what was sent, when it "
+            "was delivered, and where the repo stood at delivery — run `bus.py log` "
+            "in a shell (filters: --record, --thread, --from, --to)."
         ),
         "inputSchema": {"type": "object", "properties": {}},
     },
@@ -230,6 +215,33 @@ def tool_bus_send(args):
             out.append("Note: this was sent as gating but carries no `record`. If it "
                        "gates work, put it on the ledger too — the bus is the "
                        "notification, not the record.")
+
+        # Point-of-use context, not alarms. Both notes surface only at the
+        # moment the sender is already talking to this peer / about this
+        # record — the moment a stale assumption would actually be acted on.
+        now = time.time()
+        aged = conn.execute(
+            "SELECT id, urgency, created_at FROM messages WHERE sender=? AND "
+            "recipient=? AND id!=? AND delivered_at IS NULL AND quarantined=0 "
+            "AND created_at < ? ORDER BY id",
+            (me, args["to"], mid, now - 300)).fetchall()
+        if aged:
+            bits = ", ".join(f"#{r['id']} ({r['urgency']}, "
+                             f"{int((now - r['created_at']) / 60)}m)" for r in aged)
+            out.append("")
+            out.append(f"Note: your earlier {bits} to @{args['to']} "
+                       f"{'is' if len(aged) == 1 else 'are'} still pending — they "
+                       f"haven't hit a boundary yet. Factor that into anything you "
+                       f"conclude from their silence.")
+        if args.get("record"):
+            prior = conn.execute(
+                "SELECT COUNT(*) c FROM messages WHERE record_ref=? AND id!=?",
+                (args["record"], mid)).fetchone()["c"]
+            if prior:
+                out.append("")
+                out.append(f"FYI: {prior} earlier message(s) cite this record — "
+                           f"`bus.py log --record '{args['record']}'` to review "
+                           f"what has been said about it.")
         return "\n".join(out)
     finally:
         conn.close()
@@ -243,18 +255,6 @@ def tool_bus_inbox(_args):
         sink = io.StringIO()
         rows = bus.claim_and_emit(conn, me, via="inbox", out=sink)
         return sink.getvalue() if rows else "No undelivered messages."
-    finally:
-        conn.close()
-
-
-def tool_bus_ack(args):
-    me = bus.whoami()
-    conn = _conn()
-    try:
-        ok = bus.ack(conn, int(args["id"]), me)
-        return (f"Acknowledged #{args['id']}." if ok else
-                f"#{args['id']} was not acknowledged — it is not addressed to you, "
-                f"does not exist, or was already acknowledged.")
     finally:
         conn.close()
 
@@ -277,8 +277,6 @@ def tool_bus_status(_args):
                 bits.append(f"{r['pending']} pending"
                             + (f" (oldest {r['oldest_pending_age']}s)"
                                if r["oldest_pending_age"] else ""))
-            if r["unacked_gating"]:
-                bits.append(f"{r['unacked_gating']} gating delivered-but-UNACKED")
             if r["quarantined"]:
                 bits.append(f"{r['quarantined']} quarantined")
             lines.append("  " + ", ".join(bits))
@@ -359,7 +357,6 @@ def tool_decision_next(_args):
 HANDLERS = {
     "bus_send": tool_bus_send,
     "bus_inbox": tool_bus_inbox,
-    "bus_ack": tool_bus_ack,
     "bus_status": tool_bus_status,
     "process_path": tool_process_path,
     "process_read": tool_process_read,

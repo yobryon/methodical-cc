@@ -51,6 +51,14 @@ ceremony skill you author:
    the other seven checks and failed only this one — their PO caught it, and
    for any project building a platform this is the check that will catch the
    most.
+9. **Does it run at a moment when the person has the material but not the
+   patience?** A procedure whose trigger is a moment of *insight* rather than
+   a moment of *decision* gets bypassed — insight does not wait for ceremony,
+   and a bypassed ceremony looks like coverage. If the answer is yes, **it
+   wants to be a REVIEW of what they wrote, not a PROCEDURE for writing it**:
+   let the moment produce the artifact, and let the skill check it afterward.
+   The first project found this with their catalogue ceremony — two entries
+   written, one rewritten, zero invocations, all correctly.
 
 ## Contributing real ones
 

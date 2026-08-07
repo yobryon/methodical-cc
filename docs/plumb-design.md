@@ -475,7 +475,7 @@ The spike confirmed plugin-shipped monitors auto-launch, run at ~1 Hz in the ses
 directory, survive compaction as the same process, and **interrupt a turn mid-flight** — all
 verified again live in the shipped plugin.
 
-### 6.1 Two detectors, not five — and why the other three are absent
+### 6.1 One detector, down from five — and each subtraction is the design working
 
 The proposal named five. Three are not shipped, and the reason is the same one that made the ledger
 layer guidance rather than a wrapper:
@@ -495,8 +495,16 @@ meaningful everywhere.
 
 | Detector | Reads | Scar |
 |---|---|---|
-| **Unanswered gating** | The bus, which we own | Five rulings arrived after the work they governed. An architect could not tell *delivered* from *acted on*, because nothing distinguished them. Reported **to the sender**, since it is their ruling that may not have landed |
-| **Decision collision** | The `decisions` role | Twice — once with both collisions in a single evening. Two agents ruling in parallel each read the log's tail and wrote the same next number |
+| **Decision collision** | The `decisions` role | Twice — once with both collisions in a single evening. Two agents ruling in parallel each read the log's tail and wrote the same next number. Historically 2-for-2 true |
+
+**A fourth detector shipped and was removed (0.7.0): unanswered-gating.** It watched `bus_ack` — a
+*proxy* for action that neither party on the first real team ever called — so it fired six times,
+was wrong six times, and the one time it was believed it produced a false report to the PO about a
+recipient who was doing everything right. Worse than the noise was the conditioning: every
+individual dismissal of it was justified, *"which is exactly what makes the conditioning
+invisible."* The rule it earned: **a detector must measure the work's own artifact, never a
+protocol about the work** — a skipped protocol with a monitor attached manufactures false signal.
+Decision-collision survives precisely because the decisions log *is* the artifact.
 
 ### 6.3 They run inside the bus monitor's tick
 
@@ -591,11 +599,18 @@ SQLite is *why* this composes: three processes sharing one store need no socket,
 lifecycle, no cleanup story. Measured at 50,000 messages / 114 MB: unread-lookup **2 µs**, send
 0.65 ms. At 1 Hz that is 0.00018% of a core.
 
-**Two columns, not one.** `delivered_at` is the honest field — we can know we injected; we can never
-know it was read. But for `gating`, add **`acked_at`**: *"a ruling was injected"* and *"the
-implementor has confirmed the ruling"* are different facts, and five rulings in the evidence project
-arrived after the work they governed. **An architect who can see delivered-but-unacked has a signal
-no discipline ever gave them.**
+**One honest column, and a reversal worth recording (0.7.0).** `delivered_at` is the honest field —
+we can know we injected; we can never know it was read. An `acked_at` protocol shipped alongside it
+(*"delivered" and "acted on" are different facts*) and was **removed after its first real week**:
+nobody called it, a detector watching it fired six-for-six false, and the one time it was believed
+it produced a false report about a recipient who was doing everything right. The justification had
+quietly expired — the five late rulings that motivated it were a *turn-bounded delivery* problem,
+and interrupting delivery solved it at the layer it lived. The PO's ruling generalizes it: **the bus
+is not a ledger** — passive memorialization (delivered_at/by, and the repo commit hash stamped at
+delivery), pull diagnostics (`bus.py log`, `bus_status`), point-of-use context in the send response
+(your own still-pending messages to this peer; prior traffic citing this record) — and no protocol
+steps whose purpose is accounting. A sender who needs confirmation asks; the reply is a
+conversation, and it lands on the trail.
 
 **`--record` in the same call.** The send that carries a ruling writes the durable ledger copy in one
 operation, so it cannot be forgotten under momentum. This is the difference between a norm and a

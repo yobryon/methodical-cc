@@ -93,11 +93,16 @@ def change_token(conn):
 def state_of(r):
     if r["quarantined"]:
         return "QUARANTINED"
-    if r["acked_at"]:
-        return "acked"
     if r["delivered_at"]:
         return f"delivered:{r['delivered_by']}"
     return "pending"
+
+
+def commit_of(r):
+    try:
+        return r["delivered_commit"]
+    except (KeyError, IndexError):
+        return None
 
 
 def fmt_ts(epoch):
@@ -250,8 +255,8 @@ class BusView(App):
             parts.append(f"record {r['record_ref']}")
         if r["delivered_at"]:
             parts.append(f"delivered {fmt_ts(r['delivered_at'])}")
-        if r["acked_at"]:
-            parts.append(f"acked {fmt_ts(r['acked_at'])}")
+        if commit_of(r):
+            parts.append(f"repo @{commit_of(r)}")
         head.update("  ·  ".join(parts))
         md.update(r["body"])
 

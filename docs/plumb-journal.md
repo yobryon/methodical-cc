@@ -575,6 +575,37 @@ context and marking the record delivered must **commit together**. The dangerous
 failure is *successful injection, failed marking* — that re-delivers at 1–2 Hz and
 spams the agent's context. Wrap it; defend against the partial case explicitly.
 
+**THE BUS IS NOT A LEDGER — a PO ruling (2026-08-07) that supersedes part of
+this section.** The `acked_at` design below was built (bus_ack, through 0.6.0),
+went unused by every party while a drift detector watching it fired six times,
+was wrong six times, and produced one false report the time it was believed —
+and the PO's challenge went deeper than the incident: an accounting layer that
+ticks-and-ties messages to actions rewards busy work and betrays the bus's
+purpose, frictionless communication. The codified principles:
+
+- **Passive memorialization, yes** — delivered_at, delivered_by, and the repo's
+  commit hash at delivery, stamped by the system, asked of no one.
+- **Active tracking handles, no** — no acks, no receipts, no protocol steps
+  whose purpose is accounting. A sender who needs confirmation *asks*; the
+  reply is a conversation and lands on the trail.
+- **Pull diagnostics over push alarms** — `bus.py log` (lookback: chronology,
+  state, hash, filters) and `bus_status` answer questions; detectors that
+  watch proxies manufacture false signal and *train their readers invisibly*
+  ("I did not notice I was being trained"). The one surviving detector
+  (decision-collision) measures the work's own artifact, not a protocol about
+  the work.
+- **Point-of-use context over ceremony** — the send response may volunteer
+  what the sender is about to overlook (their own still-pending messages to
+  this peer; prior traffic citing this record), because that arrives at the
+  exact moment a stale assumption would be acted on, and costs nothing.
+- **Plumb never touches the tracker and never creates supplemental ledgers**
+  for agents to maintain — reaffirmed.
+
+The hallucinated-dispatch shape ("routed", written in the ruling's own
+sentence, never performed) is real and recurring — the answer consistent with
+this ruling is an implicit trail cheap enough that *checking a claim costs
+less than trusting it*, not a receipt protocol.
+
 **Retention:** SQLite makes pruning a `DELETE` rather than a rewrite. We need a
 policy; the JSON-array model never had one and that is why it degrades.
 

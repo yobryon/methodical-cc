@@ -27,7 +27,7 @@ _mcc_complete() {
     case "$cmd1" in
         bus)
             if (( cword == 2 )); then
-                COMPREPLY=( $(compgen -W "tail view" -- "$cur") )
+                COMPREPLY=( $(compgen -W "log tail view" -- "$cur") )
                 return
             fi
             cmd2="${words[2]}"
@@ -131,7 +131,7 @@ _mcc_complete() {
         --shell)
             COMPREPLY=( $(compgen -W "bash zsh" -- "$cur") )
             return ;;
-        --kind|--lines|--name|--repo|--terminal)
+        --from|--kind|--lines|--name|--record|--repo|--terminal|--thread|--to)
             return ;;
     esac
 
@@ -139,6 +139,7 @@ _mcc_complete() {
     if [[ "$cur" == -* ]]; then
         local flags=""
         case "$cmd1:$cmd2" in
+            bus:log)  flags="--from --lines --record --thread --to" ;;
             bus:tail)  flags="--lines --no-follow" ;;
             bus:view)  flags="--db" ;;
             complete:)  flags="--kind" ;;
@@ -168,7 +169,7 @@ _mcc_complete() {
     for ((i=args_start; i<cword; i++)); do
         w="${words[$i]}"
         case "$w" in
-            --db|--group|--group-by|--kind|--lines|--name|--output|--persona|--plugin|--rc-file|--repo|--scope|--shell|--terminal)
+            --db|--from|--group|--group-by|--kind|--lines|--name|--output|--persona|--plugin|--rc-file|--record|--repo|--scope|--shell|--terminal|--thread|--to)
                 ((i++)) ;;
             --*)
                 ;;

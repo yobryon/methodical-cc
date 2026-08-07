@@ -20,9 +20,9 @@ the moment of need.** Ours ship with the plugin. Yours live in your repo.
 
 ---
 
-## Step 1 — Check the genre. Three ways this is not a ceremony
+## Step 1 — Check the genre. Four ways this is not the ceremony you think it is
 
-Answer all three before writing anything. Getting this wrong is how the third home becomes the new
+Answer all four before writing anything. Getting this wrong is how the third home becomes the new
 drift vector.
 
 ### Is it really yours to run?
@@ -58,6 +58,15 @@ it here, because:
 ```bash
 plumb process --list        # where norms live
 ```
+
+### Does it fire at a moment of insight, or a moment of decision?
+
+A procedure whose trigger is *insight* — the shape becoming clear mid-thought, mid-reply —
+gets bypassed, because stopping to fetch a procedure means leaving the thought to go and
+get a form. **A bypassed ceremony looks like coverage.** If the material arrives at a
+moment when its author has the content but not the patience, shape the skill as a
+**review of what they wrote**, not a procedure for writing it: the moment produces the
+artifact; the skill checks it afterward.
 
 ### Is it really a one-off?
 
@@ -150,8 +159,9 @@ failure this skill was built to end.
 
 ## Done when
 
-- [ ] It is genuinely a sequence, genuinely recurring, and genuinely **yours to run** — all three
-      checked, not assumed
+- [ ] It is genuinely a sequence, genuinely recurring, genuinely **yours to run**, and shaped for
+      its trigger (a decision-moment procedure, or an insight-moment **review**) — all four checked,
+      not assumed
 - [ ] The description says **when**, and names a condition rather than a slot
 - [ ] No filenames — every artifact reached through `plumb path <role>`
 - [ ] No standing behaviours — those went to the process document

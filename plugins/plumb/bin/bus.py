@@ -56,7 +56,7 @@ import sys
 import time
 from pathlib import Path
 
-BUS_VERSION = "0.5.0"
+BUS_VERSION = "0.7.0"
 DEFAULT_DB = ".mcc/bus.db"
 MAX_ATTEMPTS = 5
 # A monitor ticks at 1 Hz, so this is ten missed ticks — tight enough that a
@@ -64,7 +64,7 @@ MAX_ATTEMPTS = 5
 # pid check below is the exact signal; this only backstops it.
 HEARTBEAT_STALE_S = 10.0
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Additive changes MIGRATE; only a genuinely incompatible store is refused.
 # Refusing on every schema bump would make the honest thing (versioning the
@@ -73,6 +73,7 @@ SCHEMA_VERSION = 2
 # cosmetic change.
 MIGRATIONS = {
     2: ["ALTER TABLE agents ADD COLUMN monitor_started REAL"],
+    3: ["ALTER TABLE messages ADD COLUMN delivered_commit TEXT"],
 }
 
 SCHEMA = """
@@ -88,6 +89,7 @@ CREATE TABLE IF NOT EXISTS messages(
   created_at    REAL NOT NULL,
   delivered_at  REAL,
   delivered_by  TEXT,
+  delivered_commit TEXT,
   acked_at      REAL,
   attempts      INTEGER NOT NULL DEFAULT 0,
   quarantined   INTEGER NOT NULL DEFAULT 0
@@ -249,11 +251,33 @@ def still_mine(conn, agent, pid):
     return row is None or row["monitor_pid"] == pid
 
 
-def ack(conn, msg_id, agent):
-    cur = conn.execute(
-        "UPDATE messages SET acked_at=? WHERE id=? AND recipient=? AND acked_at IS NULL",
-        (time.time(), msg_id, agent))
-    return cur.rowcount
+# There is deliberately NO ack primitive. One existed (bus_ack, through 0.6.0)
+# and the first real team never called it — while a drift detector watching it
+# fired six times, was wrong six times, and produced one false report the time
+# it was believed. "A skipped protocol with a monitor attached is worse than no
+# protocol, because it manufactures false signal." The bus is light comms, not
+# a ledger: it memorializes passively (delivered_at, delivered_by,
+# delivered_commit) and answers questions (`log`, `status`); it does not ask
+# agents to file receipts. A sender who needs confirmation asks — that is a
+# conversation, and the reply lands on the trail. (acked_at remains in the
+# schema for old rows; nothing writes it.)
+
+
+def repo_commit():
+    """Short commit hash of the project repo at this moment, or None.
+
+    Stamped alongside delivered_at so anyone sorting things out later can see
+    at a glance where the repo stood when a message landed. Git-only, and only
+    if this project uses it — silently absent otherwise.
+    """
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    try:
+        import subprocess
+        r = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                           cwd=root, capture_output=True, text=True, timeout=5)
+        return r.stdout.strip() or None if r.returncode == 0 else None
+    except Exception:
+        return None
 
 
 # ------------------------------------------------- session turn state (idle?)
@@ -411,13 +435,15 @@ def claim_and_emit(conn, recipient, via, urgency=None, render=None, out=None):
             conn.execute("COMMIT")
             return []
         now = time.time()
+        commit = repo_commit()
         for r in rows:
             if r["attempts"] + 1 > MAX_ATTEMPTS:
                 conn.execute("UPDATE messages SET quarantined=1 WHERE id=?", (r["id"],))
                 continue
             conn.execute(
-                "UPDATE messages SET delivered_at=?, delivered_by=?, attempts=attempts+1 "
-                "WHERE id=?", (now, via, r["id"]))
+                "UPDATE messages SET delivered_at=?, delivered_by=?, "
+                "delivered_commit=?, attempts=attempts+1 "
+                "WHERE id=?", (now, via, commit, r["id"]))
         live = [r for r in rows if r["attempts"] + 1 <= MAX_ATTEMPTS]
         if live:
             out.write(render(live))
@@ -444,10 +470,6 @@ def format_message(row, late=False):
         lines.append(f"  durable record: {row['record_ref']}")
     lines.append("")
     lines.append(row["body"])
-    if row["urgency"] == "gating":
-        lines.append("")
-        lines.append(f"  → acknowledge with bus_ack(id={row['id']}) once you have acted on it. "
-                     f"The sender can see delivered-but-unacked.")
     return "\n".join(lines)
 
 
@@ -525,13 +547,11 @@ def status(conn):
     for name in sorted(agents):
         counts = conn.execute(
             "SELECT COUNT(*) FILTER (WHERE delivered_at IS NULL AND quarantined=0) AS pending,"
-            " COUNT(*) FILTER (WHERE urgency='gating' AND delivered_at IS NOT NULL"
-            "                  AND acked_at IS NULL) AS unacked,"
             " COUNT(*) FILTER (WHERE quarantined=1) AS quarantined,"
             " MIN(CASE WHEN delivered_at IS NULL AND quarantined=0 THEN created_at END) AS oldest"
             " FROM messages WHERE recipient=?", (name,)).fetchone()
         entry = agent_liveness(conn, name)
-        entry.update(pending=counts["pending"], unacked_gating=counts["unacked"],
+        entry.update(pending=counts["pending"],
                      quarantined=counts["quarantined"])
         entry["oldest_pending_age"] = (round(time.time() - counts["oldest"], 1)
                                        if counts["oldest"] else None)
@@ -672,29 +692,80 @@ def cmd_sweep(args):
     return rows
 
 
-def cmd_ack(args):
-    conn = connect(db_path(args.db))
-    n = ack(conn, args.id, whoami(args.agent))
-    print(json.dumps({"acked": bool(n), "id": args.id}))
-    conn.close()
+def _msg_state(r):
+    if r["quarantined"]:
+        return "QUARANTINED"
+    if r["delivered_at"]:
+        return f"delivered:{r['delivered_by']}"
+    return "pending"
+
+
+def _row_commit(r):
+    try:
+        return r["delivered_commit"]
+    except (KeyError, IndexError):
+        return None
 
 
 def _tail_line(r):
     ts = time.strftime("%H:%M:%S", time.localtime(r["created_at"]))
     mark = "!" if r["urgency"] == "gating" else " "
-    if r["quarantined"]:
-        state = "QUARANTINED"
-    elif r["delivered_at"]:
-        state = f"delivered:{r['delivered_by']}" + ("  acked" if r["acked_at"] else "")
-    else:
-        state = "pending"
-    head = f"{ts} {mark}#{r['id']} @{r['sender']} → @{r['recipient']}  [{state}]"
+    head = f"{ts} {mark}#{r['id']} @{r['sender']} → @{r['recipient']}  [{_msg_state(r)}]"
+    if _row_commit(r):
+        head += f"  @{_row_commit(r)}"
     if r["thread"]:
         head += f"  (thread {r['thread']})"
     if r["record_ref"]:
         head += f"  rec:{r['record_ref']}"
     body = "\n".join("    " + ln for ln in r["body"].splitlines())
     return f"{head}\n{body}"
+
+
+def cmd_log(args):
+    """The lookback — chronology at a glance, one line per message.
+
+    The bus keeps an honest implicit trail and answers questions; it does not
+    file reports. This is where a claim gets checked ("did that dispatch
+    actually happen?"), a stale board gets explained (two rulings sitting
+    `pending`), and prior traffic about a record gets found — for the cost of
+    one command instead of a protocol everyone must remember to perform.
+    """
+    conn = connect(db_path(args.db))
+    where, params = [], []
+    if args.record:
+        where.append("record_ref LIKE ?")
+        params.append(f"%{args.record}%")
+    if args.thread:
+        where.append("thread=?")
+        params.append(args.thread)
+    if getattr(args, "from_", None):
+        where.append("sender=?")
+        params.append(args.from_)
+    if args.to:
+        where.append("recipient=?")
+        params.append(args.to)
+    sql = "SELECT * FROM messages"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(args.lines)
+    rows = conn.execute(sql, params).fetchall()
+    for r in reversed(rows):  # chronological
+        ts = time.strftime("%m-%d %H:%M:%S", time.localtime(r["created_at"]))
+        mark = "!" if r["urgency"] == "gating" else " "
+        commit = f" @{_row_commit(r)}" if _row_commit(r) else ""
+        snippet = " ".join(r["body"].split())[:64]
+        line = (f"{r['id']:>4} {ts} {mark} @{r['sender']}→@{r['recipient']:<6} "
+                f"[{_msg_state(r)}]{commit}")
+        if r["thread"]:
+            line += f" (t:{r['thread']})"
+        if r["record_ref"]:
+            line += f" rec:{r['record_ref']}"
+        print(line)
+        print(f"     {snippet}")
+    if not rows:
+        print("(no matching messages)")
+    conn.close()
 
 
 def cmd_tail(args):
@@ -742,13 +813,13 @@ def cmd_status(args):
     if args.json:
         print(json.dumps(rows, indent=2))
     else:
-        print(f"{'agent':<14}{'monitor':<12}{'pending':>8}{'unacked':>9}{'quarantined':>13}")
+        print(f"{'agent':<14}{'monitor':<12}{'pending':>8}{'quarantined':>13}")
         for r in rows:
             mon = r["monitor"]
             if mon == "stale":
                 mon = f"stale {r['stale_for']:.0f}s"
             print(f"{r['agent']:<14}{mon:<12}{r['pending']:>8}"
-                  f"{r['unacked_gating']:>9}{r['quarantined']:>13}")
+                  f"{r['quarantined']:>13}")
     conn.close()
 
 
@@ -799,9 +870,15 @@ def build_parser():
     s.add_argument("--interval", type=float, default=1.0)
     s.set_defaults(func=cmd_tail)
 
-    s = sub.add_parser("ack", parents=[common])
-    s.add_argument("id", type=int)
-    s.set_defaults(func=cmd_ack)
+    s = sub.add_parser("log", parents=[common],
+                       help="lookback: one line per message — chronology, state, repo hash")
+    s.add_argument("-n", "--lines", type=int, default=30,
+                   help="how far back (default 30)")
+    s.add_argument("--record", help="only messages citing this durable record (substring)")
+    s.add_argument("--thread", help="only this thread")
+    s.add_argument("--from", dest="from_", help="only from this agent")
+    s.add_argument("--to", help="only to this agent")
+    s.set_defaults(func=cmd_log)
 
     s = sub.add_parser("status", parents=[common])
     s.add_argument("--json", action="store_true")

@@ -1,6 +1,6 @@
 ---
 name: catalog
-description: Add an entry to the failure-shape catalog — the shapes defects take here, ordered by WHY THEY HID rather than by what broke. Enforces the portable shape (what happened / why it hid / the tell, phrased as something to TRY / how it differs from its nearest kin) and refuses an entry that is only a bug report. Use when a defect's shape is understood, which is not the same moment as when it is fixed.
+description: REVIEW a failure-shape catalog entry you already wrote — the shapes defects take here, ordered by WHY THEY HID rather than by what broke. Write the entry in flow, at the moment the shape is clear; then run this to check the portable shape (what happened / why it hid / the tell, phrased as something to TRY / how it differs from its nearest kin) and to catch an entry that is only a bug report. Use after appending an entry, or when a defect's shape is understood — which is not the same moment as when it is fixed.
 ---
 
 # The failure-shape catalog
@@ -8,6 +8,14 @@ description: Add an entry to the failure-shape catalog — the shapes defects ta
 Not a bug list. **A catalogue of the shapes defects take here, ordered by why they hid.**
 
 > **A defect anyone would have caught teaches nothing.**
+
+**Write first, review second — this skill is the review.** Catalogue entries arrive
+*mid-thought*: the shape becomes clear three sentences into explaining something to
+someone, and stopping to fetch a procedure at that moment means leaving the thought to
+go and get a form. So don't stop: **append the entry directly, in flow, while the
+content exists.** Then — same day, next pause — run this skill against what you wrote.
+Insight does not wait for ceremony, and a ceremony that competes with the only moment
+the content exists gets bypassed; a review of what the moment produced does not.
 
 The effort this comes from accumulated 41 entries. Its highest-value use was **prospective** — an
 entry used to design a test *before the code existed*, and another used to refuse building something

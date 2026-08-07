@@ -9,8 +9,9 @@ Messages between sessions travel over a bus this plugin owns, not the harness's 
 protocol. The difference that matters: **a `gating` message interrupts the recipient
 mid-turn.** It does not wait for their turn to end.
 
-The tools carry their own guidance — `bus_send`, `bus_inbox`, `bus_ack`, `bus_status`.
-This skill is the part that is not in a tool description.
+The tools carry their own guidance — `bus_send`, `bus_inbox`, `bus_status` — and the
+lookback lives in a shell command, `bus.py log`. This skill is the part that is not in
+a tool description.
 
 ## Who is on it
 
@@ -81,8 +82,9 @@ mid-turn, or not running. Re-sending creates duplicates that arrive together and
 contradictions.
 
 If you want to know rather than guess, ask: `bus_status` shows whether each peer's
-monitor is actually running, what is pending, and what has been delivered but not
-acknowledged.
+monitor is actually running and what is pending for them; `bus.py log` shows the
+chronology, including your own messages still sitting `pending` — which is what a
+"stale" peer usually turns out to be.
 
 ## A ruling goes on the ledger *before* it goes on the wire
 
@@ -95,13 +97,33 @@ including by an agent that was not running when you ruled, and by whoever replac
 This is not tidiness. Rulings arriving after the work they governed is a documented,
 repeated failure, and the ledger is the only channel immune to it.
 
-## Acknowledge gating messages once you have ACTED
+## There is no ack, on purpose — the work is the acknowledgment
 
-`bus_ack(id)` — not when you read it, when you have acted on it.
+The bus asks for no receipts. An ack protocol existed and was removed: nobody called
+it, and a monitor watching it manufactured false signal about people who were doing
+everything right. **If you need confirmation that a message landed and was absorbed,
+ask for it in the message** — "confirm when you've picked this up" is a conversation,
+it gets answered, and the answer sits on the trail like everything else. The reply,
+the commit, the board moving: those are the acknowledgments, and they cannot be
+performed absent-mindedly.
 
-*"A ruling was delivered"* and *"the recipient has acted on the ruling"* are different
-facts. The sender can see delivered-but-unacked, which is the signal that tells them
-whether their ruling actually landed.
+## The trail answers questions — `bus.py log`
+
+Every message is memorialized as it flows: sent, delivered (when, via what, and **the
+repo's commit hash at that moment**). Nothing is asked of you to maintain this — it is
+implicit. When you need to sort something out, query it:
+
+```bash
+bus.py log                          # chronology, one line per message + snippet
+bus.py log --record PLANK-139      # everything ever said citing a durable record
+bus.py log --thread t-7            # one conversation
+bus.py log --from arch --to impl   # one direction of one pair
+```
+
+Use it before concluding anything from silence (a stale board usually shows as
+`pending` right there), to check a claim that something was sent ("routed yesterday" —
+was it?), and to re-read what was already said about a record before publishing more
+derived from it.
 
 ## If a peer's monitor is down
 

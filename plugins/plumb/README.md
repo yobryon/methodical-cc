@@ -129,15 +129,23 @@ Add entries as you kill things. Never delete them — the entry *is* the guard.
 | `plumb ceremony new <name>` | Scaffold a project procedure in `.claude/skills/` |
 | `plumb exemplars [name]` | Ceremony-skill exemplars from one project — calibrate, don't copy |
 | `plumb patterns [name]` | Practices with their costs measured — consult after the interview |
-| `plumb ledger guide` | How an arc and the states map onto your tracker |
+| `plumb ledger guide` | How your unit of work and the states map onto your tracker |
+| `bus.py log [--record R]` | Bus lookback: chronology, delivery state, repo hash at delivery |
 | `plumb ledger states` | The normalized state vocabulary |
 | `plumb migrate scan` | Inventory a MAMA project's artifacts and how alive each one is |
 
 **The agent contract is the MCP server, not this CLI.** Agents get `bus_send` / `bus_inbox` /
-`bus_ack` / `bus_status` (the bus) and `process_path` / `process_read` / `decision_next` (the
-process host) as tools whose descriptions carry the guidance — the contract travels with the
-session instead of depending on a skill being loaded. The CLI is the engine (monitors, hooks) and
-the human surface; the retired-role refusal is the same utterance on both.
+`bus_status` (the bus) and `process_path` / `process_read` / `decision_next` (the process host) as
+tools whose descriptions carry the guidance — the contract travels with the session instead of
+depending on a skill being loaded. The CLI is the engine (monitors, hooks) and the human surface;
+the retired-role refusal is the same utterance on both.
+
+**There is deliberately no ack, no receipts, no accounting.** The bus is light comms, not a ledger:
+it memorializes passively (delivered when, via what, **at which repo commit**) and answers
+questions (`bus.py log`, `bus_status`); it never asks agents to file paperwork about their own
+messages. An ack protocol existed, went unused by everyone, fed a detector that was wrong six times
+out of six, and was removed. A sender who needs confirmation asks — that is a conversation, and the
+reply lands on the trail.
 
 ---
 

@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.27.0"
+MCC_VERSION = "1.28.0"
 
 import json
 import time
@@ -4059,6 +4059,19 @@ def cmd_bus_tail(args):
         sys.exit(0)
 
 
+def cmd_bus_log(args):
+    engine = _find_plumb_bin("bus.py")
+    if engine is None:
+        die("plumb's bus engine not found — is the plumb plugin installed? "
+            "(`mcc update` refreshes the marketplace)")
+    argv = ["python3", str(engine), "log", "-n", str(args.lines)]
+    for flag, val in (("--record", args.record), ("--thread", args.thread),
+                      ("--from", getattr(args, "from_", None)), ("--to", args.to)):
+        if val:
+            argv += [flag, val]
+    sys.exit(subprocess.run(argv).returncode)
+
+
 def cmd_bus_view(args):
     """Mailbox TUI. Shelled out via `uv run` — the viewer declares its own
     dependencies (PEP 723 inline metadata), so mcc itself stays stdlib-only."""
@@ -5142,6 +5155,14 @@ def build_parser():
          help="how much backlog to show first (default 20)")
     _arg(pbus_tail, "--no-follow", action="store_true", help="print backlog and exit")
     pbus_tail.set_defaults(func=cmd_bus_tail)
+    pbus_log = pbus_sub.add_parser(
+        "log", help="lookback: chronology, delivery state, repo hash — one line per message")
+    _arg(pbus_log, "-n", "--lines", type=int, default=30, help="how far back (default 30)")
+    _arg(pbus_log, "--record", help="only messages citing this durable record (substring)")
+    _arg(pbus_log, "--thread", help="only this thread")
+    _arg(pbus_log, "--from", dest="from_", help="only from this agent")
+    _arg(pbus_log, "--to", help="only to this agent")
+    pbus_log.set_defaults(func=cmd_bus_log)
     pbus_view = pbus_sub.add_parser(
         "view", help="mailbox TUI over the bus (read-only; needs `uv`)")
     _arg(pbus_view, "--db", help="bus database path (default: ./.mcc/bus.db)",

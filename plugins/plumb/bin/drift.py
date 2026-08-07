@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """plumb drift — detectors that run inside the bus monitor's tick.
 
-Two of them, not five. The proposal named five; three depend on reading the
-tracker or on a project-specific convention, and PLUMB does not proxy trackers
-(see the ledger layer). Shipping a detector that only works on one adapter, or
-only where a project happens to mark its pins a particular way, would be a
-detector nobody can trust the silence of — and **the silence is the product**.
-A check you cannot trust when it says nothing is worse than no check.
+ONE of them, and the count has gone down twice — which is the design working.
+The proposal named five; three depended on reading the tracker or on a
+project-specific convention, and PLUMB does not proxy trackers. A fourth
+(unanswered-gating) shipped and was removed after its first real week: it
+watched `bus_ack`, a protocol call nobody made, so it fired six times, was
+wrong six times, and produced one false report the time it was believed. "A
+skipped protocol with a monitor attached is worse than no protocol, because it
+manufactures false signal." A detector you cannot trust the silence OR the
+noise of subtracts value; the bus now answers questions (`bus.py log`,
+`bus_status`) instead of raising alarms about proxies.
 
-The two that survive are portable, cheap, and each attached to a real incident:
+The one that survives is portable, cheap, ledger-derived (it measures the
+work's own artifact, not a protocol about the work), and 2-for-2 true:
 
-  unanswered-gating   a ruling delivered and never acknowledged
   decision-collision  two entries claiming one number
 
 They run inside the EXISTING monitor loop rather than as separate monitors.
@@ -32,9 +36,6 @@ from pathlib import Path
 # Slow cadence: drift is not urgent, and cheap checks that fire often are how a
 # monitor gets rate-limited into silence.
 DRIFT_INTERVAL_S = 120.0
-# A gating message is a ruling that changes what someone is doing right now.
-# Unacknowledged for this long means it probably did not.
-UNACKED_GRACE_S = 600.0
 
 DECISION_RE = re.compile(r"^\s*#{1,6}\s*D-(\d+)\b|^\s*\|\s*D-(\d+)\b|^\s*\*\*D-(\d+)\b",
                          re.MULTILINE)
@@ -61,42 +62,6 @@ def save_seen(root, agent, seen):
         state_file(root, agent).write_text(json.dumps(sorted(seen)), encoding="utf-8")
     except OSError:
         pass
-
-
-# ------------------------------------------------------- unanswered gating
-
-def check_unanswered_gating(conn, agent):
-    """A ruling delivered and never acknowledged.
-
-    The scar: five rulings arrived after the work they governed. An architect
-    could not tell "delivered" from "acted on", because nothing distinguished
-    them. `acked_at` distinguishes them; this is what makes the distinction
-    arrive without being asked for.
-
-    Reported to the SENDER — they are the one whose ruling may not have landed.
-    """
-    cutoff = time.time() - UNACKED_GRACE_S
-    rows = conn.execute(
-        "SELECT id, recipient, delivered_at, substr(body,1,90) AS gist, record_ref "
-        "FROM messages WHERE sender=? AND urgency='gating' AND delivered_at IS NOT NULL "
-        "AND acked_at IS NULL AND delivered_at < ? ORDER BY delivered_at",
-        (agent, cutoff)).fetchall()
-    out = []
-    for r in rows:
-        mins = int((time.time() - r["delivered_at"]) / 60)
-        note = (f"[plumb drift] Your gating message #{r['id']} to @{r['recipient']} was "
-                f"delivered {mins} min ago and has NOT been acknowledged.\n"
-                f"  \"{r['gist'].strip()}…\"\n")
-        if r["record_ref"]:
-            note += (f"  It is on the record at {r['record_ref']}, so it survives "
-                     f"regardless — but nobody has confirmed acting on it.\n")
-        else:
-            note += ("  It is NOT on any durable record. If it gates work, put it on "
-                     "the ledger now — the bus is the notification, not the record.\n")
-        note += ("  Delivered is not acted-on. Check whether they saw it before "
-                 "assuming the work reflects it.")
-        out.append((f"unacked:{r['id']}", note))
-    return out
 
 
 # ----------------------------------------------------- decision collision
@@ -146,10 +111,6 @@ def run(conn, root, agent, emit):
     """Collect findings, emit only what has not been emitted before."""
     seen = load_seen(root, agent)
     findings = []
-    try:
-        findings += check_unanswered_gating(conn, agent)
-    except Exception:
-        pass
     try:
         findings += check_decision_collision(root)
     except Exception:
