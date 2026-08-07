@@ -195,6 +195,11 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
   vehicle; boundary sweeps (turn end, turn start, session start) are **silent standby** — they
   deliver only where a monitor cannot (headless sessions, or one that died mid-session), so peer
   traffic stays off the user's console. The user watches traffic deliberately via `mcc bus tail`
+  (plain follow) or **`mcc bus view`** — a mailbox TUI (sidebar of per-agent inboxes with pending
+  counts, message list, markdown-rendered detail, live at 1 Hz). **Strictly read-only, by ruling
+  and by construction** (the db opens `mode=ro`): the observer's window must never become a
+  participant's chair. Runs via `uv run` — the viewer declares its own dependencies (PEP 723), so
+  core mcc stays stdlib-only
 - **Compaction survival** — PreCompact snapshots and steers the summarizer; SessionStart re-orients
   on `source=compact` only
 - **All five guards**, and two drift detectors (unanswered gating rulings, decision-number

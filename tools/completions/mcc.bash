@@ -27,7 +27,7 @@ _mcc_complete() {
     case "$cmd1" in
         bus)
             if (( cword == 2 )); then
-                COMPREPLY=( $(compgen -W "tail" -- "$cur") )
+                COMPREPLY=( $(compgen -W "tail view" -- "$cur") )
                 return
             fi
             cmd2="${words[2]}"
@@ -106,7 +106,7 @@ _mcc_complete() {
 
     # ---- Flag-with-value: complete the value ----
     case "$prev" in
-        --output|--rc-file)
+        --db|--output|--rc-file)
             compopt -o default 2>/dev/null
             COMPREPLY=()
             return ;;
@@ -140,6 +140,7 @@ _mcc_complete() {
         local flags=""
         case "$cmd1:$cmd2" in
             bus:tail)  flags="--lines --no-follow" ;;
+            bus:view)  flags="--db" ;;
             complete:)  flags="--kind" ;;
             completions:emit)  flags="--output" ;;
             completions:install)  flags="--rc-file --shell" ;;
@@ -167,7 +168,7 @@ _mcc_complete() {
     for ((i=args_start; i<cword; i++)); do
         w="${words[$i]}"
         case "$w" in
-            --group|--group-by|--kind|--lines|--name|--output|--persona|--plugin|--rc-file|--repo|--scope|--shell|--terminal)
+            --db|--group|--group-by|--kind|--lines|--name|--output|--persona|--plugin|--rc-file|--repo|--scope|--shell|--terminal)
                 ((i++)) ;;
             --*)
                 ;;

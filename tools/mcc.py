@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.26.0"
+MCC_VERSION = "1.27.0"
 
 import json
 import time
@@ -4024,14 +4024,15 @@ def cmd_setup(args):
     print("  mcc switch mam|mama|off - swap implementation plugin")
 
 
-def _find_plumb_bus():
-    """Locate plumb's bus engine (bin/bus.py).
+def _find_plumb_bin(name):
+    """Locate a file in plumb's bin/.
 
     Prefer the checkout mcc itself lives in (dev repo or marketplace clone —
     always version-matched to this mcc), then the newest installed plugin
-    cache. The tail viewer is read-only, so any recent version is safe.
+    cache. The bus-observer surfaces are read-only, so any recent version is
+    safe.
     """
-    sibling = Path(__file__).resolve().parent.parent / "plugins" / "plumb" / "bin" / "bus.py"
+    sibling = Path(__file__).resolve().parent.parent / "plugins" / "plumb" / "bin" / name
     if sibling.is_file():
         return sibling
     def _ver(p):
@@ -4040,18 +4041,40 @@ def _find_plumb_bus():
         except ValueError:
             return (0,)
     cached = sorted(Path.home().glob(
-        ".claude/plugins/cache/methodical-cc/plumb/*/bin/bus.py"), key=_ver)
+        f".claude/plugins/cache/methodical-cc/plumb/*/bin/{name}"), key=_ver)
     return cached[-1] if cached else None
 
 
 def cmd_bus_tail(args):
-    engine = _find_plumb_bus()
+    engine = _find_plumb_bin("bus.py")
     if engine is None:
         die("plumb's bus engine not found — is the plumb plugin installed? "
             "(`mcc update` refreshes the marketplace)")
     argv = ["python3", str(engine), "tail", "-n", str(args.lines)]
     if args.no_follow:
         argv.append("--no-follow")
+    try:
+        sys.exit(subprocess.run(argv).returncode)
+    except KeyboardInterrupt:
+        sys.exit(0)
+
+
+def cmd_bus_view(args):
+    """Mailbox TUI. Shelled out via `uv run` — the viewer declares its own
+    dependencies (PEP 723 inline metadata), so mcc itself stays stdlib-only."""
+    viewer = _find_plumb_bin("busview.py")
+    if viewer is None:
+        die("plumb's bus viewer not found — is the plumb plugin installed? "
+            "(`mcc update` refreshes the marketplace)")
+    if not shutil.which("uv"):
+        die("`uv` is required to run the bus viewer (it installs the viewer's "
+            "own dependencies in an ephemeral env; core mcc stays dep-free).\n"
+            "  Install: https://docs.astral.sh/uv/  — e.g.\n"
+            "    curl -LsSf https://astral.sh/uv/install.sh | sh\n"
+            "  or: pipx install uv")
+    argv = ["uv", "run", str(viewer)]
+    if args.db:
+        argv += ["--db", args.db]
     try:
         sys.exit(subprocess.run(argv).returncode)
     except KeyboardInterrupt:
@@ -5119,6 +5142,11 @@ def build_parser():
          help="how much backlog to show first (default 20)")
     _arg(pbus_tail, "--no-follow", action="store_true", help="print backlog and exit")
     pbus_tail.set_defaults(func=cmd_bus_tail)
+    pbus_view = pbus_sub.add_parser(
+        "view", help="mailbox TUI over the bus (read-only; needs `uv`)")
+    _arg(pbus_view, "--db", help="bus database path (default: ./.mcc/bus.db)",
+         complete="file")
+    pbus_view.set_defaults(func=cmd_bus_view)
 
     # --- completions ---
     pcomp = sub.add_parser("completions", help="shell tab-completion: install/emit")
