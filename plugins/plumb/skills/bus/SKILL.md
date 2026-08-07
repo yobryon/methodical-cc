@@ -1,6 +1,6 @@
 ---
 name: bus
-description: How peer messaging works on this project — an interrupting bus with two delivery classes. Covers choosing gating vs normal by the RECIPIENT's cost, why silence never means loss, why a ruling goes on the ledger before the wire, and what to do when a peer's monitor is down. Use when messaging another session, or when a peer seems unresponsive.
+description: How peer messaging works on this project — an interrupting bus with two delivery classes. Covers the delivery physics of gating vs normal (interrupt a turn, or wait one out — turns can run an hour), why silence never means loss, why a ruling goes on the ledger before the wire, and the lookback (`bus.py log`). Use when messaging another session, or when a peer seems unresponsive.
 ---
 
 # The bus
@@ -30,47 +30,34 @@ not a degraded one.
 
 ---
 
-## Choose urgency by the RECIPIENT's cost
-
-The question is not *"am I blocked?"* It is **"does this change what they are doing
-right now?"** — and it only matters while they are actually doing something:
+## Urgency is delivery timing, nothing else
 
 | | Recipient mid-turn | Recipient idle | Not running |
 |---|---|---|---|
-| `gating` | **Interrupts them, now** | Wakes them, now | Next session start |
-| `normal` | Their next turn boundary | **Wakes them, now** | Next session start |
+| `gating` | Interrupts, now | Wakes them, now | Next session start |
+| `normal` | Waits for their turn's end — **which can be minutes or an hour** | Wakes them, now | Next session start |
 
-**Urgency rations derailment, and an idle peer has no work to derail** — so both
-classes deliver immediately to an idle session, waking it. That is what lets peers
-activate each other and work drive itself without the user couriering sessions awake.
-A `normal` message never means "may sit forever"; it means "don't derail work in
-progress."
+Delivery always carries everything pending, in send order; class never reorders — if
+you sent 1, 2 (`normal`) and then 3 (`gating`), they read 1, 2, 3. A peer who is not
+running cannot be woken by anything; if your message needs them *now*, ask the user to
+launch them.
 
-**Urgency decides *whether* an interruption happens; it never reorders messages.** When
-a `gating` message interrupts a working peer, everything else pending for them rides
-along in the same delivery, **in send order** — if you sent 1, 2 (`normal`) and then 3
-(`gating`), they read 1, 2, 3, because the gating message may depend on the context you
-sent before it. Batches are always chronological.
+Two facts worth having at your fingertips when you choose:
 
-Interrupting mid-turn is not free. A message that arrives eight steps into a careful
-edit sequence derails work in a way a queued one never does. Turn-boundary delivery
-has one real virtue — it arrives at a coherent moment — and that is worth keeping for
-anything that does not need to land immediately.
+- **Turns run long.** `normal` to a busy peer means they may keep acting on what they
+  already believe until their turn ends.
+- **An answer to a question someone kept working past lands after they have chosen a
+  branch.** If your answer rules on that fork, `gating` is what makes it arrive in
+  time.
 
-A peer who is not running receives at their next session start (the sweep runs at
-session birth, turn start, and turn end). If your message needs them *now*, ask the
-user to launch them — nothing can wake a session that does not exist.
-
-**You declare it, per message.** There is no inheritance from a thread, and a reply does
-not become urgent because the question was. Only the sender knows whether the answer is
-a *redirect*, and that is what urgency measures. A class that fires for *"yes, carry
-on"* stops carrying information.
+The rest is your call — you know your team, and you will grow your own norms about
+what interrupts whom. That is as it should be.
 
 ## You do not have to stop after asking
 
-The reason "send and stop" was a rule is gone: an answer can now reach you while you
-work. So keep working, unless a wrong step in the meantime would be **expensive or hard
-to reverse** — which is an ordinary engineering judgment, not a protocol.
+An answer can reach you while you work. So keep working, unless a wrong step in the
+meantime would be **expensive or hard to reverse** — which is an ordinary engineering
+judgment, not a protocol.
 
 When your question genuinely does not change your next move, say so: **"proceeding
 unless countermanded."**

@@ -45,51 +45,38 @@ TOOLS = [
     {
         "name": "bus_send",
         "description": (
-            "Send a message to another session on this project's bus (the Architect, "
-            "the Implementor, a design partner).\n\n"
-            "CHOOSING urgency — pick by the RECIPIENT's cost, not your own. Urgency "
-            "only matters while they are MID-TURN; an idle recipient is woken "
-            "immediately either way (idleness is a coherent moment — there is no "
-            "work to derail, and a message that waited for a turn that never comes "
-            "would never arrive):\n"
-            "  • 'gating'  INTERRUPTS them mid-turn, right now. Use it when this "
-            "changes what they are doing at this moment — a ruling that redirects "
-            "work, a stop, a correction. Interrupting is not free: a message that "
-            "lands eight steps into a careful edit sequence derails work.\n"
-            "  • 'normal'  arrives at their next turn boundary if they are working, "
-            "immediately if they are idle. Use it for anything that should not "
-            "derail work in progress. This is the right default.\n"
-            "A peer who is not running at all receives at their next session "
-            "start — if it needs them NOW, ask the user to launch them.\n"
-            "You do NOT need a reply to have arrived to keep working — the answer can "
-            "reach you mid-turn. Send and continue unless a wrong step in the meantime "
-            "would be expensive or hard to reverse.\n\n"
-            "IF THIS IS A RULING THAT GATES WORK: put it on the ledger FIRST and pass "
-            "the reference as `record`. The ledger is readable without waiting on "
-            "anyone's turn — including by an agent that was not running when you ruled. "
-            "The message is the notification; the ledger is the record.\n\n"
-            "There is no subject line. Put everything in `body`."
+            "Send a message to a peer session on this project's bus.\n\n"
+            "`urgency` is delivery timing, nothing else:\n"
+            "  • 'gating'  delivered now; interrupts them if they are mid-turn.\n"
+            "  • 'normal'  delivered now if they are idle (it wakes them); if they "
+            "are mid-turn, it waits for their turn to end — which can be minutes "
+            "or an hour.\n"
+            "Delivery always carries everything pending for them, in send order; "
+            "class never reorders. A peer who is not running receives at their "
+            "next session start.\n\n"
+            "There is no subject line; put everything in `body`."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "to": {"type": "string",
                        "description": "Recipient agent name, e.g. 'impl' or 'arch'. "
-                                      "Use bus_status to see who is on this bus."},
+                                      "bus_status lists who is on this bus."},
                 "body": {"type": "string",
                          "description": "The whole message. No length ceiling."},
                 "urgency": {"type": "string", "enum": ["gating", "normal"],
                             "default": "normal",
-                            "description": "gating = interrupt them now; "
-                                           "normal = arrives at their turn boundary."},
+                            "description": "gating = interrupt a turn in progress; "
+                                           "normal = wait one out. Idle peers get "
+                                           "either immediately."},
                 "thread": {"type": "string",
-                           "description": "Optional thread id, for grouping a durable "
-                                          "exchange. Does NOT affect delivery — urgency "
-                                          "is declared per message, by you."},
+                           "description": "Optional thread id for grouping an "
+                                          "exchange; no effect on delivery."},
                 "record": {"type": "string",
-                           "description": "Reference to the durable record for this "
-                                          "(issue id, doc path). Required in spirit for "
-                                          "anything that gates work."},
+                           "description": "The durable artifact this is about "
+                                          "(issue id, doc path), if any — the "
+                                          "message is the notification; the record "
+                                          "is where it lives."},
             },
             "required": ["to", "body"],
         },
@@ -210,12 +197,6 @@ def tool_bus_send(args):
         if warning:
             out.append("")
             out.append(f"⚠ {warning}")
-        if args.get("urgency") == "gating" and not args.get("record"):
-            out.append("")
-            out.append("Note: this was sent as gating but carries no `record`. If it "
-                       "gates work, put it on the ledger too — the bus is the "
-                       "notification, not the record.")
-
         # Point-of-use context, not alarms. Both notes surface only at the
         # moment the sender is already talking to this peer / about this
         # record — the moment a stale assumption would actually be acted on.

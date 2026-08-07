@@ -490,6 +490,29 @@ declined it, for reasons I want preserved so nobody relitigates it casually:
 4. **It does not solve the repeat-spam problem** — that is the `delivered_at`
    column, identically under either transport.
 
+### 7.3a Contract minimalism, and the urgency tripwire (PO rulings, 2026-08-07)
+
+**Write tool contracts for the agent six months in.** A field incident (guidance
+aging inside a 74-minute turn) traced partly to the `bus_send` contract
+*itself*: "normal is the right default" plus vivid interruption-cost language
+plus an unpriced deferral cost is a campaign for under-gating, run on every
+send. The veteran needs the affordance stated as **physics** — what each
+setting does, both costs visible as facts ("waits for their turn to end, which
+can be minutes or an hour") — and the choice left to their own judgment.
+No tests, no cost sermons, no defaults, no re-litigating the plumb premise at
+the point of use. Agents negotiate their own norms over time; the contract's
+job is to let them express intent, not to hold opinions. This principle
+applies to every agent-facing surface we ship.
+
+**The tripwire, pre-committed:** if consequential guidance ages in a long turn
+again — after this contract fix, and after the adopter's way-of-working sheds
+its stale turn-bounded language — delivery collapses to
+**deliver-everything-immediately**, with urgency surviving as framing metadata.
+That is the recipient-triage model, not a defeat: the recipient is the only
+party who ever actually knows the recipient's cost, and the change would also
+delete the busy/idle discrimination machinery outright. One condition, one
+observation, no relitigating.
+
 ### 7.4 MCP, not CLI — and why I changed my mind
 
 My first instinct was a CLI shipped with `mcc`. The PO argued for MCP and the
