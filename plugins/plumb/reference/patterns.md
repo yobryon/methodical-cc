@@ -320,7 +320,9 @@ trackers on most agent-run projects, and especially judgment-heavy projects wher
 in a decisions log and the tracker is a satellite.
 
 **Costs.** One reconciliation pass at each trigger, made cheap by the trailer convention. The
-trailer itself costs nothing — the number is in your head at commit time.
+trailer itself costs nothing — the number is in your head at commit time. (nonlinear projects get
+the pass as one motion — `sync_commits` for the trailers, `reconcile_summary` for the status line,
+verbatim.)
 
 **How you'd know it's wrong for you.** The work genuinely forces you through the ledger (an
 enforced workflow where nothing merges without an issue transition), or no one outside the loop

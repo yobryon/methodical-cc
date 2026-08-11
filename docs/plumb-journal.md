@@ -689,6 +689,16 @@ reference it and each agent gets its own key.
 One mechanism, two asks. The env contract should be designed knowing this is
 coming, even if we implement it later.
 
+*(Closed 2026-08-11, from the other side: nonlinear shipped **personas** — a
+session presents `X-Agent-ID` beside the shared token and its work is credited
+to a persona under it, auto-provisioned, attribution-only. The wiring is
+exactly the seam designed here: `.mcp.json` headers carrying
+`${PLUMB_AGENT}`. The comment-prefix convention retires. This was one item of
+an eight-item product proposal plumb sent nonlinear (NON-53) — all eight
+built, all four of our "what not to build" guardrails held. The full circle:
+field incidents → plumb design → product proposal → another team's build →
+ground truth plumb's guidance now teaches.)*
+
 ### 7.9 The durable record survives every transport decision
 
 Independent of all of the above: **anything that gates work goes on the durable

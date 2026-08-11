@@ -95,7 +95,10 @@ plumb ledger candidates --since "2026-08-05"
 
 Reads git only — plumb never touches the tracker; you take the list to your own tracker tools and
 move what is actually done. A mention is a lead, not a verdict. (**GitHub note:** `Closes #N` in a
-commit that reaches the default branch closes the issue natively — the sweep is free there.)
+commit that reaches the default branch closes the issue natively — the sweep is free there.
+**nonlinear note:** `sync_commits` ingests the same batch in one MCP call, propose-close by
+default — use it instead; `candidates` remains the answer where no ingestion exists: jira,
+linear, markdown.)
 
 **Declare the scope, in the manifest.** `[ledger] scope = "..."` says in your own words what the
 ledger does and does not hold — "PO window + cross-team; play-by-play lives on the bus" is a claim
@@ -107,9 +110,13 @@ obligation — it concentrates it: whatever the ledger still holds is exactly wh
 
 ## `nonlinear` — the reference implementation
 
-**This is what the evidence base actually ran on**, across sixteen arcs.
+**This is what the evidence base actually ran on** — and it has since **built for this methodology
+directly**: decisions, `waiting_on`, the awaiting-me queue, commit ingestion, and board-truth
+summaries all exist because two plumb projects' field reports asked for them. For a plumb project,
+this is the adapter where the ledger can genuinely sit in the gravity well.
 
-- **Access:** MCP. The agent calls nonlinear's own tools; PLUMB does not proxy them.
+- **Access:** MCP. The agent calls nonlinear's own tools; PLUMB does not proxy them. The server's
+  own instructions and guides teach the full surface — read them on first connection.
 - **Mapping — pick by your rhythm.** A bounded unit of work (an arc, a batch) maps to a **project**
   — one project per unit (e.g. *"Sprint 3: SM Connector & Query Engine"*), issues as work items
   within it. A **continuous-flow** project keys projects to **durable themes** instead — the thing
@@ -119,14 +126,39 @@ obligation — it concentrates it: whatever the ledger still holds is exactly wh
 - **Comments are the play-by-play.** This is what replaced the per-arc implementation log, and it is
   why that log is retired: issue comments already hold the narrative, with timestamps and authorship
   the document never had.
-- **Attribution — the known gap.** All agents on a project typically share one nonlinear identity, so
-  author fields cannot distinguish them. The convention is to prefix every comment with the author's
-  bus handle: `(@arch)`, `(@impl)`. **A convention surviving on discipline, inside the artifact whose
-  whole purpose is surviving context loss, is the wrong shape** — so where per-agent credentials are
-  available, use them. `mcc` injects per-agent environment at session launch and `.mcp.json` can
-  reference environment variables, which is the seam that closes this properly.
-- **Cross-team:** file issues against a dependency in *that team's* space, and reference issue ids
-  bidirectionally.
+- **Decisions are first-class** (`TEAM-D#`): the body is the argument, the lifecycle is
+  `proposed → ruled → superseded | carried` (never "done"), supersession is an edge that flips the
+  superseded record's status, and a one-way `decisions.md` mirror export keeps repo-greppability
+  while the tracker holds truth. **A project keeping its decisions here retires the `decisions`
+  file role in its manifest** with the reason on record ("lives in nonlinear as `VAN-D#`") — and
+  `plumb decision next` plus the decision-collision drift detector retire with it, honorably: a
+  tracker-native per-team sequence makes number collisions impossible by construction, which was
+  always the better form of both.
+- **Attribution — closed.** Personas: a session presents `X-Agent-ID` beside the shared bearer
+  token and its work is credited to a persona under it (`vantage-agent.arch`), auto-provisioned,
+  attribution-only. `mcc` already injects `$PLUMB_AGENT` at launch; wire it once in `.mcp.json`:
+
+  ```json
+  { "mcpServers": { "nonlinear": { "type": "http", "url": "https://…/mcp",
+      "headers": { "Authorization": "Bearer ${NONLINEAR_TOKEN}",
+                   "X-Agent-ID": "${PLUMB_AGENT}" } } } }
+  ```
+
+  Author fields become real; the comment-prefix convention retires.
+- **`waiting_on` + the awaiting-me queue.** An orthogonal field (not a workflow state) on issues
+  *and* decisions, cleared automatically when the awaited person next acts. *"In progress, waiting
+  on nobody"* is now a filter — the board-review ceremony's load-bearing question, mechanized.
+  Decisions route to a decider; `awaiting_me` is the one surface showing only what waits on you —
+  the PO-as-decider role, given a physical address.
+- **Reconciliation is one motion.** Commit trailers (`Closes VAN-24`, `Refs VAN-31`) →
+  `sync_commits` (references become commit-linked comments; closes are **proposed**, confirmed
+  with `update_issues` — a state still means someone judged it done). `reconcile_summary` returns
+  the truth-before-report status line verbatim: *"N open · N untouched 5+ days · N in progress
+  waiting on nobody."* In-motion ergonomics: `find_issue` (fuzzy description → id, so you never
+  leave the thread), `comment_and_state` (one motion), `update_issues` (batch).
+- **Cross-team:** real `blocks/blocked-by` across spaces, with the provider's state visible as a
+  read-only narrow projection from the consumer's issue. You may only link issues you can read —
+  the link itself is the consent. Reference ids bidirectionally as before.
 
 ## `github` — the common default
 

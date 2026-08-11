@@ -17,6 +17,12 @@ work's own artifact, not a protocol about the work), and 2-for-2 true:
 
   decision-collision  two entries claiming one number
 
+A project whose decisions live in a tracker-native sequence (e.g. nonlinear
+decisions, TEAM-D#) retires this detector along with the `decisions` file role
+— collisions are impossible by construction there, which was always the better
+form of this check. The detector already stands down gracefully when the role
+is retired or absent.
+
 They run inside the EXISTING monitor loop rather than as separate monitors.
 Monitors are rate-limited by the harness — "monitors that produce too many
 events are automatically stopped" — so more processes emitting more often is
