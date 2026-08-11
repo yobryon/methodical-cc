@@ -307,6 +307,34 @@ version, wow path, the project's own skill roster — the wow in the room at
 session birth) and a wow-edit guard (loud reminder on edits to the manifest-
 declared document: read the whole thing; doc and skills move together).
 
+*(Amended 2026-08-11, from the field — three refinements, all from the first
+project to run the re-run:*
+
+*1. **The record law is a preference order, not a binary.** "Forced path or
+named trigger" stopped a correct application one step early — the project
+classified "no forced path" and designed the trigger, when the path could be
+**engineered**: a PostToolUse hook on the tracker's decision tools keeps the
+repo mirror true, because the forced motion is the tool call, not the file
+write. A law phrased as a binary invites classification; as a preference
+order, it invites engineering. Order: engineer the path → name the trigger
+(staleness visible, not impossible) → discipline is not an option.*
+
+*2. **Instruments split by trigger kind.** Lifecycle-moment looks with no
+judgment in them ("check the inbox at every Stop", "refresh the mirror on
+every decision write") are HOOKS — including `type: "mcp_tool"`, which calls
+tracker tools directly with no script or credentials. A skill earns the slot
+only when the look ends in a judgment. And the roster derives itself: apply
+the forced-path test to every declared record (the deriving project: 3 of 6
+failed, including two its own drift report never checked) — better than
+asking a team what lenses it wants.*
+
+*3. **The re-run bias, named:** the author of a diagnosis over-corrects
+toward it, and over-correction looks like modesty — which is why it survives
+review. Observed shape: narrowing a claim to whatever was recently failed,
+while the PO correctly widened it on gravity grounds — "a tracker that is
+only for my benefit when you need something from me is a tracker nobody else
+has reason to touch.")*
+
 ### 5.7 Onboarding generates both — and ships exemplars, never starters
 
 Two decisions, the second reached by deliberately role-playing the onboarding

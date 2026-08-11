@@ -188,12 +188,22 @@ Project skills come in **two genres**, and the first is the one every new projec
 regular act of *looking at something you own and reporting what you see against what the wow says
 should be true*. A board-review ("for every waiting issue, name who it's waiting on"), a
 roadmap look ("where are we, what moved"), a drift check, a ledger-truth pass before a status
-report. **A day-one project can answer this even with zero history** — walk the surfaces the wow
-just declared and ask, for each: *what is the lens you'll look at this through, and at what
-condition?* Every declared record whose maintenance the work does not force (Step 2, question 4)
-gets its instrument here — **the declaration and its instrument arrive together, or the
-declaration doesn't.** Write the description as the trigger condition ("use before any status
-summary to the PO"), because the description is what the harness matches on.
+report. **The roster derives itself — don't ask the team what lenses they want.** Apply the
+forced-path test (Step 2, question 4) to *every* declared record: each one the work does not
+force anyone through gets its instrument, and the ones that pass need none. (The project that
+first ran this derivation found three of its six declared records failed the test — including
+two its own drift report had never thought to check.) **The declaration and its instrument
+arrive together, or the declaration doesn't.**
+
+Two shapes, split by trigger:
+- **Judgment-moment → a skill.** Deciding what is genuinely done, what is missing, what the gaps
+  mean. Write the description as the trigger condition ("use before any status summary to the
+  PO") — the description is what the harness matches on.
+- **Lifecycle-moment → a hook, not a skill.** *"Look at X at moment Y"* with no judgment in the
+  look wants `.claude/settings.json`, not `.claude/skills/` — hooks can run scripts *and call MCP
+  tools directly* (`type: "mcp_tool"`: an inbox check at every Stop, a mirror refresh on every
+  decision write — see `plumb ledger guide`). A hook beats a norm for the same reason a mechanism
+  beats a trigger.
 
 **Ceremonies — ordered sequences, run rarely.** The release sequence, the grain change, onboarding
 a data source. These usually *cannot* be written on day one, and should not be forced — they arrive
@@ -272,6 +282,12 @@ been sitting still. Assume drift and go looking for it.
 
 The tell that a re-run was overdue: *nobody can point to when the current way of working was
 decided.*
+
+And one bias to watch in the room, especially when the re-run was prompted by a failure: **the
+author of a diagnosis over-corrects toward it, and over-correction looks like modesty — which is
+why it survives review.** The specific shape observed: narrowing a claim to whatever was recently
+failed. The PO may correctly push the other way; a wider claim can put a record on more of the
+work's forced paths.
 
 ---
 

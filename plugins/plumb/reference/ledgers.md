@@ -52,10 +52,21 @@ name who it is waiting on, out loud. If you cannot, that is the finding.**
 
 Measured on a real project: the declared ledger held **under 1% of the project's recorded thought**
 while the bus carried 1.14M characters and the docs 6,808 lines — and the board went false in both
-directions at once. The diagnosis generalises, so it is stated here as law:
+directions at once. The diagnosis generalises, so it is stated here as law — **as a preference
+order, not a binary.** (It shipped first as a binary; a project applied it *correctly* and it
+stopped them one step early — they classified "no forced path exists" and designed the trigger,
+when a forced path could have been *engineered*. A law phrased as a binary invites you to
+classify; phrased as a preference order, it invites you to try.)
 
-> **A record either sits on a path the work forces you through, or it needs a named reconciliation
-> trigger. There is no third option — "discipline" is the name of the missing trigger.**
+> 1. **Put the update on a path the work already forces you through** — and if none exists, ask
+>    whether one can be **engineered** before concluding it cannot. The forced path may not be
+>    where you first look: a repo mirror cannot sit on the file write (no MCP server writes to
+>    disk), but it can sit on the **tool call** — you cannot change a decision without making one,
+>    and the harness fires a hook on every one. The same gravity that pulls work away from a
+>    satellite record can be harnessed to keep it true.
+> 2. **Failing that, name a reconciliation trigger** — and accept that a trigger makes staleness
+>    *visible*, not impossible.
+> 3. **Discipline is not an option.** It is the name of the missing trigger.
 
 The diagnostic is the four-channels question. Ask it of every record the way of working declares:
 
@@ -66,16 +77,19 @@ The diagnostic is the four-channels question. Ask it of every record the way of 
 | git + docs | the change does not exist until committed |
 | the tracker | **often: nothing** |
 
-Anything in the last row's position gets an instrument, a trigger, **or it does not get declared**
-— the declaration and its maintenance mechanism arrive together or not at all.
+Anything in the last row's position gets an engineered path, an instrument, a trigger, **or it
+does not get declared** — the declaration and its maintenance mechanism arrive together or not at
+all.
 
 **Gravity is singular.** Narrative status accretes wherever the project's primary thought lives. A
 build-heavy project's gravity sits near the tracker and mostly keeps it true; a judgment-heavy
 project's gravity sits in its decisions log, and the tracker is a satellite — satellites need
 scheduled contact. Watch for the signature: tracker ids hand-written into a document because the
-document "felt like the place." That is the well announcing itself. (Some trackers can host
-decision records natively; where yours does, co-locating with the gravity is worth more than the
-boundary aesthetics — one home matters more than which home.)
+document "felt like the place." That is the well announcing itself — and the sharpened form, from
+the project that lived it: **being pleasant to write and already open is what makes a document
+dangerous, not what makes it safe.** (Some trackers can host decision records natively; where
+yours does, co-locating with the gravity is worth more than the boundary aesthetics — one home
+matters more than which home.)
 
 **The named trigger that earns its keep: truth-before-report.** Before any status summary to the PO
 or an external party, true the ledger — or caveat it explicitly ("board not reconciled since
@@ -101,10 +115,14 @@ default — use it instead; `candidates` remains the answer where no ingestion e
 linear, markdown.)
 
 **Declare the scope, in the manifest.** `[ledger] scope = "..."` says in your own words what the
-ledger does and does not hold — "PO window + cross-team; play-by-play lives on the bus" is a claim
-practice can keep, where an unscoped `[ledger]` claims everything and makes the shortfall
-invisible. `doctor` will note an undeclared scope. Narrowing the scope does not relax the truth
-obligation — it concentrates it: whatever the ledger still holds is exactly what the PO reads.
+ledger does and does not hold — a claim practice can keep, where an unscoped `[ledger]` claims
+everything and makes the shortfall invisible. `doctor` will note an undeclared scope. Two
+cautions, one in each direction. Narrowing does not relax the truth obligation — it concentrates
+it: whatever the ledger still holds is exactly what the PO reads. And narrowing is not always the
+answer: one project's PO **widened** the scope after a drift, on gravity grounds — *"a tracker
+that is only for my benefit when you need something from me is a tracker nobody else has reason
+to touch."* A wider scope can put the ledger on more of the work's forced paths; a narrower one
+needs stronger triggers for what remains.
 
 ---
 
@@ -159,6 +177,67 @@ this is the adapter where the ledger can genuinely sit in the gravity well.
 - **Cross-team:** real `blocks/blocked-by` across spaces, with the provider's state visible as a
   read-only narrow projection from the consumer's issue. You may only link issues you can read —
   the link itself is the consent. Reference ids bidirectionally as before.
+
+### Two project-local hooks every nonlinear project should adopt
+
+Field-derived (a project built both, then wrote the recipe so the next project doesn't reinvent
+the mechanism at the end) and **strongly encouraged** — each is a forced path engineered where a
+trigger was about to be settled for.
+
+**Hook 1 — the decisions mirror rides the decision.** If you keep the `decisions.md` mirror
+export in the repo (greppable offline), the mirror must be *fetched, never authored* — a mirror
+anyone can type becomes the decision ledger again, within the hour, even under a header that says
+`GENERATED, NOT TRUTH`. The forced path is the **tool call**: you cannot change a decision
+without making one. In the project's tracked `.claude/settings.json`:
+
+```json
+{ "hooks": { "PostToolUse": [
+    { "matcher": "mcp__nonlinear__(create_decision|rule_decision|supersede_decision|comment_decision)",
+      "hooks": [ { "type": "command",
+                   "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/mirror-decisions.sh" } ] } ] } }
+```
+
+`comment_decision` is the matcher entry most likely to be forgotten and the one that matters
+most: **decision bodies are immutable, so comments are the only channel a correction travels** —
+drop it and corrections never reach the repo. (The general rule for any mirror-shaped mechanism:
+*ask which channel carries corrections, and confirm the export includes it.*)
+
+The script hits `GET {BASE_URL}/api/teams/{TEAM_UUID}/decisions.md` (the UUID, not the team key —
+`list_teams` has it) and installs the result. Four properties are load-bearing, not defensive
+habit:
+
+1. **Atomic install**: fetch to a temp file *in the target directory*, `chmod 0444`, then
+   `mv -f` — rename needs write on the *directory*, so the mirror stays read-only on disk and a
+   death mid-write can never leave a partial file.
+2. **Refuse to install a response that is not the export**: check the status *and* the shape
+   (e.g. `grep -q '^## [A-Z]\+-D'`) — an auth redirect or error page arrives as a 200 often
+   enough that status alone is not evidence, and a mirror that installs an error page is lying,
+   which is worse than stale.
+3. **Every failure leaves the existing file untouched**, exits non-zero, names the cause — and
+   *watch it fail before trusting it to fail well* (bad team id, unreachable host, bad token).
+4. **The token is never printed.**
+
+One blind spot, named rather than discovered: the hook fires on *tool calls* — a decision ruled
+in the web UI fires nothing. **The mechanism demotes the truth-before-report trigger; it does not
+retire it.** Keep the ledger-truth instrument running the script unconditionally before status
+reports: the mechanism covers the common case, the named trigger covers what the mechanism cannot
+see. Both, not either.
+
+**Hook 2 — passive inbox awareness at turn end.** Hooks can call MCP tools directly
+(`type: "mcp_tool"`) — no script, no credential handling, no HTTP route needed:
+
+```json
+{ "hooks": { "Stop": [
+    { "hooks": [ { "type": "mcp_tool", "server": "nonlinear", "tool": "inbox",
+                   "input": { "limit": 10 }, "timeout": 20,
+                   "statusMessage": "Checking the nonlinear inbox" } ] } ] } }
+```
+
+The agent learns, passively and every turn, whether anything on the tracker deserves attention —
+routed decisions, `waiting_on` flags, mentions — with no action taken and nothing to remember.
+Two craft notes from the project that wired it: **don't pass `markRead`** until you have proven
+the hook's output reaches the model (marking read on faith would silently consume notifications
+forever), and a Stop `mcp_tool` hook cannot block stopping, so it needs no loop guard.
 
 ## `github` — the common default
 

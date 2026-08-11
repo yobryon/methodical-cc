@@ -35,6 +35,11 @@ gaps are named." Write its description as the trigger *condition* ("use before a
 to the PO") — the description is what gets matched. If what you are writing runs on a cadence
 rather than at a rare event, write it as an instrument and keep it thin.
 
+And one further gate on the instrument itself: **if the look requires no judgment — "check X at
+moment Y" — it is a hook, not a skill.** Hooks run scripts and call MCP tools directly
+(`type: "mcp_tool"`); a mechanism beats a trigger, and a hook beats a norm. A skill earns the
+slot only when the look ends in a judgment.
+
 ### Is it really yours to run?
 
 **Will you still be the ones running this in a year — or are you standing in for a user who will?**
