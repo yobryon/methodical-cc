@@ -397,6 +397,8 @@ def cmd_manifest(args):
     print(f"document        {mf.document}")
     print(f"ledger          {mf.ledger.get('adapter', '(none)')}"
           + (f"  space={mf.ledger['space']}" if mf.ledger.get("space") else ""))
+    if mf.ledger.get("scope"):
+        print(f"ledger scope    {mf.ledger['scope']}")
     if mf.actors:
         print("actors          " + ", ".join(f"{k}={v}" for k, v in sorted(mf.actors.items())))
     print(f"roles           {len(mf.roles)} live, {len(mf.retired)} retired")
@@ -626,6 +628,13 @@ def cmd_doctor(args):
                      "available to test against")
     else:
         notes.append(f"ledger adapter '{adapter}'")
+    if adapter and adapter != "markdown":
+        if mf.ledger.get("scope"):
+            notes.append(f"ledger scope declared: {mf.ledger['scope']}")
+        else:
+            notes.append("ledger has NO declared scope — the claim is 'everything'. "
+                         "If practice holds less, say so: [ledger] scope = \"...\" "
+                         "(see `plumb ledger guide`)")
 
     for n in notes:
         print(f"  ok   {n}")
@@ -657,9 +666,13 @@ document = "{document}"
 
 [ledger]
 # Settled during establish. One of: nonlinear | github | jira | linear | markdown
+# `scope` declares what the ledger DOES and DOES NOT hold — in your own words.
+# An unscoped [ledger] claims everything, and a claim the practice cannot keep
+# becomes a false document nobody can see. See `plumb ledger guide`.
 # Syntax (values are examples of FORM, not suggestions):
 #   adapter = "markdown"
 #   space   = "PROJ"
+#   scope   = "PO window + cross-team; play-by-play lives on the bus and in docs"
 
 [artifacts]
 # Artifact ROLES this project actually has. Skills ask for a role by name;

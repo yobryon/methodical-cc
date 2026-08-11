@@ -45,6 +45,13 @@ Refuse the entry if you cannot answer all four of Step 2. In particular, refuse 
 answer to *"why did it hide?"* is **"nobody looked"** — that is a process gap, not a shape, and it
 belongs in a retro.
 
+**Shapes are domain-free; filing is not.** One project's catalogue held the diagnosis of its own
+process drift four times over and never retrieved it — the entries were filed under "engineering,"
+the symptom under "process," and the diagnosis sat six inches from the disease for three days. When
+naming a shape, **strip the domain** ("two hand-maintained descriptions of one fact" is about code
+*and* about ledgers); when diagnosing any recurring failure — including a methodology failure —
+**consult the catalogue first.**
+
 **The test of an entry is portability:** could someone who was not here use it on code we have never
 seen? If the entry only makes sense with this codebase in hand, it is a bug report wearing a
 catalog's clothes.

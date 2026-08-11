@@ -89,8 +89,15 @@ Eight things. Ask about what is not already answered by Step 1; confirm what is.
    flow, something else entirely? **Ask it neutrally.** Do not offer an arc rhythm as the default —
    but *do* ask, because unlike most of this document a cadence cannot arrive by promotion. A
    project needs some answer from day one, and the answer shapes half the other artifacts.
-4. **Where does execution state live?** The tracker, or nothing yet. This sets `[ledger] adapter`.
-   If they have no tracker, say plainly what the `markdown` adapter costs them.
+4. **Where does execution state live — and what forces anyone through it?** The tracker, or nothing
+   yet. This sets `[ledger] adapter`. If they have no tracker, say plainly what the `markdown`
+   adapter costs them. Then the question most projects are never asked: **for each record they
+   declare, what part of the work forces anyone through it?** Chat answers because the PO asks; the
+   bus answers because a peer is blocked; git answers because the change doesn't exist until
+   committed — a tracker is often forced by *nothing*, and *a record either sits on a forced path
+   or needs a named trigger; "discipline" is the name of the missing trigger* (`plumb ledger
+   guide` has the full treatment). What the ledger will and won't hold goes in the manifest as
+   `[ledger] scope`, in their words — **don't declare what they won't carry.**
 5. **Where does design memory live?** Which documents exist, which are load-bearing, which are
    fiction. This sets `[artifacts]`.
 6. **Who do you depend on, and who depends on you?** Other teams, upstream providers, downstream
@@ -169,12 +176,31 @@ and move on.
 
 ## Step 4 — Author the project's own skills
 
-**This is the half that distinguishes PLUMB from MAMA, and it is easy to skip.**
+**This is the half that distinguishes PLUMB from MAMA, and it is easy to skip.** It is also where
+the way of working stays *present*: the wow is a document, and a document not in the room loses to
+whatever is — but skills are surfaced by the harness at matched moments. **A project's own skills
+are the wow's ambient surface.** Skimping here is how a process becomes something a session once
+wrote instead of something it does.
 
-The shipped skill set is a **floor, not a ceiling**. A project's own procedures — the release
-ceremony, the grain-change sequence, the way this team onboards a data source — belong in the
-project's own `.claude/skills/`, invocable by name, so the PO gets shorthand through *their* workflow
-rather than ours.
+Project skills come in **two genres**, and the first is the one every new project skips:
+
+**Instruments — recurring lenses over a surface the wow declares.** Not rare, not ceremonial: the
+regular act of *looking at something you own and reporting what you see against what the wow says
+should be true*. A board-review ("for every waiting issue, name who it's waiting on"), a
+roadmap look ("where are we, what moved"), a drift check, a ledger-truth pass before a status
+report. **A day-one project can answer this even with zero history** — walk the surfaces the wow
+just declared and ask, for each: *what is the lens you'll look at this through, and at what
+condition?* Every declared record whose maintenance the work does not force (Step 2, question 4)
+gets its instrument here — **the declaration and its instrument arrive together, or the
+declaration doesn't.** Write the description as the trigger condition ("use before any status
+summary to the PO"), because the description is what the harness matches on.
+
+**Ceremonies — ordered sequences, run rarely.** The release sequence, the grain change, onboarding
+a data source. These usually *cannot* be written on day one, and should not be forced — they arrive
+by recurrence (`plumb:ceremony`, the second time you run something).
+
+Both live in the project's own `.claude/skills/`, invocable by name, so the PO gets shorthand
+through *their* workflow rather than ours.
 
 **This is where the project's *rhythm* becomes real.** PLUMB deliberately does **not** ship skills
 for planning an arc, kicking one off, or closing one — because what an arc *is*, what a kickoff
@@ -211,8 +237,12 @@ Then fill it in **with them**. Two rules the scaffold states and you must enforc
 2. **Carry sequence, not standing behaviour.** If a step is really *"always do X"*, it is a norm —
    move it to the document.
 
-**Do not invent ceremonies.** If nothing comes to mind, write none, and say what will prompt one
-later: the second time you run something, that is `plumb:ceremony`.
+**Do not invent ceremonies — but do not leave the instruments empty.** Ceremonies arrive by
+recurrence; if none come to mind, write none and say what will prompt one. Instruments are the
+opposite case: they are derivable from the surfaces the wow just declared, and an empty instrument
+roster means the wow has no ambient presence — the first evidence project produced its real roster
+only after its PO caught the drift an instrument would have seen. One instrument per declared
+surface is the honest day-one floor.
 
 ---
 

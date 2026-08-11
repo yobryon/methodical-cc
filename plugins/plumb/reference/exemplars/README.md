@@ -17,6 +17,12 @@ project's reality, with a first draft that came from you. A pre-written
 ceremony adapted is a ceremony inherited; the exemplars exist so you can see
 the grain and the discipline, then write your own.
 
+**A note on genre:** both exemplars are *ceremonies* — ordered sequences, run rarely. Your roster
+will mostly be the other genre: **instruments**, recurring lenses over surfaces your way of working
+declares (a board-review, a roadmap look, a drift check). Instruments are shorter than anything
+here — read the surface, compare against the wow, name the gaps — and the checklist below applies
+to them the same way, especially #4: the trigger is a condition.
+
 ## What to calibrate on
 
 Read the exemplars with these questions, which are also the checklist for any

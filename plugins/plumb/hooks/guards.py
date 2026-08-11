@@ -472,9 +472,51 @@ def handle_post_bash(payload, root, cfg):
         emit_context("PostToolUse", "\n\n".join(notes))
 
 
-def handle_post_edit(payload, root):
+def handle_post_edit(payload, root, cfg):
     ti = payload.get("tool_input") or {}
     record_touch(root, payload.get("session_id"), ti.get("file_path"))
+    if enabled(cfg, "wow_edit"):
+        note = guard_wow_edit(root, ti.get("file_path"))
+        if note:
+            emit_context("PostToolUse", note)
+
+
+def guard_wow_edit(root, path):
+    """A loud reminder when the way-of-working document itself is edited.
+
+    The scar: an architect hand-patched a discipline rule into the process
+    document mid-flight, from memory, without reading it — the same class of
+    remedy the project's own catalogue said fails exactly when it matters.
+    A wow edited from memory diverges section by section, because each patch
+    is locally sensible and nobody re-reads the whole.
+
+    Not a block — editing the wow is legitimate and encouraged. Loud, once
+    per edit, at the moment it happens.
+    """
+    if Manifest is None or not path:
+        return None
+    try:
+        mf = Manifest.load(root, required=False)
+    except SystemExit:
+        return None
+    if not mf or mf.document is None:
+        return None
+    try:
+        if Path(path).resolve() != mf.document.resolve():
+            return None
+    except OSError:
+        return None
+    return (
+        "[plumb] You just edited this project's WAY OF WORKING — the document "
+        "every skill defers to.\n"
+        "  If this was more than a typo: read the WHOLE document before moving "
+        "on (a wow edited from memory diverges section by section), make sure "
+        "the change is something the team actually decided, and consider "
+        "whether it deserves the `plumb:establish` re-run — which starts by "
+        "diffing the document against reality — rather than a spot edit.\n"
+        "  If a norm changed: does any project skill (ceremony or instrument) "
+        "still encode the old one? Doc and skills move together, same commit."
+    )
 
 
 def main():
@@ -496,7 +538,7 @@ def main():
     elif event == "PostToolUse" and tool == "Bash":
         handle_post_bash(payload, root, cfg)
     elif event == "PostToolUse" and tool in ("Edit", "Write", "NotebookEdit"):
-        handle_post_edit(payload, root)
+        handle_post_edit(payload, root, cfg)
 
 
 if __name__ == "__main__":

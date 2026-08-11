@@ -20,10 +20,20 @@ the moment of need.** Ours ship with the plugin. Yours live in your repo.
 
 ---
 
-## Step 1 — Check the genre. Four ways this is not the ceremony you think it is
+## Step 1 — Check the genre. Five ways this is not the ceremony you think it is
 
-Answer all four before writing anything. Getting this wrong is how the third home becomes the new
+Answer all five before writing anything. Getting this wrong is how the third home becomes the new
 drift vector.
+
+### Is it really an INSTRUMENT?
+
+A ceremony is an ordered sequence, run rarely. An **instrument** is a *recurring lens over a
+surface you own* — board-review, roadmap look, drift check, ledger-truth pass. It is still a
+project skill, but a different shape: **short, look-and-report** — read the surface, compare it to
+what the way of working says should be true, name the gaps. No phases, no done-when beyond "the
+gaps are named." Write its description as the trigger *condition* ("use before any status summary
+to the PO") — the description is what gets matched. If what you are writing runs on a cadence
+rather than at a rare event, write it as an instrument and keep it thin.
 
 ### Is it really yours to run?
 

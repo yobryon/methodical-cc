@@ -156,6 +156,13 @@ Most first drafts are bug reports.
 **How you'd know it's wrong for you.** Your defects are mostly one-offs, or *"a defect anyone would
 have caught"* describes them. That kind teaches nothing and clutters the catalog.
 
+**One retrieval warning, earned expensively:** the shapes are domain-free, but filing is not. One
+project's catalogue contained the diagnosis of its own process failure four times over —
+unretrieved for three days, because the entries were filed under "engineering" and the symptom
+under "process." **Consult the catalogue for methodology failures too, and strip the domain when
+naming a shape** — *two hand-maintained descriptions of one fact* applies to code and to process
+identically.
+
 **Provenance.** One project (platform build, ~6 months, 16+ arcs, two humans-worth of agent roles). Weigh accordingly — this has depth, not breadth.
 
 ---
@@ -289,6 +296,39 @@ a constrained harness, a hard per-run boundary. Then something has to carry the 
 across, and it is worth writing.
 
 **Provenance.** One project, plus a harness change (durable sessions + compaction) that removed the state document's founding premise — the reasoning leans on the harness fact as much as the project.
+
+---
+
+## truth-before-report — The ledger is trued at the moment its falsity would do damage
+
+**Practice.** Before any status summary to the Product Owner or an external party, reconcile the
+declared ledger against reality — or caveat it explicitly ("board not reconciled since Tuesday").
+The mechanical half: issue ids written into commit messages at landing time (`Closes VAN-24`), and
+`plumb ledger candidates` sweeping the mentions into a check-list at the trigger. Bounded-rhythm
+projects already run this trigger under another name: close-of-arc reconciliation.
+
+**The scar.** A PO asked *"how are we so close to done if there's so much left open?"* — 10 of 12
+"open" issues were finished, and six fresh defects were absent. Wrong in both directions at once: a
+board carrying no information, read as truth. The underlying law: **a record either sits on a path
+the work forces you through, or it needs a named trigger — "discipline" is the name of the missing
+trigger.** The project's own catalogue had predicted this four times over ("the work never surfaces
+the omission, so these remedies must be scheduled, not triggered by the work") and the remedy its
+architect first chose — *move the issue in the same turn as the work* — held for about a day.
+
+**Applies when.** Any declared record the work does not force anyone through — which is most
+trackers on most agent-run projects, and especially judgment-heavy projects where the gravity sits
+in a decisions log and the tracker is a satellite.
+
+**Costs.** One reconciliation pass at each trigger, made cheap by the trailer convention. The
+trailer itself costs nothing — the number is in your head at commit time.
+
+**How you'd know it's wrong for you.** The work genuinely forces you through the ledger (an
+enforced workflow where nothing merges without an issue transition), or no one outside the loop
+reads it — in which case ask why it is declared at all.
+
+**Provenance.** One project's counterfactual scar (three days, measured), one project's 18-arc
+at-scale confirmation of the trigger under its arc-close name — plus the same failure occurring in
+the second project's earliest arcs until its PO caught it. Endemic across every project observed.
 
 ---
 

@@ -27,7 +27,15 @@ plumb process "norms"
 ```
 
 You are looking at two surfaces: the **log** (instances, dated, accumulating) and the **norms**
-(standing behaviour, always on). This pass moves things between them.
+(standing behaviour, always on). This pass moves things between them — and it has **three
+promotion targets**, not one:
+
+- An observation that recurred as *standing behaviour* → a **norm**, in the process document.
+- A *sequence* that has now been run twice → a **ceremony**, via `plumb:ceremony`.
+- A *surface* that has been repeatedly mis-seen — a stale board read as truth, a roadmap nobody
+  can answer from, drift caught late — → an **instrument**: a short look-and-report skill over
+  that surface, triggered by a condition. A surface that burned you twice without a lens is the
+  log telling you which skill to write.
 
 > **A process document is most attractive to write to at exactly the moment its content is least
 > reliable** — right after a vivid incident, when the sentence is good and the evidence is one

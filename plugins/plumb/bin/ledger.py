@@ -211,6 +211,73 @@ def cmd_list(args):
         print(f"  {r.get('id','?'):<6} {r.get('state','?'):<12} {r.get('title','')}")
 
 
+ISSUE_ID_RE = re.compile(r"\b([A-Z][A-Z0-9]{1,9}-\d+)\b")
+
+
+def cmd_candidates(args):
+    """Reconciliation helper: which issues do recent commits mention?
+
+    Reads ONLY git — plumb never touches the tracker. The agent takes this
+    list to their own tracker tools and moves what is actually done. This is
+    the mechanical half of truth-before-report: the commit trailer
+    ("Closes VAN-24", or any mention) is the cheap in-motion write that rides
+    a motion the work already requires; this sweep is where those mentions
+    get turned into state, in one pass, at a named trigger — instead of 160
+    individually-remembered context switches.
+    """
+    import subprocess
+    root = args.root or "."
+    prefix = args.prefix
+    if not prefix:
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            import plumb
+            mf = plumb.Manifest.load(root, required=False)
+            prefix = (mf.ledger.get("space") if mf else None)
+        except Exception:
+            prefix = None
+    try:
+        out = subprocess.run(
+            ["git", "log", f"--since={args.since}", "--pretty=%h%x09%ad%x09%s",
+             "--date=short"],
+            cwd=root, capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        print("plumb ledger: not a git repo (or git unavailable) — nothing to scan",
+              file=sys.stderr)
+        return 1
+    if out.returncode != 0:
+        print("plumb ledger: git log failed — is this a git repo?", file=sys.stderr)
+        return 1
+
+    by_issue = {}
+    for line in out.stdout.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != 3:
+            continue
+        sha, date, subject = parts
+        for m in ISSUE_ID_RE.finditer(subject):
+            iid = m.group(1)
+            if prefix and not iid.startswith(prefix.rstrip("-") + "-"):
+                continue
+            by_issue.setdefault(iid, []).append((sha, date, subject))
+
+    if not by_issue:
+        scope = f" matching {prefix}-*" if prefix else ""
+        print(f"No issue ids{scope} mentioned in commits since {args.since}.")
+        return 0
+
+    print(f"Issues mentioned in commits since {args.since} — candidates for a "
+          f"state check.\nThis list is a LEAD, not a verdict: a mention is not a "
+          f"close. Move what is\nactually done, via your own tracker tools.\n")
+    for iid in sorted(by_issue, key=lambda k: (k.split("-")[0], int(k.split("-")[1]))):
+        print(f"  {iid}")
+        for sha, date, subject in by_issue[iid][:4]:
+            print(f"      {sha} {date}  {subject[:80]}")
+        if len(by_issue[iid]) > 4:
+            print(f"      …and {len(by_issue[iid]) - 4} more")
+    return 0
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="plumb ledger", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -227,6 +294,13 @@ def build_parser():
 
     s = sub.add_parser("states", parents=[common], help="the normalized state vocabulary")
     s.set_defaults(func=cmd_states)
+
+    s = sub.add_parser("candidates", parents=[common],
+                       help="issues mentioned in recent commits — reconciliation leads (reads git only)")
+    s.add_argument("--since", default="3 days ago",
+                   help="git --since expression (default '3 days ago')")
+    s.add_argument("--prefix", help="issue-id prefix (default: [ledger] space from the manifest)")
+    s.set_defaults(func=cmd_candidates)
 
     s = sub.add_parser("create", parents=[common], help="[markdown] create an issue")
     s.add_argument("title")

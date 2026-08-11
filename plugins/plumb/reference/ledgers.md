@@ -29,9 +29,13 @@ The exception is `markdown`, which has nothing to call. That one is real code.
 triage → backlog → todo → in_progress → in_review → done
 ```
 
-**States move as work moves.** In the evidence project ~16 issues sat in `triage` while their work
-shipped, and the Product Owner caught it rather than the agents. The norm that fixed it is exactly
-the kind a monitor makes free (§6).
+**States move as work moves.** In the first evidence project ~16 issues sat in `triage` while their
+work shipped; in the second, 10 of 12 "open" issues were done while six fresh defects were absent —
+*wrong in both directions at once, which means the board carried no information, and it was read as
+truth*. In every instance the Product Owner caught it, not the agents. This failure is endemic, not
+occasional — see **Keeping a declared ledger true**, below, for the structural response. (There is
+deliberately no drift alarm for it: a stale-state detector would measure exactly the habit that is
+absent, which is the failure mode that got the ack detector removed.)
 
 Where a tracker cannot express one of these, the adapter guidance says so rather than approximating
 silently.
@@ -41,6 +45,63 @@ it.* Any process that separates deciding from building accumulates items whose t
 exactly that — and they render as ordinary waiting states, indistinguishable from work in motion.
 The cheapest fix observed is a review question, not a new state: **for every waiting-state issue,
 name who it is waiting on, out loud. If you cannot, that is the finding.**
+
+---
+
+## Keeping a declared ledger true
+
+Measured on a real project: the declared ledger held **under 1% of the project's recorded thought**
+while the bus carried 1.14M characters and the docs 6,808 lines — and the board went false in both
+directions at once. The diagnosis generalises, so it is stated here as law:
+
+> **A record either sits on a path the work forces you through, or it needs a named reconciliation
+> trigger. There is no third option — "discipline" is the name of the missing trigger.**
+
+The diagnostic is the four-channels question. Ask it of every record the way of working declares:
+
+| channel | who forces you through it |
+|---|---|
+| chat with the PO | they ask; you answer |
+| the bus | a peer is blocked until you reply |
+| git + docs | the change does not exist until committed |
+| the tracker | **often: nothing** |
+
+Anything in the last row's position gets an instrument, a trigger, **or it does not get declared**
+— the declaration and its maintenance mechanism arrive together or not at all.
+
+**Gravity is singular.** Narrative status accretes wherever the project's primary thought lives. A
+build-heavy project's gravity sits near the tracker and mostly keeps it true; a judgment-heavy
+project's gravity sits in its decisions log, and the tracker is a satellite — satellites need
+scheduled contact. Watch for the signature: tracker ids hand-written into a document because the
+document "felt like the place." That is the well announcing itself. (Some trackers can host
+decision records natively; where yours does, co-locating with the gravity is worth more than the
+boundary aesthetics — one home matters more than which home.)
+
+**The named trigger that earns its keep: truth-before-report.** Before any status summary to the PO
+or an external party, true the ledger — or caveat it explicitly ("board not reconciled since
+Tuesday"). That is the moment its falsity does damage, and both measured incidents were exactly
+that moment. Bounded-rhythm projects already have this trigger under another name: the close-of-arc
+reconciliation.
+
+**Make the in-motion write ride the commit.** Most of the per-update cost is not typing — it is
+context-switching to a second system while holding the thread. So don't switch: write the issue id
+into the commit message at the moment of landing (`Closes VAN-24`, or any mention — the number is
+still in your head at commit time), and let reconciliation sweep the mentions mechanically:
+
+```bash
+plumb ledger candidates            # issues mentioned in commits since '3 days ago'
+plumb ledger candidates --since "2026-08-05"
+```
+
+Reads git only — plumb never touches the tracker; you take the list to your own tracker tools and
+move what is actually done. A mention is a lead, not a verdict. (**GitHub note:** `Closes #N` in a
+commit that reaches the default branch closes the issue natively — the sweep is free there.)
+
+**Declare the scope, in the manifest.** `[ledger] scope = "..."` says in your own words what the
+ledger does and does not hold — "PO window + cross-team; play-by-play lives on the bus" is a claim
+practice can keep, where an unscoped `[ledger]` claims everything and makes the shortfall
+invisible. `doctor` will note an undeclared scope. Narrowing the scope does not relax the truth
+obligation — it concentrates it: whatever the ledger still holds is exactly what the PO reads.
 
 ---
 

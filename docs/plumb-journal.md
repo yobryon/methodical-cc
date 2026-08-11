@@ -268,6 +268,45 @@ both, same commit — and **log-then-promote gains two promotion targets**:
 observations promote into the doc when they are norms, and into a skill when
 they are procedures.
 
+### 5.6a Instruments — the third genre, and the presence law (added 2026-08-07)
+
+Field finding across both adopters: **plumb made the wow *authoritative* but
+not *present*.** The document wins where a skill disagrees — but a document
+that never enters a working session's context loses to whatever is in the
+room, and compaction moves every session further from the conversation where
+the process was alive. MAMA's methodology was ambient because it lived in
+harness-surfaced skills; when we moved the process into a project document, we
+silently deleted its ambient surface. Symptoms: thin skill rosters at
+onboarding (one adopter produced nothing; the other found its real roster
+only after its PO caught drift), and a declared ledger holding <1% of a
+project's recorded thought while going false in both directions.
+
+Two additions, both codified:
+
+- **The taxonomy was missing a genre.** Norms (doc) and ceremonies (rare
+  sequences) were never the whole roster — the skills that keep a wow
+  operative are **instruments**: recurring lenses over a surface the wow
+  declares (board-review, roadmap look, drift check, ledger-truth pass).
+  Short, look-and-report, trigger stated as a condition. A day-one project
+  can name one per declared surface; establish now asks surface-first, and
+  promote gains instrument as its third promotion target (norm / ceremony /
+  instrument).
+- **The record law + gravity law** (in ledgers.md): *a record either sits on
+  a path the work forces you through, or it needs a named trigger —
+  "discipline" is the name of the missing trigger.* And gravity is singular:
+  status accretes wherever the project's primary thought lives; a ledger off
+  the gravity well is a satellite and needs scheduled contact
+  (truth-before-report is the rhythm-free trigger; arc-close reconciliation
+  was the bounded-rhythm form all along). Manifest gains `[ledger] scope`
+  so the claim can match the practice legibly; `plumb ledger candidates`
+  makes the reconcile pass mechanical from commit-message mentions (git-read
+  only — the no-proxy boundary holds).
+
+Presence mechanisms shipped with it: a tiny SessionStart orientation (process
+version, wow path, the project's own skill roster — the wow in the room at
+session birth) and a wow-edit guard (loud reminder on edits to the manifest-
+declared document: read the whole thing; doc and skills move together).
+
 ### 5.7 Onboarding generates both — and ships exemplars, never starters
 
 Two decisions, the second reached by deliberately role-playing the onboarding
