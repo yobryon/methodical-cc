@@ -19,7 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
-MCC_VERSION = "1.28.0"
+MCC_VERSION = "1.29.0"
 
 import json
 import time
@@ -3715,7 +3715,7 @@ def cmd_resume(args):
             sys.exit(1)
         print(f"No session registered as '{name}'.", file=sys.stderr)
         print()
-        cmd_list(None)
+        _print_registered()
         sys.exit(1)
     if not have_claude():
         die("'claude' command not found on PATH.")
@@ -3777,7 +3777,10 @@ def cmd_resume(args):
     os.execvp(argv[0], argv)
 
 
-def cmd_list(args):
+def _print_registered(args=None):
+    """Registered-name dump used by the resume-error path. `mcc list` itself
+    is sugar for `mcc session list` (the richer view); this remains because
+    a failed `mcc <name>` wants to show exactly the registry it searched."""
     state_dirs = find_state_dirs()
     found_any = False
     for d in state_dirs:
@@ -4938,8 +4941,12 @@ def build_parser():
     sub = p.add_subparsers(dest="cmd", metavar="<command>")
 
     # --- list ---
-    pl = sub.add_parser("list", help="list registered sessions")
-    pl.set_defaults(func=cmd_list)
+    pl = sub.add_parser("list",
+                        help="list Claude Code sessions for this project (alias for `session list`)")
+    _arg(pl, "--all", action="store_true", help="list across all Claude Code projects")
+    _arg(pl, "--paths", action="store_true", help="show jsonl path under each row")
+    _arg(pl, "--show-path", action="store_true", help="alias for --paths", dest="paths")
+    pl.set_defaults(func=cmd_session_list)
 
     # --- status ---
     ps = sub.add_parser("status", help="show plugin state and registered sessions")
@@ -5224,7 +5231,7 @@ TOP_HELP_GROUPS = [
     ("Session", [
         ("<name>",  "Resume session by name (shorthand for `session resume`)"),
         ("create",  "Create + register a new session"),
-        ("list",    "List registered sessions"),
+        ("list",    "List Claude Code sessions (alias for `session list`)"),
         ("session", "session list/set/resume/transcript (`mcc session -h`)"),
     ]),
     ("Project", [

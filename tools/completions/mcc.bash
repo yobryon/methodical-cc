@@ -150,6 +150,7 @@ _mcc_complete() {
             create:)  flags="--persona --plugin --scope" ;;
             docs:publish)  flags="--include-pending --skip-pending" ;;
             docs:pull)  flags="--resync" ;;
+            list:)  flags="--all --paths --show-path" ;;
             reflect:submit)  flags="--no-confirm --no-scan --repo" ;;
             session:args)  flags="--clear --scope" ;;
             session:list)  flags="--all --paths --show-path" ;;

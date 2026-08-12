@@ -229,15 +229,21 @@ see. Both, not either.
 ```json
 { "hooks": { "Stop": [
     { "hooks": [ { "type": "mcp_tool", "server": "nonlinear", "tool": "inbox",
-                   "input": { "limit": 10 }, "timeout": 20,
+                   "input": { "limit": 10, "runAsHook": true }, "timeout": 20,
                    "statusMessage": "Checking the nonlinear inbox" } ] } ] } }
 ```
 
 The agent learns, passively and every turn, whether anything on the tracker deserves attention —
 routed decisions, `waiting_on` flags, mentions — with no action taken and nothing to remember.
-Two craft notes from the project that wired it: **don't pass `markRead`** until you have proven
-the hook's output reaches the model (marking read on faith would silently consume notifications
-forever), and a Stop `mcp_tool` hook cannot block stopping, so it needs no loop guard.
+
+**`runAsHook: true` is what makes this work as a hook rather than a log line.** It tells the
+inbox to return a *hook-shaped* result instead of the notification list: an empty inbox yields a
+quiet `additionalContext` ("your inbox is clear"), and unread items yield a **decision/reason
+block that re-invokes the agent with the items in context** — the same deliver-at-the-boundary
+shape as plumb's own bus sweep, arrived at independently. The tool owns the loop's termination;
+the flag is hook-only by contract ("NOT FOR INTERACTIVE USE" — its own schema says so). One craft
+note survives for *interactive* inbox calls: don't pass `markRead` until you have confirmed the
+output reached whoever needed it — marking read on faith silently consumes notifications forever.
 
 ## `github` — the common default
 
