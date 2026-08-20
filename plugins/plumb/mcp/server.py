@@ -194,6 +194,15 @@ def tool_bus_send(args):
                        args.get("record"))
         warning = bus.delivery_note(conn, args["to"])
         out = [f"Sent #{mid} to @{args['to']} ({args.get('urgency', 'normal')})."]
+        if len(args["body"]) > bus.EVENT_CLIP_CHARS:
+            out.append("")
+            out.append(f"✂ #{mid} is {len(args['body']):,} chars — delivery clips at "
+                       f"~{bus.EVENT_CLIP_CHARS:,}. The receiver gets a banner, the head, "
+                       f"and a `bus.py show {mid}` pointer; the store holds it whole. "
+                       f"If the tail carries a question or a decision, restate it in "
+                       f"the first {bus.EVENT_CLIP_CHARS:,} chars or lean on the record — "
+                       f"a sender who doesn't know their tail was clipped believes "
+                       f"they asked a question.")
         if warning:
             out.append("")
             out.append(f"⚠ {warning}")

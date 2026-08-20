@@ -9,6 +9,12 @@ Not a bug list. **A catalogue of the shapes defects take here, ordered by why th
 
 > **A defect anyone would have caught teaches nothing.**
 
+**The mechanics are the tool's; the thinking is yours.** Entries head as `## <n>. <title>` —
+one canonical form, so counting is a grep and never a bespoke script. `plumb catalog next`
+reads the next unclaimed number from the file itself; `plumb catalog append "<title>"` claims
+it and appends in one motion (a `>>` cannot detect a collision; two agents appending
+concurrently have produced two entries with one number).
+
 **Write first, review second — this skill is the review.** Catalogue entries arrive
 *mid-thought*: the shape becomes clear three sentences into explaining something to
 someone, and stopping to fetch a procedure at that moment means leaving the thought to

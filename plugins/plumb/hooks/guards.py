@@ -171,6 +171,20 @@ def guard_foreign_staged(root, session):
 
 CONTROL_OK = {0x09, 0x0A, 0x0D}  # tab, LF, CR
 
+# Genuinely-binary formats are EXEMPT: the guard's premise is a SOURCE file
+# that became binary (grep goes silent on it and "not found" stops meaning
+# "not searched"). An image was never searchable prose — refusing one is the
+# guard misfiring on its own premise. Field-found: a byte-identical copy of an
+# already-committed PNG was refused, and the project shipped records without
+# their frames for five days rather than fight it.
+BINARY_OK = {
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp", ".tiff",
+    ".pdf", ".woff", ".woff2", ".ttf", ".otf", ".eot",
+    ".zip", ".gz", ".tgz", ".tar", ".7z", ".jar",
+    ".mp3", ".mp4", ".mov", ".wav", ".ogg", ".webm",
+    ".sqlite", ".db", ".wasm", ".pyc", ".so", ".dylib", ".dll",
+}
+
 
 def guard_control_bytes(root):
     """A source file containing raw control bytes.
@@ -189,6 +203,8 @@ def guard_control_bytes(root):
                              "--diff-filter=ACM").split("\n") if p]
     hits = []
     for rel in staged:
+        if Path(rel).suffix.lower() in BINARY_OK:
+            continue
         p = Path(root) / rel
         if not p.is_file() or p.stat().st_size > 2_000_000:
             continue

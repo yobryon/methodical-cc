@@ -60,7 +60,22 @@ meantime would be **expensive or hard to reverse** — which is an ordinary engi
 judgment, not a protocol.
 
 When your question genuinely does not change your next move, say so: **"proceeding
-unless countermanded."**
+unless countermanded."** And the phrase means *proceed* — actually proceed. Announcing
+a plan and then going idle is asking permission with extra steps: the countermand
+window is *while you work*, not before you start, and nobody treats your statement of
+intent as a request awaiting approval.
+
+## Going idle is silent — nothing announces it
+
+The physics fact nobody states: **no peer is notified when you stop.** Idle-wake makes
+stopping *safe* — anything pending will wake you — but it does not make stopping
+*visible*. To your teammates, your going idle and your being mid-task look identical:
+silence.
+
+So the turn boundary is a communication act you perform by omission. If your stopping
+*means* something — done with what was asked, blocked, handing off, queue empty — only
+a message makes it mean that. Ending a turn with your loops closed and your leader told
+is finishing; ending one with an unstated handoff is not resting, it is disappearing.
 
 ## Silence is not loss
 
@@ -90,9 +105,27 @@ The bus asks for no receipts. An ack protocol existed and was removed: nobody ca
 it, and a monitor watching it manufactured false signal about people who were doing
 everything right. **If you need confirmation that a message landed and was absorbed,
 ask for it in the message** — "confirm when you've picked this up" is a conversation,
-it gets answered, and the answer sits on the trail like everything else. The reply,
-the commit, the board moving: those are the acknowledgments, and they cannot be
-performed absent-mindedly.
+it gets answered, and the answer sits on the trail like everything else. The reply and
+the commit are acknowledgments in themselves. **The board is one only where your team
+has wired it to speak** — an inbox hook, a ticker — otherwise moving an issue is a
+record nobody hears, and "I marked it Done, so they know" is a belief about a
+subscription that does not exist. If nothing subscribes, say it on the bus.
+
+## Tickers — your project's own wake-ups, riding our monitor
+
+The harness allows monitors only from plugins, so a project cannot watch anything while
+idle — except through us. `[tickers.<name>]` in `.plumb.toml` runs a project script
+inside plumb's monitor with the bus's own contours: `normal` tickers run only when the
+session is idle (their output *wakes* you — a tracker inbox check, a CI watch);
+`gating` tickers may interrupt mid-turn. The script gets `$PLUMB_TICK_PREV` (epoch of
+its last successful run) as its new-since-X cursor; non-empty stdout is delivered,
+empty is silence. Guardrails are enforced (interval floor, output cap, failure
+backoff) because the ticker is a tenant in the process that delivers your mail.
+
+Seam manners: if your ticker watches a tracker whose notifications mirror bus traffic,
+`bus.py refs --since 2h` lists record refs already delivered to you over the bus — an
+inbox item citing one is redundant by construction, and suppressing it is your
+script's one-line courtesy to your future attention.
 
 ## The trail answers questions — `bus.py log`
 

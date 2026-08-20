@@ -508,6 +508,64 @@ def cmd_patterns(args):
     print(body)
 
 
+# Canonical catalogue entry heading: `## <n>. <title>` — one form, so counting
+# is a grep. Reading accepts the variants observed in the field (##/###, bold,
+# `.` or `)`); writing emits only the canonical form. Field evidence for both
+# halves: a 106-entry catalogue split across two heading formats cost its
+# project three bespoke counting scripts, and a `>>` append produced two
+# entries numbered 102 the evening two agents wrote concurrently.
+CATALOG_ENTRY_RE = re.compile(r"^\s*(?:#{2,3}\s*|\*\*)(\d+)[.)]", re.MULTILINE)
+
+
+def _catalog_file(mf):
+    try:
+        path = mf.resolve("failure_catalog")
+    except Retired as exc:
+        report_retired(exc)
+    except UnknownRole:
+        die("this project declares no `failure_catalog` role — declare it in "
+            f"{MANIFEST_NAME} (or your catalogue lives under another name; "
+            "these helpers key on the role).")
+    return path
+
+
+def cmd_catalog_next(args):
+    mf = Manifest.load(args.root)
+    path = _catalog_file(mf)
+    if not path.is_file():
+        print(1)
+        return
+    nums = [int(m.group(1)) for m in
+            CATALOG_ENTRY_RE.finditer(path.read_text(encoding="utf-8"))]
+    print((max(nums) + 1) if nums else 1)
+
+
+def cmd_catalog_append(args):
+    """Append an entry with the next number claimed from the file itself —
+    `decision next`'s sibling: numbering claimed from the artifact, never from
+    memory, in the same motion as the write (a >> append cannot detect a
+    collision; this reads max+1 and writes atomically after it)."""
+    mf = Manifest.load(args.root)
+    path = _catalog_file(mf)
+    if not path.is_file():
+        die(f"{path} does not exist — create the catalogue first (an empty file "
+            f"with a title line is fine).")
+    text = path.read_text(encoding="utf-8")
+    nums = [int(m.group(1)) for m in CATALOG_ENTRY_RE.finditer(text)]
+    n = (max(nums) + 1) if nums else 1
+    body = args.body
+    if body == "-":
+        body = sys.stdin.read().strip()
+    if not body:
+        body = ("**What happened.** \n\n**Why it hid.** \n\n"
+                "**The tell (phrased as something to TRY).** \n\n"
+                "**Nearest kin, and how it differs.** ")
+    entry = f"\n## {n}. {args.title.strip()}\n\n{body}\n"
+    path.write_text(text.rstrip() + "\n" + entry, encoding="utf-8")
+    print(f"appended entry {n} to {path.name} — written in flow; run the "
+          f"plumb:catalog review against it when you pause.")
+
+
 def exemplars_dir():
     return Path(__file__).resolve().parent.parent / "reference" / "exemplars"
 
@@ -775,6 +833,16 @@ def build_parser():
     s = sub.add_parser("patterns", parents=[common], help="practices with their costs measured (consult AFTER the interview)")
     s.add_argument("name", nargs="?", help="pattern to show in full")
     s.set_defaults(func=cmd_patterns)
+
+    s = sub.add_parser("catalog", parents=[common],
+                       help="failure-catalogue mechanics: next number, canonical append")
+    csub2 = s.add_subparsers(dest="subcmd", required=True)
+    c = csub2.add_parser("next", help="next unclaimed entry number, read from the file")
+    c.set_defaults(func=cmd_catalog_next)
+    c = csub2.add_parser("append", help="append an entry, number claimed from the file")
+    c.add_argument("title")
+    c.add_argument("--body", help="entry body, or '-' for stdin (default: portable-shape skeleton)")
+    c.set_defaults(func=cmd_catalog_append)
 
     s = sub.add_parser("exemplars", parents=[common],
                        help="ceremony-skill exemplars from one project — calibrate, don't copy")

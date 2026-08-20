@@ -203,7 +203,9 @@ Two shapes, split by trigger:
   look wants `.claude/settings.json`, not `.claude/skills/` — hooks can run scripts *and call MCP
   tools directly* (`type: "mcp_tool"`: an inbox check at every Stop, a mirror refresh on every
   decision write — see `plumb ledger guide`). A hook beats a norm for the same reason a mechanism
-  beats a trigger.
+  beats a trigger. And where the moment is *while you are idle* — the one moment no project hook
+  can reach — a `[tickers.<name>]` entry in `.plumb.toml` runs your script inside plumb's monitor
+  and its output wakes you (see the `bus` skill).
 
 **Ceremonies — ordered sequences, run rarely.** The release sequence, the grain change, onboarding
 a data source. These usually *cannot* be written on day one, and should not be forced — they arrive

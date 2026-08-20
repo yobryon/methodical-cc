@@ -335,6 +335,35 @@ while the PO correctly widened it on gravity grounds — "a tracker that is
 only for my benefit when you need something from me is a tracker nobody else
 has reason to touch.")*
 
+### 5.6c First feedback-skill harvest (2026-08-20) — rulings and holds
+
+The skill's first live run (Plank) worked as designed — a workaround surfaced
+by the what-do-you-route-around question, and a post-script arguing with its
+own strongest recommendation. Recorded from the round:
+
+- **PO ruling: the Stop-hook inbox delivery STAYS.** It has driven more action
+  than the projects realize. The seam (bus + tracker announcing one event)
+  gets *tuning*, not deletion — and per the report's own post-script, any
+  channel-quieting is sequenced AFTER truncation was fixed, because the
+  redundant channel recovered a clipped finding the primary silently dropped.
+- **Measurement hazard, canonized:** *a tool being used is not evidence the
+  need it was built for exists* — `bus.py log --record` was reached for twice,
+  both times to recover truncated bus tails, never for claim-checking. Fix the
+  truncation and its usage was predicted to go to zero while a usage metric
+  called it healthy.
+- **Held, one question routed to the other project:** sequence skills get
+  invoked; judgment skills may not ("by the time I know I need it, I have
+  already made the call") — possibly judgment guidance belongs in the
+  always-on document, not the consulted-at-need surface. Author flagged it
+  weak; one confirming project before any change.
+- **The idle-signals audit** (PO-prompted, confirmed by the report): our own
+  text taught passivity — "the board moving" listed as an acknowledgment
+  (true only where something subscribes), the announce-then-stop inversion of
+  "proceeding unless countermanded," and the unstated physics that **going
+  idle is silent** — idle-wake made stopping safe but never visible, and
+  nothing ever said so. All three fixed as physics statements in the bus
+  skill.
+
 ### 5.6b The feedback channel (added 2026-08-20)
 
 `plumb:feedback` ships as a skill, invoked at need — deliberately NOT a

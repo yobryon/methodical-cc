@@ -51,12 +51,13 @@ plugin exists to attack; we do not get to ship one.
 import argparse
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
 from pathlib import Path
 
-BUS_VERSION = "0.7.0"
+BUS_VERSION = "0.10.0"
 DEFAULT_DB = ".mcc/bus.db"
 MAX_ATTEMPTS = 5
 # A monitor ticks at 1 Hz, so this is ten missed ticks — tight enough that a
@@ -456,6 +457,15 @@ def claim_and_emit(conn, recipient, via, urgency=None, render=None, out=None):
         raise
 
 
+# Delivery events pass through the harness, which clips long output SILENTLY —
+# field-measured: message tails vanished behind "...(truncated)", including a
+# section that reshaped a design gate, with no signal at either end. So we clip
+# FIRST, at a threshold under any plausible harness cap, with the banner AT THE
+# TOP — a banner at the tail would be eaten by exactly the clip it warns about.
+# The store always holds the full body; `bus.py show <id>` retrieves it whole.
+EVENT_CLIP_CHARS = int(os.environ.get("PLUMB_BUS_EVENT_MAX", "10000"))
+
+
 def format_message(row, late=False):
     head = f"[plumb bus] {row['urgency'].upper()} from @{row['sender']}"
     if row["thread"]:
@@ -468,8 +478,16 @@ def format_message(row, late=False):
             "are being delayed. Tell the PO.")
     if row["record_ref"]:
         lines.append(f"  durable record: {row['record_ref']}")
+    body = row["body"]
+    if len(body) > EVENT_CLIP_CHARS:
+        lines.append(
+            f"  ✂ CLIPPED FOR DELIVERY — this message is {len(body):,} chars; "
+            f"only the first {EVENT_CLIP_CHARS:,} follow.\n"
+            f"  Read it WHOLE before acting on it: `bus.py show {row['id']}`"
+            + (f"  (record: {row['record_ref']})" if row["record_ref"] else ""))
+        body = body[:EVENT_CLIP_CHARS] + "\n  ✂ [clipped — see banner above]"
     lines.append("")
-    lines.append(row["body"])
+    lines.append(body)
     return "\n".join(lines)
 
 
@@ -580,6 +598,91 @@ def cmd_send(args):
     conn.close()
 
 
+# --------------------------------------------------------- project tickers
+#
+# The harness allows monitors only from PLUGINS — a project cannot declare one.
+# So plumb's monitor doubles as the project's activation surface: `.plumb.toml`
+# may declare tickers, project scripts the monitor runs on a cadence, whose
+# output is delivered with the bus's own contours. This bridges the one gap
+# projects cannot reach themselves (they CAN wire Stop/SessionStart hooks):
+# waking the idle and interrupting the busy.
+#
+#   [tickers.nonlinear-inbox]
+#   command  = "scripts/inbox-tick.sh"     # run from the project root
+#   interval = 120                         # seconds; floor 30 enforced
+#   urgency  = "normal"                    # normal = runs+delivers only when the
+#                                          # session is idle (wakes it);
+#                                          # gating = may interrupt mid-turn
+#
+# Contract: the script gets $PLUMB_AGENT, $PLUMB_TICK_NAME, and
+# $PLUMB_TICK_PREV (epoch of its previous successful run; empty on first) —
+# the "new since X" cursor, handed over; fancier state is the script's own.
+# Non-empty stdout is delivered as a monitor event; empty stdout is silence.
+# `bus.py refs --since ...` lets a script suppress items whose record refs
+# already arrived over the bus (the seam-quieting query).
+#
+# Guardrails, each from a scar: interval floor + output cap because the
+# harness kills chatty monitors and a runaway project script must not cost the
+# agent its BUS delivery (the ticker is a tenant); failures announce once then
+# back off, because a failure repeated every tick trains its reader.
+
+TICKER_MIN_INTERVAL = 30.0
+TICKER_OUTPUT_CAP = 4000
+TICKER_TIMEOUT = 25.0
+
+
+def load_tickers(root):
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import plumb
+        mf = plumb.Manifest.load(root, required=False)
+    except Exception:
+        return {}, None
+    if mf is None:
+        return {}, None
+    raw = mf.data.get("tickers", {}) or {}
+    out = {}
+    for name, cfg in raw.items():
+        if not isinstance(cfg, dict) or not cfg.get("command"):
+            continue
+        out[name] = {
+            "command": cfg["command"],
+            "interval": max(float(cfg.get("interval", 120)), TICKER_MIN_INTERVAL),
+            "urgency": cfg.get("urgency", "normal"),
+        }
+    return out, mf.path
+
+
+def run_ticker(name, cfg, root, agent, state):
+    """One ticker execution. Returns text to deliver, or None."""
+    import subprocess
+    env = dict(os.environ, PLUMB_AGENT=agent, PLUMB_TICK_NAME=name,
+               PLUMB_TICK_PREV=str(state.get("last_ok") or ""))
+    try:
+        r = subprocess.run(["bash", "-lc", cfg["command"]], cwd=root, env=env,
+                           capture_output=True, text=True, timeout=TICKER_TIMEOUT)
+    except (OSError, subprocess.SubprocessError):
+        r = None
+    if r is None or r.returncode != 0:
+        state["fails"] = state.get("fails", 0) + 1
+        if state["fails"] == 1:
+            detail = f"rc {r.returncode}" if r is not None else "failed to start"
+            return (f"[plumb ticker:{name}] script failed ({detail}); will keep "
+                    f"trying quietly and back off after repeated failures. "
+                    f"Worth a look when convenient — a dead ticker is silent in a "
+                    f"way indistinguishable from a quiet one.")
+        return None
+    state["fails"] = 0
+    state["last_ok"] = time.time()
+    text = (r.stdout or "").strip()
+    if not text:
+        return None
+    if len(text) > TICKER_OUTPUT_CAP:
+        text = (text[:TICKER_OUTPUT_CAP]
+                + f"\n  ✂ [ticker output clipped at {TICKER_OUTPUT_CAP} chars]")
+    return f"[plumb ticker:{name}]\n{text}"
+
+
 def cmd_watch(args):
     """The monitor. Level-triggered by design: it re-derives state every tick.
 
@@ -631,6 +734,12 @@ def cmd_watch(args):
         drift = None
     last_drift = 0.0
 
+    # Project tickers: config from .plumb.toml, reloaded when it changes.
+    tick_root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    tickers, tick_cfg_path = load_tickers(tick_root)
+    tick_state = {name: {"last_due": 0.0} for name in tickers}
+    tick_cfg_mtime = tick_cfg_path.stat().st_mtime if tick_cfg_path else None
+
     while True:
         try:
             if not still_mine(conn, me, pid):
@@ -645,7 +754,9 @@ def cmd_watch(args):
                 claim_and_emit(conn, me, via="monitor", urgency=args.urgency)
             else:
                 state, idle_for = session_turn_state()
-                if state == "idle" and (idle_for is None or idle_for >= args.idle_grace):
+                idle_ready = (state == "idle"
+                              and (idle_for is None or idle_for >= args.idle_grace))
+                if idle_ready:
                     # wake with everything pending, in send order, one batch
                     claim_and_emit(conn, me, via="monitor-wake")
                 else:
@@ -661,6 +772,24 @@ def cmd_watch(args):
                     if gating_waiting:
                         claim_and_emit(conn, me, via="monitor")
 
+                # Project tickers, same contours as the bus: gating tickers may
+                # run (and interrupt) any time they are due; normal tickers run
+                # only when the session is idle-ready, so their output WAKES
+                # rather than derails.
+                now = time.time()
+                for name, cfg in tickers.items():
+                    st = tick_state.setdefault(name, {"last_due": 0.0})
+                    interval = cfg["interval"] * (4 if st.get("fails", 0) >= 3 else 1)
+                    if now - st["last_due"] < interval:
+                        continue
+                    if cfg["urgency"] != "gating" and not idle_ready:
+                        continue  # not due-forfeited; retried next tick
+                    st["last_due"] = now
+                    text = run_ticker(name, cfg, tick_root, me, st)
+                    if text:
+                        sys.stdout.write(text + "\n")
+                        sys.stdout.flush()
+
             # Drift runs in THIS process on a slow cadence rather than as its own
             # monitor: the harness stops monitors that produce too many events,
             # so more processes emitting more often is how the one that actually
@@ -671,6 +800,16 @@ def cmd_watch(args):
                 root = Path(db_path(args.db)).parent.parent
                 drift.run(conn, root, me, lambda s: (sys.stdout.write(s + "\n"),
                                                      sys.stdout.flush()))
+                # Reload ticker config when .plumb.toml moves (same slow cadence).
+                try:
+                    mt = tick_cfg_path.stat().st_mtime if tick_cfg_path else None
+                except OSError:
+                    mt = None
+                if mt != tick_cfg_mtime:
+                    tickers, tick_cfg_path = load_tickers(tick_root)
+                    tick_cfg_mtime = mt
+                    for name in tickers:
+                        tick_state.setdefault(name, {"last_due": 0.0})
         except sqlite3.OperationalError:
             pass  # a writer held the lock; next tick re-derives. Never fatal.
         time.sleep(args.interval)
@@ -719,6 +858,48 @@ def _tail_line(r):
         head += f"  rec:{r['record_ref']}"
     body = "\n".join("    " + ln for ln in r["body"].splitlines())
     return f"{head}\n{body}"
+
+
+def cmd_show(args):
+    """One message, whole. The retrieval pointer clipped deliveries name."""
+    conn = connect(db_path(args.db))
+    r = conn.execute("SELECT * FROM messages WHERE id=?", (args.id,)).fetchone()
+    conn.close()
+    if r is None:
+        print(f"bus: no message #{args.id}", file=sys.stderr)
+        return 1
+    print(_tail_line(r))
+
+
+def cmd_refs(args):
+    """Record refs delivered TO ME since a time — the seam-quieting query.
+
+    A tracker-inbox item whose record ref already arrived over the bus is
+    redundant by construction; a project ticker or Stop-hook script can call
+    this and suppress the mirrors. The policy is the project's; the trail
+    just answers the question.
+    """
+    me = whoami(args.agent)
+    since = args.since
+    m = re.match(r"^(\d+(?:\.\d+)?)([smhd])$", since or "")
+    if m:
+        mult = {"s": 1, "m": 60, "h": 3600, "d": 86400}[m.group(2)]
+        cutoff = time.time() - float(m.group(1)) * mult
+    else:
+        try:
+            cutoff = float(since)
+        except (TypeError, ValueError):
+            print("bus: --since takes an epoch or a relative time like 15m, 2h",
+                  file=sys.stderr)
+            return 1
+    conn = connect(db_path(args.db))
+    rows = conn.execute(
+        "SELECT DISTINCT record_ref FROM messages WHERE recipient=? AND "
+        "delivered_at >= ? AND record_ref IS NOT NULL ORDER BY record_ref",
+        (me, cutoff)).fetchall()
+    conn.close()
+    for r in rows:
+        print(r["record_ref"])
 
 
 def cmd_log(args):
@@ -869,6 +1050,15 @@ def build_parser():
     s.add_argument("--no-follow", action="store_true", help="print backlog and exit")
     s.add_argument("--interval", type=float, default=1.0)
     s.set_defaults(func=cmd_tail)
+
+    s = sub.add_parser("show", parents=[common], help="print one message in full, by id")
+    s.add_argument("id", type=int)
+    s.set_defaults(func=cmd_show)
+
+    s = sub.add_parser("refs", parents=[common],
+                       help="record refs delivered to me since a time (for seam-quieting scripts)")
+    s.add_argument("--since", required=True, help="epoch, or relative: 90s, 15m, 2h, 1d")
+    s.set_defaults(func=cmd_refs)
 
     s = sub.add_parser("log", parents=[common],
                        help="lookback: one line per message — chronology, state, repo hash")
