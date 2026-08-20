@@ -335,6 +335,29 @@ while the PO correctly widened it on gravity grounds — "a tracker that is
 only for my benefit when you need something from me is a tracker nobody else
 has reason to touch.")*
 
+### 5.6b The feedback channel (added 2026-08-20)
+
+`plumb:feedback` ships as a skill, invoked at need — deliberately NOT a
+forced workflow (MAMA's mistake, resisted) and deliberately **channel-free**:
+the arch and PO work out where a report goes, and carrying it back to the
+plumb team is the PO's, not the tooling's. Light touch now; something more
+structured may come later if the want appears.
+
+Design stance, from role-playing the six-months-in arch: the skill is a
+**vantage-shifter, not a survey**. No per-feature questions (they anchor to
+our taxonomy and harvest polite answers), no project recitation, no form.
+Three question clusters (what you've normalized / what the delta says /
+borrow an outsider's eyes), two self-checks (consult your own records first
+— the shapes are domain-free; declare your biases — fresh-scar and
+modesty-shaped over-correction), and the routing line that keeps reports
+apropos: **you own your way of working — change it yourself; what plumb
+needs is how a friction SURVIVED** (the mechanics of working-past are where
+an ambient surface failed to make something loud), where our surfaces failed
+or mistaught, what you built that we should have made unnecessary, and the
+keep-one/delete-one asymmetric ranking. The reports that changed the most
+shared four properties, now stated in the skill: incident-cited, costs
+named, ranked strongest-first, biases declared.
+
 ### 5.7 Onboarding generates both — and ships exemplars, never starters
 
 Two decisions, the second reached by deliberately role-playing the onboarding

@@ -212,7 +212,9 @@ A guard that fires wrongly is worth reporting rather than disabling — but it i
   on `source=compact` only
 - **All five guards**, and two drift detectors (unanswered gating rulings, decision-number
   collisions) inside the monitor's tick
-- **Seven skills** — `establish`, `ceremony`, `promote` (about the methodology itself);
+- **Eight skills** — `establish`, `ceremony`, `promote`, `feedback` (about the methodology itself
+  — `feedback` is the step-back: notice what you've stopped noticing, write what the plumb team
+  can use, hand it to your PO, who owns the channel back to us);
   `design-gate`, `drive`, `catalog`, `bus` (portable, epistemic, usable with no methodology at all)
 - **The reference shelf** — the pattern library (costs measured, rejection criteria first-class)
   and the ceremony-skill exemplars (calibrate, don't copy)
