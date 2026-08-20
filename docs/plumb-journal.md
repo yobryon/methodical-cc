@@ -335,6 +335,21 @@ while the PO correctly widened it on gravity grounds — "a tracker that is
 only for my benefit when you need something from me is a tracker nobody else
 has reason to touch.")*
 
+### 5.6d The presence law applied to plumb itself (2026-08-20)
+
+The PO asked whether adopter projects would discover a new plumb version's
+changes on their own. Honest answer: no — a skill-text change never reaches a
+running team (nobody rereads a skill they think they know, and compaction
+carries the old model forward). The wow-presence finding, one level up:
+**plumb's own changes were authoritative but not present.** MAMA solved this
+with a forced upgrade ceremony; the plumb form is ambient: the orientation
+hook stamps the last-seen plugin version per project (.mcc/plumb/
+last-version) and, when it moves, announces the in-between entries from
+reference/changes.md — once, at session birth, action-pointing ("reread the
+`bus` skill"). Maintenance rule now lives in that file's header: **every
+release adds an entry; a release without one is invisible to running
+projects.**
+
 ### 5.6c First feedback-skill harvest (2026-08-20) — rulings and holds
 
 The skill's first live run (Plank) worked as designed — a workaround surfaced

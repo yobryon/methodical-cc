@@ -26,6 +26,84 @@ except ImportError:
     sys.exit(0)
 
 
+PLUGIN_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _ver_tuple(v):
+    try:
+        return tuple(int(x) for x in str(v).split("."))
+    except (ValueError, AttributeError):
+        return None
+
+
+def plugin_version():
+    try:
+        return json.loads((PLUGIN_ROOT / ".claude-plugin" / "plugin.json")
+                          .read_text(encoding="utf-8")).get("version")
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def parse_changes():
+    """[(version_tuple, version_str, [lines])] from reference/changes.md, newest first."""
+    p = PLUGIN_ROOT / "reference" / "changes.md"
+    try:
+        text = p.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    out, cur = [], None
+    for line in text.splitlines():
+        m = None
+        if line.startswith("## "):
+            m = _ver_tuple(line[3:].strip())
+            cur = (m, line[3:].strip(), []) if m else None
+            if cur:
+                out.append(cur)
+        elif cur and line.strip():
+            cur[2].append(line.rstrip())
+    return out
+
+
+def transition_note(root):
+    """The version-transition announcement — the presence law applied to plumb
+    itself. A skill-text change never reaches a running team (nobody rereads a
+    skill they think they know, and compaction carries the old model forward),
+    so the orientation announces what moved, once per project, from
+    reference/changes.md. Stamp lives beside the other plumb state."""
+    current = plugin_version()
+    cur_t = _ver_tuple(current)
+    if cur_t is None:
+        return None
+    stamp_dir = Path(root) / ".mcc" / "plumb"
+    stamp = stamp_dir / "last-version"
+    try:
+        last = stamp.read_text(encoding="utf-8").strip()
+    except OSError:
+        last = None
+    last_t = _ver_tuple(last)
+    try:
+        stamp_dir.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(current + "\n", encoding="utf-8")
+    except OSError:
+        pass
+    if last_t is None or last_t >= cur_t:
+        return None  # first sight (stamp quietly) or nothing new
+
+    entries = [(t, s, ls) for t, s, ls in parse_changes()
+               if last_t < t <= cur_t]
+    lines = [f"⬆ plumb {last} → {current} since this project's last launch. "
+             f"What changed:"]
+    entries.sort(reverse=True)
+    shown = entries[:3]
+    for _, ver, body in shown:
+        lines.append(f"  {ver}:")
+        lines += [f"  {ln}" for ln in body]
+    if len(entries) > len(shown):
+        lines.append(f"  …and {len(entries) - len(shown)} earlier version(s) — "
+                     f"full notes: {PLUGIN_ROOT / 'reference' / 'changes.md'}")
+    return "\n".join(lines)
+
+
 def main():
     try:
         payload = json.load(sys.stdin)
@@ -63,6 +141,9 @@ def main():
 
     print("=== PLUMB ===")
     print("  " + "\n  ".join(bits))
+    note = transition_note(mf.root)
+    if note:
+        print(note)
 
 
 if __name__ == "__main__":
