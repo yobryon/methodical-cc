@@ -350,6 +350,48 @@ reference/changes.md — once, at session birth, action-pointing ("reread the
 release adds an entry; a release without one is invisible to running
 projects.**
 
+### 5.6e Second feedback harvest (2026-08-20) — cross-validation, and the announcer's day-one defect
+
+The second adopter's feedback round landed hours after the first, and its main
+value was **cross-validation** — two projects, no contact, same findings:
+
+- **Truncation**: independently reported, already fixed (0.10.0). Their line —
+  *"the caught set is by definition the unrepresentative set"* — is the best
+  statement of the silently-shorter hazard on record; keep it.
+- **The Stop-hook inbox**: the PO's stays-but-tune ruling, ratified with data
+  from the other direction (~10 blocks, ~3 actionable, each actionable one a
+  same-turn catch). Verdict became a spec: the noise was *scoping*, not the
+  hook — structural (a mis-assignment neither dispositionable nor escapable),
+  so the fix went upstream (NON-65 inbox scope incl. the API path tickers
+  will use, NON-66 participant self-removal, NON-67 list_decisions
+  pagination) and the recipe gained its scoping section.
+- **The ambient/pull gradient (their §4) released the held finding**: second
+  independent report of invoked-vs-starved (84 vs 19 commits; an implementor
+  naming a catalogued shape aloud and still treating it as undiagnosed —
+  "naming produces the feeling of having placed it"). Now an established
+  cross-project fact. The design brief it leaves: `promote` moves
+  observations up; **nothing retires scar tissue down** from ambient into
+  pull without dying. Held for a design round with the PO — not patchable.
+- **New this round — topology (0.11.0)**: a 48-hour census of a
+  three-session shared checkout (peer's commit amended, work stashed off
+  disk, three pushes carrying held commits) with the diagnosis in house
+  physics: *salience failures, not memory failures*. Shipped both halves:
+  `establish` asks the working-tree question (worktree-per-session the
+  recommended default), and a `foreign_push` guard prints outgoing commits
+  recorded by another session — print, not block ("the failure was never 'I
+  decided to push it anyway'"). Sessions claim their commits at PostToolUse;
+  unclaimed stays silent, same crying-wolf rationale as the touched-set.
+
+And one defect the PO caught by observation ("nobody reacted to the
+announcement"): **the transition announcer shipped inside the very upgrade it
+was meant to announce** — no stamp read as first-sight, first-sight stamped
+quietly, so the entire rollout cohort got silence, the one audience the
+feature was built for. Fixed in 0.11.0: manifest-without-stamp now gets a
+catch-up announcement, and `plumb init` stamps at establish time so genuinely
+new projects don't. The general shape, worth remembering: *a presence
+mechanism's first deployment is itself a presence problem, and it cannot rely
+on itself to solve it.*
+
 ### 5.6c First feedback-skill harvest (2026-08-20) — rulings and holds
 
 The skill's first live run (Plank) worked as designed — a workaround surfaced

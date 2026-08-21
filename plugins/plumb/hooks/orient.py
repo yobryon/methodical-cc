@@ -86,8 +86,25 @@ def transition_note(root):
         stamp.write_text(current + "\n", encoding="utf-8")
     except OSError:
         pass
-    if last_t is None or last_t >= cur_t:
-        return None  # first sight (stamp quietly) or nothing new
+    if last_t is None:
+        # No stamp but an established manifest: this project adopted plumb
+        # BEFORE versions announced themselves. Day-one defect, PO-found: the
+        # stamp ships inside the very upgrade it announces, so treating first
+        # sight as quiet gave the entire rollout cohort silence — the one
+        # audience the feature was built for. `plumb init` stamps new projects
+        # at establish time, so only pre-announcer adopters land here.
+        entries = sorted(parse_changes(), reverse=True)[:2]
+        if not entries:
+            return None
+        lines = [f"⬆ plumb is now {current}, and version transitions announce "
+                 f"themselves here from now on. Recent changes this project "
+                 f"may have missed:"]
+        for _, ver, body in entries:
+            lines.append(f"  {ver}:")
+            lines += [f"  {ln}" for ln in body]
+        return "\n".join(lines)
+    if last_t >= cur_t:
+        return None  # nothing new
 
     entries = [(t, s, ls) for t, s, ls in parse_changes()
                if last_t < t <= cur_t]

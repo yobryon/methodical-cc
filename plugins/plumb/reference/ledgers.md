@@ -245,6 +245,21 @@ the flag is hook-only by contract ("NOT FOR INTERACTIVE USE" — its own schema 
 note survives for *interactive* inbox calls: don't pass `markRead` until you have confirmed the
 output reached whoever needed it — marking read on faith silently consumes notifications forever.
 
+**Scoping — the hook's verdict data, measured.** A surface that blocks stopping charges a full
+extra turn per false positive, so its value tracks one ratio: what fraction of the inbox the agent
+can actually *disposition*. One project's long-session count: **~10 blocks, ~3 actionable** — and
+each actionable one caught something same-turn that would otherwise have waited a boundary, which
+is why the hook stays. The noise majority was structural, not behavioral: a weeks-old
+mis-assignment made the agent a participant on another team's issue, and every comment in that
+team's active discussion blocked a stop the agent could neither disposition (not their team's
+work) nor unsubscribe from (not their issue to edit). The tool does not yet take a scope — no team
+or actionability filter exists on `inbox`, in the MCP surface or the API hooks and monitors call
+(filed upstream, participant self-removal with it). Until it lands, the compensations are hygiene,
+not code: keep `limit` small; the **first** time the inbox surfaces an item you cannot act on, fix
+the membership at the source instead of learning to skim past it; and treat "I routinely read
+items I cannot disposition" as a mis-scoping to report to the PO — a compensation that has stopped
+feeling like one is precisely the thing a feedback round exists to surface.
+
 ## `github` — the common default
 
 - **Access:** the `gh` CLI, or GitHub's MCP. Both are well-guided; use either.

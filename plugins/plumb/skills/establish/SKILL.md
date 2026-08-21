@@ -76,7 +76,7 @@ squash-merge everything else — is that a rule or a habit?"* beats *"how do you
 
 ## Step 2 — Establish the skeleton, by asking
 
-Eight things. Ask about what is not already answered by Step 1; confirm what is.
+Nine things. Ask about what is not already answered by Step 1; confirm what is.
 
 1. **Who is in this?** Which roles actually exist here — a separate implementor session, a design
    partner, or only the PO and one agent? Do not assume PLUMB's default cast. A project with one
@@ -110,6 +110,20 @@ Eight things. Ask about what is not already answered by Step 1; confirm what is.
 8. **What do you do repeatedly that you would want shorthand for, and what has gone wrong more than
    once?** The first feeds Step 4. The second tells you what this project's guards should watch and
    what its failure catalog will open with.
+9. **Multi-session projects only: how do the sessions share the working tree?** One checkout for
+   everyone, or a worktree per session? **Ask it out loud — the topology decides an entire incident
+   class, and no project observed so far chose theirs on purpose.** One adopter's 48-hour census of
+   a three-session shared checkout: a peer's commit rewritten by an `--amend`, 176 uncommitted
+   insertions taken off disk by a `git stash`, three pushes carrying another session's
+   explicitly-held commits. Their diagnosis is why a written rule cannot fix it: these are
+   **salience failures, not memory failures** — pushing a docs commit, amending, stashing do not
+   *feel like* touching a peer's work, so no remembered rule fires; only a check attached to the
+   act helps. **Recommend `git worktree add` per session as the default.** Where the team keeps a
+   shared tree anyway, record that as the chosen topology with its reason; plumb's guards cover
+   part of the surface mechanically (foreign-staged at commit, foreign-push at push), and the wow
+   should carry the part no guard can: on a shared tree, a wire or schema change's exposure window
+   opens at the *emit*, before any commit exists — so the norm is announce at the emit; holding
+   the push protects nobody and only hides the cause from the peer already sitting on a red test.
 
 ---
 

@@ -293,6 +293,91 @@ def guard_secrets(root):
     )
 
 
+# ------------------------------------------------- guard 3½: foreign push
+
+PUSH_CMD = re.compile(r"\bgit\b(?![^|;&]*\b--help\b)[^|;&]*\bpush\b")
+
+
+def commits_file(root, session):
+    return state_dir(root) / f"commits-{session or 'anon'}"
+
+
+def record_commit(root, session):
+    """After a successful `git commit`, claim HEAD for this session.
+
+    The claim map is what lets the push guard say WHOSE commit is riding
+    along. An amend rewrites the sha, so the old claim goes stale harmlessly
+    — the rewritten commit shows as unclaimed, and unclaimed stays silent.
+    """
+    sha = git(root, "rev-parse", "HEAD").strip()
+    if not sha:
+        return
+    f = commits_file(root, session)
+    seen = set(f.read_text(encoding="utf-8").split("\n")) if f.exists() else set()
+    if sha not in seen:
+        with f.open("a", encoding="utf-8") as fh:
+            fh.write(sha + "\n")
+
+
+def foreign_commit_owners(root, session):
+    """sha → other-session-id for every commit claimed by a DIFFERENT session."""
+    owners = {}
+    try:
+        files = list(state_dir(root).glob("commits-*"))
+    except OSError:
+        return owners
+    mine = commits_file(root, session).name
+    for f in files:
+        if f.name == mine:
+            continue
+        try:
+            for sha in f.read_text(encoding="utf-8").split("\n"):
+                if sha:
+                    owners[sha] = f.name[len("commits-"):]
+        except OSError:
+            continue
+    return owners
+
+
+def guard_foreign_push(root, session):
+    """A push carrying another session's commits, on a shared checkout.
+
+    Field census from one adopter's 48 hours on a three-session shared tree:
+    three separate pushes carried a peer's explicitly-held commits — one of
+    them inside the commit recording the previous incident. Their diagnosis
+    is the design: these are salience failures, not memory failures. Pushing
+    a docs commit does not FEEL like touching a peer's work, so no remembered
+    rule fires; only a check attached to the act helps.
+
+    Print, not block — the failure was never "I decided to push it anyway",
+    it was "I did not know it was there."
+    """
+    out = git(root, "log", "@{u}..HEAD", "--format=%H\x1f%h\x1f%s")
+    if not out.strip():
+        return None
+    owners = foreign_commit_owners(root, session)
+    if not owners:
+        return None  # nothing claimed by anyone else — silence beats crying wolf
+    rows = []
+    for line in out.strip().split("\n"):
+        parts = line.split("\x1f")
+        if len(parts) == 3 and parts[0] in owners:
+            rows.append((parts[1], owners[parts[0]][:8], parts[2]))
+    if not rows:
+        return None
+    listing = "\n".join(f"    {h}  (session {who}…)  {subj[:70]}"
+                        for h, who, subj in rows[:10])
+    more = f"\n    … and {len(rows) - 10} more" if len(rows) > 10 else ""
+    return (
+        f"⚠ plumb: this push carries {len(rows)} commit(s) recorded by ANOTHER "
+        f"session on this shared checkout:\n\n{listing}{more}\n\n"
+        f"A push publishes everything beneath it, including work a peer may be "
+        f"deliberately holding. If these are known-ready, push on. If you did "
+        f"not know they were there — that is exactly the failure this exists "
+        f"for: check with the session that made them before publishing."
+    )
+
+
 # --------------------------------------------- guard 4: build verdict / stale
 
 STALE_FLAGS = re.compile(r"--no-build\b|--no-restore\b|--no-compile\b|-DskipTests\b")
@@ -446,6 +531,11 @@ def handle_pre_bash(payload, root, cfg):
     cmd = (payload.get("tool_input") or {}).get("command", "")
     session = payload.get("session_id")
     note_staged_before(root, session, cmd)
+    if PUSH_CMD.search(cmd) and not is_git_commit(cmd) \
+            and enabled(cfg, "foreign_push"):
+        note = guard_foreign_push(root, session)
+        if note:
+            emit_context("PreToolUse", note)
     if not is_git_commit(cmd):
         return
     reasons = []
@@ -472,6 +562,9 @@ def handle_post_bash(payload, root, cfg):
     session = payload.get("session_id")
 
     claim_newly_staged(root, session, cmd)
+
+    if is_git_commit(cmd) and response_exit_code(resp) == 0:
+        record_commit(root, session)
 
     if BUILD_CMD.search(cmd) and not STALE_FLAGS.search(cmd):
         rc = response_exit_code(resp)

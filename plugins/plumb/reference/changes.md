@@ -7,6 +7,17 @@ running projects, which is the exact presence failure this file exists to close.
 Write entries FOR that ambient moment: one to three lines, action-pointing ("reread
 the `bus` skill"), no changelog prose.
 
+## 0.11.0
+- New guard for shared checkouts: `git push` now surfaces outgoing commits recorded by
+  ANOTHER session (print, not block). `plumb:establish` now asks the working-tree
+  topology question — worktree-per-session is the recommended multi-session default.
+- The Stop-hook inbox recipe (`plumb ledger guide`) gained its scoping section: the hook
+  stays, keep `limit` small, fix mis-assignments at the source the first time one
+  surfaces. Upstream filters are filed (NON-65/66/67).
+- A day-one defect meant the 0.10.0 announcement never reached projects already running
+  plumb. If the entry below is news: **reread the `bus` skill** — going idle is silent,
+  tickers can wake you, large messages clip loudly with a retrieval pointer.
+
 ## 0.10.1
 - Version transitions now announce themselves like this, at session start, once per
   project. You are reading the feature.

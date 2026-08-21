@@ -301,6 +301,15 @@ def scan_decision_numbers(text):
 
 # -------------------------------------------------------------------- commands
 
+def _plugin_version():
+    try:
+        return json.loads(
+            (Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json")
+            .read_text(encoding="utf-8")).get("version")
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def cmd_init(args):
     root = Path(args.root).resolve() if args.root else find_project_root()
     path = root / MANIFEST_NAME
@@ -309,6 +318,17 @@ def cmd_init(args):
     doc = args.document or "docs/way_of_working.md"
     path.write_text(MANIFEST_TEMPLATE.format(document=doc), encoding="utf-8")
     print(f"wrote {path}")
+    # Stamp the version at establish time so the orientation's transition
+    # announcer treats this project as current — an unstamped manifest reads
+    # as a pre-announcer adopter and gets the catch-up announcement.
+    ver = _plugin_version()
+    if ver:
+        try:
+            d = root / ".mcc" / "plumb"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "last-version").write_text(ver + "\n", encoding="utf-8")
+        except OSError:
+            pass
     doc_path = root / doc
     if not doc_path.exists():
         doc_path.parent.mkdir(parents=True, exist_ok=True)
