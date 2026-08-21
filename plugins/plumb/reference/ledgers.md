@@ -245,20 +245,25 @@ the flag is hook-only by contract ("NOT FOR INTERACTIVE USE" — its own schema 
 note survives for *interactive* inbox calls: don't pass `markRead` until you have confirmed the
 output reached whoever needed it — marking read on faith silently consumes notifications forever.
 
-**Scoping — the hook's verdict data, measured.** A surface that blocks stopping charges a full
-extra turn per false positive, so its value tracks one ratio: what fraction of the inbox the agent
-can actually *disposition*. One project's long-session count: **~10 blocks, ~3 actionable** — and
-each actionable one caught something same-turn that would otherwise have waited a boundary, which
-is why the hook stays. The noise majority was structural, not behavioral: a weeks-old
-mis-assignment made the agent a participant on another team's issue, and every comment in that
-team's active discussion blocked a stop the agent could neither disposition (not their team's
-work) nor unsubscribe from (not their issue to edit). The tool does not yet take a scope — no team
-or actionability filter exists on `inbox`, in the MCP surface or the API hooks and monitors call
-(filed upstream, participant self-removal with it). Until it lands, the compensations are hygiene,
-not code: keep `limit` small; the **first** time the inbox surfaces an item you cannot act on, fix
-the membership at the source instead of learning to skim past it; and treat "I routinely read
-items I cannot disposition" as a mis-scoping to report to the PO — a compensation that has stopped
-feeling like one is precisely the thing a feedback round exists to surface.
+**Scoping — the hook blocks only on what you can act on.** A surface that blocks stopping charges
+a full extra turn per false positive, so its value tracks one ratio: what fraction of the inbox
+the agent can actually *disposition*. The field data that proved it (one long session: ~10
+blocks, ~3 actionable, the noise a foreign-team thread from an old mis-assignment) went upstream
+and the scope now exists in the tool:
+
+- **`runAsHook` blocks on the dispositionable set by default** — items on issues/decisions you
+  can act on: subject in a member team, assigned to you, waiting on you. A foreign-team thread
+  you merely got subscribed to no longer holds your turn open. The recipe above needs no change.
+- **Interactive calls can pass `team` and `dispositionable: true`** — and so can a ticker: the
+  MCP surface is HTTP-served, so a monitor polling the inbox passes the same scope inline.
+- **`runAsHook` never marks read** — it is a pure read; *dispositioning* is what clears an item
+  (reading the issue or decision it points at). No more inbox-clearing semantics to reason about
+  in the hook path.
+- **`leave_issue { identifier }`** removes *you* from an issue's subscribers (and unassigns you
+  if assigned) — it needs no edit rights on the issue's team, so a cross-team mis-subscription
+  is now self-service: the **first** time the inbox surfaces a thread you cannot act on, leave
+  it — do not learn to skim past it. A compensation that has stopped feeling like one is
+  precisely the thing a feedback round exists to surface; this one no longer needs to be one.
 
 ## `github` — the common default
 

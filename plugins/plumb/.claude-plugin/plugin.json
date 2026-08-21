@@ -1,7 +1,7 @@
 {
   "name": "plumb",
   "description": "MAMA's successor: not a better methodology, but a host for a methodology the project authors and evolves, plus an evidence layer that works with no methodology at all. Keeps the Product Owner as decider and removes them as lifecycle operator. Ships mechanical guards for repeatedly-observed failures, an interrupting, idle-waking peer-messaging bus (no acks, no receipts \u2014 passive trail + lookback instead), a process host surfaced as MCP tools (roles, norms, decision numbers \u2014 with retired-role refusals), a pluggable execution ledger (nonlinear/GitHub/Jira/Linear/markdown), the drive protocol, read-before-rule design gates, and compaction survival. Skills carry sequence; the project's own way-of-working document carries norms, and wins where they disagree.",
-  "version": "0.11.0",
+  "version": "0.11.1",
   "author": {
     "name": "Bryon Williams"
   },

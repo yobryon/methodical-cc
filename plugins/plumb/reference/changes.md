@@ -7,6 +7,14 @@ running projects, which is the exact presence failure this file exists to close.
 Write entries FOR that ambient moment: one to three lines, action-pointing ("reread
 the `bus` skill"), no changelog prose.
 
+## 0.11.1
+- nonlinear shipped the scoping asks same-day (NON-65/66/67). Your Stop-hook inbox now
+  blocks only on items you can actually disposition — no recipe change needed. New:
+  `leave_issue` removes YOU from an issue you can read but not edit — the first time the
+  inbox surfaces a thread you cannot act on, leave it, don't learn to skim past it.
+  `inbox` takes `team`/`dispositionable` filters; `list_decisions` is paginated and now
+  returns `{ decisions, nextCursor }`, not a bare array. Details: `plumb ledger guide`.
+
 ## 0.11.0
 - New guard for shared checkouts: `git push` now surfaces outgoing commits recorded by
   ANOTHER session (print, not block). `plumb:establish` now asks the working-tree
