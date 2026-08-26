@@ -38,6 +38,19 @@ import json
 import re
 import time
 from pathlib import Path
+import sys
+
+# Windows consoles default to a legacy code page (cp1252); plumb speaks arrows
+# and scissors, so an unfixed stdout turns the first delivery that carries one
+# into a UnicodeEncodeError crash — field-found on plumb's first Windows
+# launch, where it took the bus watcher down. Reconfigure; never crash-on-print.
+if sys.platform == "win32":
+    for _s in (sys.stdin, sys.stdout, sys.stderr):
+        try:
+            _s.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            pass
+
 
 # Slow cadence: drift is not urgent, and cheap checks that fire often are how a
 # monitor gets rate-limited into silence.

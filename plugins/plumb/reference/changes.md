@@ -7,6 +7,16 @@ running projects, which is the exact presence failure this file exists to close.
 Write entries FOR that ambient moment: one to three lines, action-pointing ("reread
 the `bus` skill"), no changelog prose.
 
+## 0.11.2
+- plumb runs on native Windows. First contact found three wounds, all fixed: the
+  liveness probe crashed the bus watcher (signal 0 is CTRL_C_EVENT on Windows —
+  not a probe), cp1252 consoles crashed on plumb's arrows (stdio is now forced
+  to UTF-8), and `python3` resolved to the Microsoft Store stub (hook and
+  monitor commands now fall back `python3` → `python` → `py`). One requirement
+  stands: a real Python install. If the MCP server fails to start on Windows,
+  make sure `python3` on PATH is real Python — python.org's installer with
+  "Add to PATH", or disable the Store's python3 App-execution alias.
+
 ## 0.11.1
 - nonlinear shipped the scoping asks same-day (NON-65/66/67). Your Stop-hook inbox now
   blocks only on items you can actually disposition — no recipe change needed. New:

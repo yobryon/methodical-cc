@@ -57,6 +57,18 @@ import sys
 import time
 from pathlib import Path
 
+# Windows consoles default to a legacy code page (cp1252); plumb speaks arrows
+# and scissors, so an unfixed stdout turns the first delivery that carries one
+# into a UnicodeEncodeError crash — field-found on plumb's first Windows
+# launch, where it took the bus watcher down. Reconfigure; never crash-on-print.
+if sys.platform == "win32":
+    for _s in (sys.stdin, sys.stdout, sys.stderr):
+        try:
+            _s.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError):
+            pass
+
+
 BUS_VERSION = "0.10.0"
 DEFAULT_DB = ".mcc/bus.db"
 MAX_ATTEMPTS = 5
@@ -312,11 +324,46 @@ TRANSCRIPT_QUIET_IDLE_S = 300.0  # mtime fallback: quiet this long = idle
 
 
 def _pid_alive(pid):
+    """Exact liveness: True / False / None (cannot tell — callers fall back).
+
+    POSIX: signal 0 tests existence without touching the process. Windows:
+    os.kill(pid, 0) is NOT a probe — signal 0 IS CTRL_C_EVENT there, so the
+    "check" either raises SystemError or actually delivers a Ctrl+C to the
+    target's console group (verified live on 3.11). Field-found on plumb's
+    first Windows launch: the watcher's own liveness sweep took it down.
+    OpenProcess is the probe on that side of the fence.
+    """
     try:
-        os.kill(int(pid), 0)
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None   # no pid is not a dead pid — let the heartbeat decide
+    if pid <= 0:
+        return None
+    if os.name == "nt":
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            # error 5 (access denied): it exists, just not ours to open
+            return True if k32.GetLastError() == 5 else False
+        try:
+            code = ctypes.c_ulong()
+            if k32.GetExitCodeProcess(h, ctypes.byref(code)):
+                return code.value == STILL_ACTIVE
+            return None
+        finally:
+            k32.CloseHandle(h)
+    try:
+        os.kill(pid, 0)
         return True
-    except (OSError, ValueError, TypeError):
+    except ProcessLookupError:
         return False
+    except PermissionError:
+        return True   # exists, owned by someone else
+    except OSError:
+        return None
 
 
 def _my_registry_entry():
@@ -492,26 +539,8 @@ def format_message(row, late=False):
 
 
 # -------------------------------------------------------------------- status
-
-def _pid_alive(pid):
-    """Exact liveness, where the heartbeat is only an estimate.
-
-    Signal 0 tests existence without touching the process. Sessions for a
-    project run on one machine, so this is available and precise; where it is
-    not (a recycled pid, a different host) the heartbeat age still backstops it.
-    Returns None when we cannot tell, so callers fall back rather than guess.
-    """
-    if not pid:
-        return None
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True   # exists, owned by someone else
-    except OSError:
-        return None
+# (agent_liveness uses the module-level _pid_alive; the heartbeat age
+# backstops it where liveness returns None — a recycled pid, a different host.)
 
 
 def agent_liveness(conn, agent):
@@ -653,14 +682,53 @@ def load_tickers(root):
     return out, mf.path
 
 
+_TICKER_BASH = None
+
+
+def _bash_for_tickers():
+    """The bash that runs ticker commands — cross-platform, resolved once.
+
+    POSIX: bash on PATH. Windows: Git Bash (a Claude Code requirement, so it
+    is present), found explicitly because PATH's `bash` there can resolve to
+    System32\\bash.exe — which is WSL, a different world whose filesystem and
+    environment are not this project's. None → tickers report failed-to-start.
+    """
+    global _TICKER_BASH
+    if _TICKER_BASH is not None:
+        return _TICKER_BASH or None
+    if os.name != "nt":
+        _TICKER_BASH = "bash"
+        return _TICKER_BASH
+    import shutil
+    cands = []
+    w = shutil.which("bash.exe") or shutil.which("bash")
+    if w and "system32" not in w.lower():
+        cands.append(w)
+    for var in ("ProgramFiles", "ProgramFiles(x86)", "LocalAppData"):
+        base = os.environ.get(var)
+        if base:
+            cands.append(os.path.join(base, "Git", "bin", "bash.exe"))
+    git = shutil.which("git.exe") or shutil.which("git")
+    if git:
+        cands.append(str(Path(git).resolve().parent.parent / "bin" / "bash.exe"))
+    for c in cands:
+        if c and Path(c).is_file():
+            _TICKER_BASH = c
+            return c
+    _TICKER_BASH = ""   # searched and failed; don't search every tick
+    return None
+
+
 def run_ticker(name, cfg, root, agent, state):
     """One ticker execution. Returns text to deliver, or None."""
     import subprocess
     env = dict(os.environ, PLUMB_AGENT=agent, PLUMB_TICK_NAME=name,
                PLUMB_TICK_PREV=str(state.get("last_ok") or ""))
+    bash = _bash_for_tickers()
     try:
-        r = subprocess.run(["bash", "-lc", cfg["command"]], cwd=root, env=env,
-                           capture_output=True, text=True, timeout=TICKER_TIMEOUT)
+        r = subprocess.run([bash, "-lc", cfg["command"]], cwd=root, env=env,
+                           capture_output=True, text=True,
+                           timeout=TICKER_TIMEOUT) if bash else None
     except (OSError, subprocess.SubprocessError):
         r = None
     if r is None or r.returncode != 0:

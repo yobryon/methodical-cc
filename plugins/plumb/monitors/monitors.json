@@ -2,7 +2,7 @@
   {
     "name": "plumb-bus",
     "description": "plumb bus delivery",
-    "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/bin/bus.py watch --agent \"${PLUMB_AGENT}\" --interval 1",
+    "command": "python3 \"${CLAUDE_PLUGIN_ROOT}\"/bin/bus.py watch --agent \"${PLUMB_AGENT}\" --interval 1 || python \"${CLAUDE_PLUGIN_ROOT}\"/bin/bus.py watch --agent \"${PLUMB_AGENT}\" --interval 1 || py \"${CLAUDE_PLUGIN_ROOT}\"/bin/bus.py watch --agent \"${PLUMB_AGENT}\" --interval 1",
     "when": "always"
   }
 ]

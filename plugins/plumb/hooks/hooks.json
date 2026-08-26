@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\" || python \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\" || py \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\"",
             "timeout": 20
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\" || python \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\" || py \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\"",
             "timeout": 20
           }
         ]
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\" || python \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\" || py \"${CLAUDE_PLUGIN_ROOT}/hooks/guards.py\"",
             "timeout": 10
           }
         ]
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\" || python \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\" || py \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\"",
             "timeout": 15
           }
         ]
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\" || python \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\" || py \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\"",
             "timeout": 15
           }
         ]
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/compaction.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/compaction.py\" || python \"${CLAUDE_PLUGIN_ROOT}/hooks/compaction.py\" || py \"${CLAUDE_PLUGIN_ROOT}/hooks/compaction.py\"",
             "timeout": 20
           }
         ]
@@ -73,7 +73,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/compaction.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/compaction.py\" || python \"${CLAUDE_PLUGIN_ROOT}/hooks/compaction.py\" || py \"${CLAUDE_PLUGIN_ROOT}/hooks/compaction.py\"",
             "timeout": 20
           }
         ]
@@ -83,12 +83,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/orient.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/orient.py\" || python \"${CLAUDE_PLUGIN_ROOT}/hooks/orient.py\" || py \"${CLAUDE_PLUGIN_ROOT}/hooks/orient.py\"",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\" || python \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\" || py \"${CLAUDE_PLUGIN_ROOT}/hooks/bus_sweep.py\"",
             "timeout": 15
           }
         ]

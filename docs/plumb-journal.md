@@ -382,6 +382,21 @@ value was **cross-validation** — two projects, no contact, same findings:
   decided to push it anyway'"). Sessions claim their commits at PostToolUse;
   unclaimed stays silent, same crying-wolf rationale as the touched-set.
 
+**First Windows contact (0.11.2).** The first native-Windows launch surfaced
+three latent platform assumptions, each silent until that moment: the
+liveness probe (`os.kill(pid, 0)` — on Windows signal 0 IS `CTRL_C_EVENT`,
+so the "check" either raises SystemError or delivers a real Ctrl+C; verified
+live), cp1252 console encoding (the first delivered message carrying an
+arrow crashed the watcher — the crash-on-print inverse of loud clipping),
+and `python3` resolving to the Microsoft Store's install-nag stub. Fixes:
+a ctypes OpenProcess probe, forced UTF-8 stdio in every entry point, and
+`python3 → python → py` fallback chains in hook/monitor commands (hooks run
+under Git Bash on Windows — a Claude Code requirement — so POSIX `||` is
+portable). The lesson, general: **a platform assumption is invisible until
+first contact, and the failure it produces looks like the feature's fault,
+not the platform's** — the field report read "monitor script failed," not
+"your liveness check is a Ctrl+C cannon."
+
 And one defect the PO caught by observation ("nobody reacted to the
 announcement"): **the transition announcer shipped inside the very upgrade it
 was meant to announce** — no stamp read as first-sight, first-sight stamped
