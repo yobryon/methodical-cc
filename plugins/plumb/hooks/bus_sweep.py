@@ -73,23 +73,75 @@ except ImportError:
     sys.exit(0)
 
 
+def stand_down_note(transport):
+    """transport != plumb: the sweep's one remaining job — leftovers.
+
+    Messages queued before the transition must not rot silently in a store
+    nothing drains. This surfaces them ONCE (stamped), as a pointer rather
+    than a delivery: replaying old bus traffic as if live could mislead, and
+    anything still relevant belongs on the new transport anyway.
+    """
+    db = bus.db_path()
+    if not Path(db).exists():
+        return None
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    stamp = Path(root) / ".mcc" / "plumb" / "bus-stand-down"
+    if stamp.exists():
+        return None
+    try:
+        conn = bus.connect(db)
+        try:
+            n = conn.execute(
+                "SELECT COUNT(*) c FROM messages WHERE delivered_at IS NULL "
+                "AND quarantined=0").fetchone()["c"]
+        finally:
+            conn.close()
+    except SystemExit:
+        return None   # a schema-mismatch refusal is not this hook's fight
+    try:
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(f"transport={transport}\n", encoding="utf-8")
+    except OSError:
+        pass
+    if not n:
+        return None
+    bus_py = Path(bus.__file__).resolve()
+    return (f"[plumb bus] Peer messaging here moved to '{transport}'; the plumb "
+            f"bus stands down. {n} message(s) sent before the transition were "
+            f"never delivered (this prints once). Read them: `python3 {bus_py} "
+            f"log` — anything still live, resend on '{transport}'.")
+
+
 def main():
     try:
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         payload = {}
 
-    if not os.environ.get("PLUMB_AGENT"):
-        sys.exit(0)  # not a bus-enabled session; say nothing
-
     if payload.get("cwd"):
         os.environ.setdefault("CLAUDE_PROJECT_DIR", payload["cwd"])
+
+    event = payload.get("hook_event_name") or "Stop"
+
+    transport = bus.bus_transport()
+    if transport != "plumb":
+        note = stand_down_note(transport)
+        if note:
+            if event == "SessionStart":
+                print(note)   # plain stdout: the path proven on every source
+            else:
+                json.dump({"hookSpecificOutput": {
+                    "hookEventName": event,
+                    "additionalContext": note,
+                }}, sys.stdout)
+        sys.exit(0)
+
+    if not os.environ.get("PLUMB_AGENT"):
+        sys.exit(0)  # not a bus-enabled session; say nothing
 
     db = bus.db_path()
     if not Path(db).exists():
         sys.exit(0)  # no bus in this project
-
-    event = payload.get("hook_event_name") or "Stop"
 
     conn = bus.connect(db)
     try:

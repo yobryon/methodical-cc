@@ -407,6 +407,39 @@ new projects don't. The general shape, worth remembering: *a presence
 mechanism's first deployment is itself a presence problem, and it cannot rely
 on itself to solve it.*
 
+### 5.6f The bus meets its successor (2026-09-08) — transport declarations
+
+Aspen (the PO's multi-node agent meta-harness) made inter-agent messaging a
+first-class harness affordance — which is the honorable end state for plumb's
+bus: it was always scaffolding for a missing affordance, the same pattern as
+the old bus plugin retiring when SendMessage went native. The field incident
+that forced the design: under aspen, plumb's monitors never start (no mcc, no
+identity), but the MCP still advertised bus tools, and an agent sent into a
+queue nothing drains — a dead affordance that looks alive, our own
+silently-shorter shape as a *surface*.
+
+The response, PO-ruled, two layers plus a generalization:
+- **Layer 1 (physics, harness-agnostic):** a send verifies its delivery path
+  exists. No identity + a successor detected → refusal with redirect and the
+  declare-it nudge; the precondition check catches every non-mcc launch, not
+  just aspen.
+- **Layer 2 (declaration):** `[bus] transport = "<name>"`; anything but
+  `"plumb"` stands the whole surface down — tools *unregistered* rather than
+  refusing (a retired role refuses because skills ask by name; a tool is
+  found by BROWSING, and a live-looking tool is the trap), sweeps quiet after
+  a one-time undelivered-leftovers pointer, orientation names the real
+  channel, the bus skill opens with a transport check.
+- **Tickers survive the transition** — they are the project's activation
+  surface, the one thing the successor doesn't provide (aspen wakes on bus
+  delivery, not at the project's own behest). The monitor runs tickers-only
+  under a foreign transport, identity falling back to the harness's
+  ($ASPEN_AGENT_NAME), and tickers gained `agent = "<who>"` targeting —
+  closing a debt the PO spotted: every session had been running every ticker.
+
+The through-line for the record: the manifest's oldest job is saying *what is
+dead here and why*, so the dead thing refuses instead of fades. This round
+applied that to a piece of plumb itself.
+
 ### 5.6c First feedback-skill harvest (2026-08-20) — rulings and holds
 
 The skill's first live run (Plank) worked as designed — a workaround surfaced

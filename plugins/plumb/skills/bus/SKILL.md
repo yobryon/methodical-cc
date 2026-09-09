@@ -5,6 +5,14 @@ description: How peer messaging works on this project — an interrupting bus wi
 
 # The bus
 
+> **Transport check, before anything else.** This skill describes plumb's OWN bus. If
+> `.plumb.toml` declares `[bus] transport` as anything other than `plumb` — or your
+> session carries another harness's messaging (e.g. `$ASPEN_AGENT` is set and the
+> plumb bus tools are absent) — then peer messaging here is carried by THAT transport:
+> use its tools and **ignore the rest of this skill**; its delivery semantics do not
+> describe your channel. The one exception is the `## Tickers` section, which applies
+> regardless of transport.
+
 Messages between sessions travel over a bus this plugin owns, not the harness's team
 protocol. The difference that matters: **a `gating` message interrupts the recipient
 mid-turn.** It does not wait for their turn to end.
@@ -121,6 +129,12 @@ session is idle (their output *wakes* you — a tracker inbox check, a CI watch)
 its last successful run) as its new-since-X cursor; non-empty stdout is delivered,
 empty is silence. Guardrails are enforced (interval floor, output cap, failure
 backoff) because the ticker is a tenant in the process that delivers your mail.
+
+**Targeting:** by default every session's monitor runs every ticker, each with its own
+cursor — fine for two sessions, noise for six. `agent = "arch"` in the ticker's table
+runs it only in the session with that identity. Tickers are transport-independent:
+under a non-plumb `[bus] transport` the monitor still runs them (identity falls back
+to the harness's own, e.g. `$ASPEN_AGENT_NAME`), even though bus delivery stands down.
 
 Seam manners: if your ticker watches a tracker whose notifications mirror bus traffic,
 `bus.py refs --since 2h` lists record refs already delivered to you over the bus — an

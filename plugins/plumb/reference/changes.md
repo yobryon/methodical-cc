@@ -7,6 +7,21 @@ running projects, which is the exact presence failure this file exists to close.
 Write entries FOR that ambient moment: one to three lines, action-pointing ("reread
 the `bus` skill"), no changelog prose.
 
+## 0.12.0
+- **The bus is now a declared transport.** If a successor harness carries your peer
+  messaging (aspen, say), declare `[bus] transport = "aspen"` in `.plumb.toml`: plumb's
+  bus tools go unregistered, sweeps go quiet, and the monitor runs tickers only —
+  instead of sitting beside the real channel looking viable. Undelivered pre-transition
+  messages surface once with a `bus.py log` pointer. Default `"plumb"`: nothing changes.
+- Sends now verify their delivery path exists: a session with no bus identity (or on a
+  non-plumb transport) gets a refusal saying where messaging actually lives, not a
+  message accepted into a queue nothing drains.
+- Tickers gained targeting: `[tickers.<name>] agent = "arch"` runs a ticker in that one
+  session's monitor instead of every session's. Tickers keep running under a non-plumb
+  transport (identity falls back to the harness's, e.g. `$ASPEN_AGENT_NAME`).
+- The `bus` skill now opens with the transport check: on a non-plumb transport, ignore
+  it (except Tickers). `establish` asks where peer messaging lives (question 10).
+
 ## 0.11.2
 - plumb runs on native Windows. First contact found three wounds, all fixed: the
   liveness probe crashed the bus watcher (signal 0 is CTRL_C_EVENT on Windows —

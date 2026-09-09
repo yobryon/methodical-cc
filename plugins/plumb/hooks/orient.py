@@ -162,6 +162,12 @@ def main():
             led += f" — scope: {scope}"
         bits.append(led)
 
+    transport = str((mf.data.get("bus", {}) or {}).get("transport", "plumb"))
+    if transport != "plumb":
+        bits.append(f"peer messaging: {transport} — plumb's own bus stands "
+                    f"down here (its tools are absent by declaration; use the "
+                    f"{transport} channel, and ignore the plumb:bus skill)")
+
     skills_dir = mf.root / ".claude" / "skills"
     names = sorted(p.parent.name for p in skills_dir.glob("*/SKILL.md")) \
         if skills_dir.is_dir() else []

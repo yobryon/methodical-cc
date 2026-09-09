@@ -69,7 +69,7 @@ if sys.platform == "win32":
             pass
 
 
-BUS_VERSION = "0.10.0"
+BUS_VERSION = "0.12.0"
 DEFAULT_DB = ".mcc/bus.db"
 MAX_ATTEMPTS = 5
 # A monitor ticks at 1 Hz, so this is ten missed ticks — tight enough that a
@@ -178,6 +178,59 @@ def connect(path):
     conn.executescript(SCHEMA)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     return conn
+
+
+def bus_transport(root=None):
+    """The project's declared peer-messaging transport — `.plumb.toml [bus]`.
+
+    "plumb" (the default) is this bus. Anything else names a successor that
+    carries peer messaging natively (a mesh harness like aspen), and this bus
+    STANDS DOWN: tools unregistered, sweeps quiet, the monitor runs tickers
+    only. The reason this is a declaration and not a detection: a dead
+    affordance that looks alive recruits agents into a queue nothing drains —
+    field-found the week aspen arrived, when an agent sent into exactly that.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import plumb
+        mf = plumb.Manifest.load(root, required=False)
+    except Exception:
+        return "plumb"
+    if mf is None:
+        return "plumb"
+    val = (mf.data.get("bus", {}) or {}).get("transport", "plumb")
+    return str(val) or "plumb"
+
+
+def send_preflight(explicit_agent=None):
+    """Refuse a send that has no delivery path — Layer 1, harness-agnostic.
+
+    The precondition this bus never checked: a send needs machinery on the
+    other end. Under a successor harness the monitors never start, so a send
+    "succeeds" into a store nothing drains — silently shorter rather than
+    visibly failed, on our own wire. Raises SystemExit with the reason; the
+    MCP server surfaces that as the tool result.
+    """
+    transport = bus_transport()
+    if transport != "plumb":
+        raise SystemExit(
+            f"plumb bus: this project's peer messaging is carried by "
+            f"'{transport}' (.plumb.toml [bus] transport = \"{transport}\") — "
+            f"the plumb bus stands down here, and this send would have no "
+            f"delivery path. Use the '{transport}' channel's own tools. "
+            f"Bus history stays readable via `bus.py log`.")
+    if not (explicit_agent or os.environ.get("PLUMB_AGENT")):
+        if os.environ.get("ASPEN_AGENT"):
+            raise SystemExit(
+                "plumb bus: this session runs under aspen ($ASPEN_AGENT is "
+                "set) and has no plumb bus identity — nothing launches this "
+                "bus's monitors here, so a send would enter a queue nothing "
+                "drains. Peer messaging in an aspen session is aspen's own "
+                "bus tools. If this whole project now lives on aspen, declare "
+                "it so the next agent isn't tempted: `[bus] transport = "
+                "\"aspen\"` in .plumb.toml.")
+        # No successor detected either: fall through to whoami()'s standard
+        # no-identity refusal (launch via mcc, or pass --agent).
 
 
 def whoami(explicit=None):
@@ -615,6 +668,7 @@ def cmd_init(args):
 
 
 def cmd_send(args):
+    send_preflight(args.agent)
     conn = connect(db_path(args.db))
     body = args.body
     if body == "-" or body is None:
@@ -678,6 +732,10 @@ def load_tickers(root):
             "command": cfg["command"],
             "interval": max(float(cfg.get("interval", 120)), TICKER_MIN_INTERVAL),
             "urgency": cfg.get("urgency", "normal"),
+            # Optional targeting: run only in the session whose identity
+            # matches. Absent → every session's monitor runs it (each with its
+            # own cursor), which is the pre-targeting behaviour.
+            "agent": cfg.get("agent"),
         }
     return out, mf.path
 
@@ -774,12 +832,25 @@ def cmd_watch(args):
     over-delivery is impossible either way — every path goes through the same
     transactional claim in claim_and_emit.
     """
+    transport = bus_transport()
+    if transport != "plumb":
+        # The bus half stands down by declaration; tickers are transport-
+        # independent — they are the project's activation surface, the one
+        # thing a successor harness may not provide (aspen wakes on bus
+        # delivery, not at the project's own behest).
+        watch_tickers_only(args)
+        return
     me = args.agent or os.environ.get("PLUMB_AGENT")
     if not me:
         # Plugin-shipped monitors auto-launch in EVERY session, including ones
         # not started through mcc. Dying with a traceback would leave the
         # session with no monitor and no explanation — silent, and
         # indistinguishable from healthy. Say it once, plainly, and stop.
+        if os.environ.get("ASPEN_AGENT"):
+            # An aspen session on a project that has not declared its
+            # transport. Sends already refuse (send_preflight); the monitor
+            # just stands down quietly rather than nagging every launch.
+            return
         print("[plumb bus] Monitor not started: this session has no identity "
               "($PLUMB_AGENT is unset).\n"
               "  Launch via `mcc <name>` to join the bus. Until then this session "
@@ -847,6 +918,8 @@ def cmd_watch(args):
                 now = time.time()
                 for name, cfg in tickers.items():
                     st = tick_state.setdefault(name, {"last_due": 0.0})
+                    if cfg.get("agent") and cfg["agent"] != me:
+                        continue  # targeted at another session's identity
                     interval = cfg["interval"] * (4 if st.get("fails", 0) >= 3 else 1)
                     if now - st["last_due"] < interval:
                         continue
@@ -880,6 +953,58 @@ def cmd_watch(args):
                         tick_state.setdefault(name, {"last_due": 0.0})
         except sqlite3.OperationalError:
             pass  # a writer held the lock; next tick re-derives. Never fatal.
+        time.sleep(args.interval)
+
+
+def watch_tickers_only(args):
+    """The monitor under a non-plumb transport: tickers, nothing else.
+
+    No bus DB, no heartbeat, no drift (drift watched the bus's own records).
+    Identity for ticker TARGETING falls back to the successor harness's name
+    ($PLUMB_AGENT → $ASPEN_AGENT_NAME → "project"), so a `[tickers.x]
+    agent = "arch"` entry still runs in exactly one session. Exits quietly
+    when the project declares no tickers — the orientation line says where
+    peer messaging went; a monitor event every launch would just be noise.
+    """
+    tick_root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    tickers, tick_cfg_path = load_tickers(tick_root)
+    if not tickers:
+        return
+    me = (os.environ.get("PLUMB_AGENT")
+          or os.environ.get("ASPEN_AGENT_NAME") or "project")
+    tick_state = {name: {"last_due": 0.0} for name in tickers}
+    tick_cfg_mtime = tick_cfg_path.stat().st_mtime if tick_cfg_path else None
+    last_reload = time.time()
+    while True:
+        state, idle_for = session_turn_state()
+        idle_ready = (state == "idle"
+                      and (idle_for is None or idle_for >= args.idle_grace))
+        now = time.time()
+        for name, cfg in tickers.items():
+            st = tick_state.setdefault(name, {"last_due": 0.0})
+            if cfg.get("agent") and cfg["agent"] != me:
+                continue
+            interval = cfg["interval"] * (4 if st.get("fails", 0) >= 3 else 1)
+            if now - st["last_due"] < interval:
+                continue
+            if cfg["urgency"] != "gating" and not idle_ready:
+                continue
+            st["last_due"] = now
+            text = run_ticker(name, cfg, tick_root, me, st)
+            if text:
+                sys.stdout.write(text + "\n")
+                sys.stdout.flush()
+        if now - last_reload > 300:
+            last_reload = now
+            try:
+                mt = tick_cfg_path.stat().st_mtime if tick_cfg_path else None
+            except OSError:
+                mt = None
+            if mt != tick_cfg_mtime:
+                tickers, tick_cfg_path = load_tickers(tick_root)
+                tick_cfg_mtime = mt
+                for name in tickers:
+                    tick_state.setdefault(name, {"last_due": 0.0})
         time.sleep(args.interval)
 
 

@@ -198,6 +198,7 @@ def _conn():
 
 
 def tool_bus_send(args):
+    bus.send_preflight()   # refuse a send with no delivery path, with the why
     me = bus.whoami()
     conn = _conn()
     try:
@@ -365,6 +366,18 @@ HANDLERS = {
     "decision_next": tool_decision_next,
 }
 
+# A project may declare that a successor harness carries its peer messaging
+# (`[bus] transport` in .plumb.toml — e.g. "aspen"). Then the bus tools are
+# NOT REGISTERED, rather than registered-and-refusing: a retired ROLE refuses
+# because skills ask for it by name, but a tool is found by BROWSING, and a
+# live-looking tool in the list is exactly what recruited an agent into a
+# queue nothing drains, the week aspen arrived. The process-host tools are
+# transport-independent and always present.
+BUS_TOOL_NAMES = {"bus_send", "bus_inbox", "bus_status"}
+BUS_TRANSPORT = bus.bus_transport()
+if BUS_TRANSPORT != "plumb":
+    TOOLS = [t for t in TOOLS if t["name"] not in BUS_TOOL_NAMES]
+
 
 # -------------------------------------------------------------- JSON-RPC loop
 
@@ -396,6 +409,16 @@ def handle(req):
         respond(msg_id, {"tools": TOOLS})
     elif method == "tools/call":
         name = params.get("name")
+        if name in BUS_TOOL_NAMES and BUS_TRANSPORT != "plumb":
+            # Belt for a stale tool cache: the tool is unregistered, but a
+            # client that remembers it should get the reason, not a 404.
+            respond(msg_id, {"content": [{"type": "text", "text": (
+                f"This project's peer messaging is carried by "
+                f"'{BUS_TRANSPORT}' (.plumb.toml [bus] transport) — the plumb "
+                f"bus stands down here. Use the '{BUS_TRANSPORT}' channel's "
+                f"own tools; bus history stays readable via `bus.py log`.")}],
+                "isError": True})
+            return
         handler = HANDLERS.get(name)
         if handler is None:
             respond(msg_id, error={"code": -32601, "message": f"unknown tool {name!r}"})

@@ -76,7 +76,7 @@ squash-merge everything else — is that a rule or a habit?"* beats *"how do you
 
 ## Step 2 — Establish the skeleton, by asking
 
-Nine things. Ask about what is not already answered by Step 1; confirm what is.
+Ten things. Ask about what is not already answered by Step 1; confirm what is.
 
 1. **Who is in this?** Which roles actually exist here — a separate implementor session, a design
    partner, or only the PO and one agent? Do not assume PLUMB's default cast. A project with one
@@ -124,6 +124,15 @@ Nine things. Ask about what is not already answered by Step 1; confirm what is.
    should carry the part no guard can: on a shared tree, a wire or schema change's exposure window
    opens at the *emit*, before any commit exists — so the norm is announce at the emit; holding
    the push protects nobody and only hides the cause from the peer already sitting on a red test.
+10. **Where does peer messaging live?** If the sessions run inside a harness that carries
+    inter-agent messaging natively (a mesh or meta-harness — aspen, for one), declare it:
+    `[bus] transport = "<name>"` in the manifest. Plumb's own bus then **stands down** —
+    its tools go unregistered, its sweeps go quiet, its monitor runs project tickers only
+    — rather than sitting beside the real channel looking viable, which is how an agent
+    ends up sending into a queue nothing drains. The default, `"plumb"`, is plumb's own
+    interrupting, idle-waking bus, delivered by the monitors `mcc` launches. Tickers work
+    under either answer; `[tickers.<name>] agent = "<who>"` targets one session where
+    every session running them would be noise.
 
 ---
 
